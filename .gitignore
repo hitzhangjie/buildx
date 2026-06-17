@@ -26,12 +26,12 @@ bin/
 .DS_Store
 Thumbs.db
 
-# Synapse runtime data
-synapse/data/
+# BuildX runtime data
+buildx-server/data/
 
 # Maven
 target/
 
 # Local build artifacts
-synapse/synapse
-synapse-cli/cli
+buildx-server/buildx-server
+buildx-cli/buildx-cli

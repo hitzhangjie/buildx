@@ -1,0 +1,15 @@
+services:
+  buildx-server:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "6610:6610"
+      - "6611:6611"
+    volumes:
+      - buildx-data:/data
+    environment:
+      BUILDX_DEV: "true"
+
+volumes:
+  buildx-data:

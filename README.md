@@ -1,13 +1,13 @@
 # BuildX
 
-Monorepo for the BuildX / Synapse toolchain.
+Monorepo for the BuildX toolchain.
 
 ## Layout
 
 | Path | Type | Description |
 |------|------|-------------|
-| `synapse/` | Go module | Synapse server |
-| `synapse-cli/` | Go module | Synapse CLI (`cli` binary) |
+| `buildx-server/` | Go module | BuildX server |
+| `buildx-cli/` | Go module | BuildX CLI (`buildx-cli` binary) |
 | `onedev/` | git submodule | OneDev platform |
 | `agent/` | git submodule | OneDev agent |
 | `commons/` | git submodule | Shared libraries |
@@ -22,8 +22,8 @@ Root `go.work` wires the in-repo Go modules:
 
 ```bash
 go work sync
-go build -C synapse .
-go build -C synapse-cli ./cmd/cli
+go build -C buildx-server .
+go build -C buildx-cli ./cmd/cli
 ```
 
 ## Clone with submodules
@@ -34,15 +34,15 @@ git clone --recurse-submodules https://github.com/hitzhangjie/buildx.git
 git submodule update --init --recursive
 ```
 
-## Build Synapse
+## Build server
 
 ```bash
-cd synapse && make build
+cd buildx-server && make build
 ```
 
 ## Build CLI
 
 ```bash
-cd synapse-cli && make build
-./bin/cli version
+cd buildx-cli && make build
+./bin/buildx-cli version
 ```

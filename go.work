@@ -2,6 +2,6 @@ go 1.22
 
 use (
 	.
-	./synapse
-	./synapse-cli
+	./buildx-cli
+	./buildx-server
 )
