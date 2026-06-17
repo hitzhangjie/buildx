@@ -31,3 +31,7 @@ synapse/data/
 
 # Maven
 target/
+
+# Local build artifacts
+synapse/synapse
+synapse-cli/cli
