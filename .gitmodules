@@ -1,0 +1,21 @@
+[submodule "onedev"]
+	path = onedev
+	url = https://github.com/theonedev/onedev.git
+[submodule "agent"]
+	path = agent
+	url = https://github.com/theonedev/agent.git
+[submodule "commons"]
+	path = commons
+	url = https://github.com/theonedev/commons.git
+[submodule "k8s-helper"]
+	path = k8s-helper
+	url = https://github.com/theonedev/k8s-helper.git
+[submodule "maven-plugin"]
+	path = maven-plugin
+	url = https://github.com/theonedev/maven-plugin.git
+[submodule "parent"]
+	path = parent
+	url = https://github.com/theonedev/parent.git
+[submodule "tod"]
+	path = tod
+	url = https://github.com/theonedev/tod.git

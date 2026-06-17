@@ -1,0 +1,15 @@
+services:
+  synapse:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "6610:6610"
+      - "6611:6611"
+    volumes:
+      - synapse-data:/data
+    environment:
+      SYNAPSE_DEV: "true"
+
+volumes:
+  synapse-data:
