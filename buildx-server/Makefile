@@ -1,14 +1,18 @@
-.PHONY: build run test lint clean dev docker
+.PHONY: build install run test lint clean dev docker
 
-BINARY_SERVER := buildx-server
-VERSION       ?= dev
-LDFLAGS       := -s -w -X github.com/hitzhangjie/buildx/buildx-server/internal/version.Version=$(VERSION)
+BINARY := buildx-server
+MODULE := github.com/hitzhangjie/buildx/buildx-server
+VERSION ?= dev
+LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION)
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY_SERVER) .
+	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) .
+
+install:
+	go install -ldflags "$(LDFLAGS)" .
 
 run: build
-	./bin/$(BINARY_SERVER) server
+	./bin/$(BINARY) server
 
 dev:
 	go run . server --dev

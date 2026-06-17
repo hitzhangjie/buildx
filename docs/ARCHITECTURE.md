@@ -60,7 +60,7 @@ Reference source: `references/onedev/server-core/src/main/java/io/onedev/server`
 | `io.onedev.server.search` | `internal/search` (planned) | Keep query/search model aligned |
 | `io.onedev.server.event` | `internal/event` (planned) | Keep event types and names close |
 | `io.onedev.server.plugin` + `server-plugin/*` | `internal/plugin` | Plugin extension points remain first-class |
-| `tod` CLI | `buildx-cli/cmd/cli` | CLI capability maps to standalone `buildx-cli` command model |
+| `tod` CLI | `buildx-cli/cmd/buildx-cli` | CLI capability maps to standalone `buildx-cli` command model |
 | Persistence (Hibernate/JPA layer) | `internal/persistence` (planned) | Storage abstraction can exist, but persistence naming should be explicit |
 
 ### Current naming deviations (tracked)

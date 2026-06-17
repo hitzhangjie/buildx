@@ -47,5 +47,5 @@ buildx-server/web/dist/
 buildx-server/web/.next/
 
 # Local build artifacts
-buildx-server/buildx-server
-buildx-cli/buildx-cli
+buildx-server/bin/
+buildx-cli/bin/

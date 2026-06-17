@@ -35,7 +35,7 @@ Root `go.work` wires the in-repo Go modules:
 ```bash
 go work sync
 go build -C buildx-server .
-go build -C buildx-cli ./cmd/cli
+go build -C buildx-cli ./cmd/buildx-cli
 ```
 
 ## Clone with submodules
