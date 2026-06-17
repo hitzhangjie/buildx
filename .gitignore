@@ -6,11 +6,12 @@ bin/
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# Go
 *.test
-
-# Output of the go coverage tool
 *.out
+coverage.out
+coverage.html
+vendor/
 
 # Go workspace file (optional local override)
 # go.work
@@ -26,11 +27,24 @@ bin/
 .DS_Store
 Thumbs.db
 
+# Environment
+.env
+.env.local
+*.pem
+
 # BuildX runtime data
 buildx-server/data/
+*.db
+*.sqlite
 
 # Maven
 target/
+
+# buildx-server
+buildx-server/dist/
+buildx-server/web/node_modules/
+buildx-server/web/dist/
+buildx-server/web/.next/
 
 # Local build artifacts
 buildx-server/buildx-server

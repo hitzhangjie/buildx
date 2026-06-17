@@ -1,0 +1,16 @@
+---
+description: references/ submodules are read-only reference sources
+globs: references/**
+alwaysApply: false
+---
+
+# Read-only references
+
+Files under `references/` are git submodules (OneDev upstream). Treat them as **read-only**.
+
+- Do **not** modify, refactor, or format files in `references/`
+- Do **not** add new files or commits inside submodule directories
+- **Do** read and cite them when porting behavior to `buildx-server/` or `buildx-cli/`
+- **Do** point migration docs at `references/onedev` or `references/tod` paths
+
+If a fix is needed in upstream OneDev, note it in migration docs or changelog — do not patch submodules here.

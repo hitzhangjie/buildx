@@ -71,16 +71,19 @@ buildx-server/
 ├── pkg/                  # Public reusable packages
 ├── web/                  # Frontend (OneDev-compatible UI target)
 ├── deploy/               # Docker & Kubernetes manifests
-└── docs/                 # Vision, architecture, roadmap
+└── docs/                 # Pointer to repo-root docs/
 ```
 
 CLI module is maintained separately at `../buildx-cli` with command name `buildx-cli`.
 
 ## Documentation
 
-- [Vision & naming](docs/VISION.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
+Project docs and migration progress live at the repo root:
+
+- [Vision & naming](../docs/VISION.md)
+- [Architecture](../docs/ARCHITECTURE.md)
+- [Roadmap](../docs/ROADMAP.md)
+- [CLI migration](../docs/buildx-cli-migration.md)
 
 ## Relationship to OneDev
 

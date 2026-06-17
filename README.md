@@ -1,20 +1,32 @@
 # BuildX
 
-Monorepo for the BuildX toolchain.
+Monorepo for the BuildX toolchain — a Go reimplementation of the [OneDev](https://github.com/theonedev/onedev) backend with CLI parity to [tod](references/tod).
 
 ## Layout
 
 | Path | Type | Description |
 |------|------|-------------|
-| `buildx-server/` | Go module | BuildX server |
-| `buildx-cli/` | Go module | BuildX CLI (`buildx-cli` binary) |
-| `onedev/` | git submodule | OneDev platform |
-| `agent/` | git submodule | OneDev agent |
-| `commons/` | git submodule | Shared libraries |
-| `k8s-helper/` | git submodule | Kubernetes helpers |
-| `maven-plugin/` | git submodule | Maven plugin |
-| `parent/` | git submodule | Parent POM |
-| `tod/` | git submodule | TOD CLI tooling |
+| `buildx-server/` | Go module | BuildX server (ported from OneDev) |
+| `buildx-cli/` | Go module | BuildX CLI (`buildx-cli` binary, ported from tod) |
+| `references/onedev/` | git submodule | OneDev platform (read-only reference) |
+| `references/tod/` | git submodule | TOD CLI (read-only reference) |
+| `references/agent/` | git submodule | OneDev agent |
+| `references/commons/` | git submodule | Shared libraries |
+| `references/k8s-helper/` | git submodule | Kubernetes helpers |
+| `references/maven-plugin/` | git submodule | Maven plugin |
+| `references/parent/` | git submodule | Parent POM |
+| `docs/` | docs | Vision, architecture, migration progress |
+
+Reference submodules are **read-only** — see [references/README.md](references/README.md).
+
+## Documentation
+
+- [docs/README.md](docs/README.md) — documentation index
+- [docs/VISION.md](docs/VISION.md) — product vision
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — server architecture
+- [docs/ROADMAP.md](docs/ROADMAP.md) — migration roadmap and progress
+- [docs/buildx-cli-migration.md](docs/buildx-cli-migration.md) — CLI parity (tod → buildx-cli)
+- [changelog.md](changelog.md) — migration and release notes
 
 ## Go workspace
 

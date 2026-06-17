@@ -1,0 +1,15 @@
+---
+description: Update changelog and docs after each migration batch
+alwaysApply: true
+---
+
+# Migration documentation workflow
+
+After completing a migration batch (one or more related features/commands):
+
+1. **changelog.md** (repo root) — add an `[Unreleased]` entry with what was ported and any breaking or notable behavior changes
+2. **docs/ROADMAP.md** — check off completed items or update phase status for `buildx-server`
+3. **docs/buildx-cli-migration.md** — update command parity table when CLI commands are ported
+4. **docs/ARCHITECTURE.md** — update package mapping or naming deviations only when structure changes
+
+Keep entries concise and dated when releasing versions. Link to OneDev/tod source paths under `references/` when helpful for traceability.

@@ -71,16 +71,19 @@ buildx-server/
 ├── pkg/                  # 可对外复用的包
 ├── web/                  # 前端（目标：兼容 OneDev UI）
 ├── deploy/               # Docker 与 Kubernetes 部署
-└── docs/                 # 愿景、架构、路线图
+└── docs/                 # 指向仓库根目录 docs/
 ```
 
 CLI 模块独立维护在 `../buildx-cli`，命令名为 `buildx-cli`。
 
 ## 文档
 
-- [愿景与命名](docs/VISION.md)
-- [架构设计](docs/ARCHITECTURE.md)
-- [路线图](docs/ROADMAP.md)
+项目文档与迁移进度位于仓库根目录：
+
+- [愿景与命名](../docs/VISION.md)
+- [架构设计](../docs/ARCHITECTURE.md)
+- [路线图](../docs/ROADMAP.md)
+- [CLI 迁移](../docs/buildx-cli-migration.md)
 
 ## 与 OneDev 的关系
 
