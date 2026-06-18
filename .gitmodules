@@ -19,3 +19,24 @@
 [submodule "tod"]
 	path = references/tod
 	url = https://github.com/theonedev/tod.git
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/go"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/go
+	url = https://git.woa.com/standards/go
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/css"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/css
+	url = https://git.woa.com/standards/css
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/javascript"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/javascript
+	url = https://git.woa.com/standards/javascript
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/protobuf"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/protobuf
+	url = https://git.woa.com/standards/protobuf
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/dockerfile"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/dockerfile
+	url = https://git.woa.com/standards/dockerfile
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/sql"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/sql
+	url = https://git.woa.com/standards/sql
+[submodule ".cursor/skills/adversarial-code-reviewer/standards/python"]
+	path = .cursor/skills/adversarial-code-reviewer/standards/python
+	url = https://git.woa.com/standards/python
