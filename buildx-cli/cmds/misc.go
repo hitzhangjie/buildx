@@ -129,8 +129,11 @@ the configured access-token.`,
 		if err != nil {
 			return err
 		}
+		if len(body) == 0 {
+			return fmt.Errorf("empty response from %s", downloadURL)
+		}
 		if err := os.WriteFile(args[1], body, 0o644); err != nil {
-			return fmt.Errorf("failed to write %s: %v", args[1], err)
+			return fmt.Errorf("failed to write %s: %w", args[1], err)
 		}
 		return nil
 	},

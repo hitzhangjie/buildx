@@ -104,7 +104,10 @@ func applyConfigEnvironmentOverrides(cfg *Config) {
 }
 
 func (cfg *Config) Validate() error {
-	configFilePath, _ := FindConfigFile()
+	configFilePath, err := FindConfigFile()
+	if err != nil {
+		return err
+	}
 	if cfg.ServerURL == "" {
 		return fmt.Errorf("missing setting %q in %s", ServerURLKey, configFilePath)
 	}
