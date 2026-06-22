@@ -26,7 +26,7 @@ func workingDirOf(cmd *cobra.Command) string {
 }
 
 func currentProjectFor(rt *Runtime, cmd *cobra.Command) (string, error) {
-	_, project, err := client.InferProject(rt.Config, workingDirOf(cmd))
+	_, project, err := rt.API.InferProject(workingDirOf(cmd))
 	if err != nil {
 		return "", err
 	}

@@ -7,8 +7,6 @@ import (
 	"os/exec"
 	"strings"
 
-	client "github.com/hitzhangjie/buildx/buildx-cli/client"
-
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +44,7 @@ var remoteCmd = &cobra.Command{
 	Short: "Print the git remote that points at the inferred BuildX project",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		remote, _, err := client.InferProject(runtime.Config, workingDirOf(cmd))
+		remote, _, err := runtime.API.InferProject(workingDirOf(cmd))
 		if err != nil {
 			return err
 		}
@@ -123,7 +121,7 @@ Relative URLs are resolved against the configured server-url. Authentication use
 the configured access-token.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
-		downloadURL, err := client.ResolveMarkdownResourceURL(runtime.Config.ServerURL, args[0])
+		downloadURL, err := runtime.API.ResolveMarkdownResourceURL(args[0])
 		if err != nil {
 			return err
 		}

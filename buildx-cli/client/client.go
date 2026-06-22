@@ -19,35 +19,37 @@ import (
 )
 
 const (
-	MinRequiredServerVersion = "15.1.0"
-	APIPathPrefix            = "/~api/cli/"
+	minRequiredServerVersion = "15.1.0"
+	apiPathPrefix            = "/~api/cli/"
 )
 
+// VersionInfo is returned by the server's check-version endpoint.
 type VersionInfo struct {
 	ServerVersion         string `json:"serverVersion"`
 	MinRequiredCLIVersion string `json:"minRequiredCliVersion"`
 }
 
+// Client talks to the BuildX CLI HTTP API using the supplied configuration.
 type Client struct {
-	Config *config.Config
+	config *config.Config
 }
 
 func NewClient(cfg *config.Config) *Client {
-	return &Client{Config: cfg}
+	return &Client{config: cfg}
 }
 
-func (c *Client) NewHTTPClient() (*http.Client, error) {
+func (c *Client) newHTTPClient() (*http.Client, error) {
 	client := &http.Client{}
-	if c.Config == nil || c.Config.TrustCertsFile == "" {
+	if c.config == nil || c.config.TrustCertsFile == "" {
 		return client, nil
 	}
-	content, err := os.ReadFile(c.Config.TrustCertsFile)
+	content, err := os.ReadFile(c.config.TrustCertsFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read trust-certs-file %q: %w", c.Config.TrustCertsFile, err)
+		return nil, fmt.Errorf("failed to read trust-certs-file %q: %w", c.config.TrustCertsFile, err)
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(content) {
-		return nil, fmt.Errorf("invalid trust-certs-file: %s", c.Config.TrustCertsFile)
+		return nil, fmt.Errorf("invalid trust-certs-file: %s", c.config.TrustCertsFile)
 	}
 	rootCAs, err := x509.SystemCertPool()
 	if err != nil {
@@ -64,9 +66,9 @@ func (c *Client) NewHTTPClient() (*http.Client, error) {
 	return client, nil
 }
 
-func (c *Client) MakeAPICall(req *http.Request) ([]byte, error) {
-	req.Header.Set("Authorization", "Bearer "+c.Config.AccessToken)
-	httpClient, err := c.NewHTTPClient()
+func (c *Client) makeAPICall(req *http.Request) ([]byte, error) {
+	req.Header.Set("Authorization", "Bearer "+c.config.AccessToken)
+	httpClient, err := c.newHTTPClient()
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +93,7 @@ func (c *Client) MakeAPICall(req *http.Request) ([]byte, error) {
 }
 
 func (c *Client) APIGetBytes(endpointSuffix string, query url.Values) ([]byte, error) {
-	apiURL := c.Config.ServerURL + APIPathPrefix + endpointSuffix
+	apiURL := c.config.ServerURL + apiPathPrefix + endpointSuffix
 	if len(query) > 0 {
 		apiURL += "?" + query.Encode()
 	}
@@ -99,11 +101,11 @@ func (c *Client) APIGetBytes(endpointSuffix string, query url.Values) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	return c.MakeAPICall(req)
+	return c.makeAPICall(req)
 }
 
 func (c *Client) APIPostText(endpointSuffix string, query url.Values, body string) ([]byte, error) {
-	apiURL := c.Config.ServerURL + APIPathPrefix + endpointSuffix
+	apiURL := c.config.ServerURL + apiPathPrefix + endpointSuffix
 	if len(query) > 0 {
 		apiURL += "?" + query.Encode()
 	}
@@ -112,7 +114,7 @@ func (c *Client) APIPostText(endpointSuffix string, query url.Values, body strin
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "text/plain")
-	return c.MakeAPICall(req)
+	return c.makeAPICall(req)
 }
 
 func (c *Client) APIGetAbsolute(absoluteURL string) ([]byte, error) {
@@ -120,10 +122,10 @@ func (c *Client) APIGetAbsolute(absoluteURL string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	return c.MakeAPICall(req)
+	return c.makeAPICall(req)
 }
 
-func ResolveMarkdownResourceURL(serverURL, resourceURL string) (string, error) {
+func (c *Client) ResolveMarkdownResourceURL(resourceURL string) (string, error) {
 	parsed, err := url.Parse(resourceURL)
 	if err != nil {
 		return "", fmt.Errorf("invalid resource URL %q: %v", resourceURL, err)
@@ -132,6 +134,7 @@ func ResolveMarkdownResourceURL(serverURL, resourceURL string) (string, error) {
 		return resourceURL, nil
 	}
 
+	serverURL := c.config.ServerURL
 	base, err := url.Parse(strings.TrimRight(serverURL, "/"))
 	if err != nil {
 		return "", fmt.Errorf("invalid server URL %q: %v", serverURL, err)
@@ -143,11 +146,11 @@ func ResolveMarkdownResourceURL(serverURL, resourceURL string) (string, error) {
 }
 
 func (c *Client) CheckVersion() (VersionInfo, error) {
-	req, err := http.NewRequest("GET", c.Config.ServerURL+APIPathPrefix+"check-version", nil)
+	req, err := http.NewRequest("GET", c.config.ServerURL+apiPathPrefix+"check-version", nil)
 	if err != nil {
 		return VersionInfo{}, fmt.Errorf("failed to check version: %v", err)
 	}
-	body, err := c.MakeAPICall(req)
+	body, err := c.makeAPICall(req)
 	if err != nil {
 		return VersionInfo{}, err
 	}
@@ -169,17 +172,17 @@ func (c *Client) CheckVersion() (VersionInfo, error) {
 	if info.ServerVersion != "" {
 		serverSemVer, err := semver.NewVersion(info.ServerVersion)
 		if err == nil {
-			minServerSemVer, _ := semver.NewVersion(MinRequiredServerVersion)
+			minServerSemVer, _ := semver.NewVersion(minRequiredServerVersion)
 			if serverSemVer.LessThan(minServerSemVer) {
-				return VersionInfo{}, fmt.Errorf("this cli requires OneDev server version >= %s (current: %s)", MinRequiredServerVersion, info.ServerVersion)
+				return VersionInfo{}, fmt.Errorf("this cli requires OneDev server version >= %s (current: %s)", minRequiredServerVersion, info.ServerVersion)
 			}
 		}
 	}
 	return info, nil
 }
 
-func InferProject(cfg *config.Config, workingDir string) (string, string, error) {
-	_, err := exec.LookPath("git")
+func (c *Client) InferProject(workingDir string) (remote string, project string, err error) {
+	_, err = exec.LookPath("git")
 	if err != nil {
 		return "", "", fmt.Errorf("git executable not found in system path")
 	}
@@ -190,12 +193,7 @@ func InferProject(cfg *config.Config, workingDir string) (string, string, error)
 		return "", "", fmt.Errorf("working directory is not inside a git repository")
 	}
 
-	req, err := http.NewRequest("GET", cfg.ServerURL+APIPathPrefix+"get-clone-roots", nil)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create request: %v", err)
-	}
-	client := NewClient(cfg)
-	body, err := client.MakeAPICall(req)
+	body, err := c.APIGetBytes("get-clone-roots", nil)
 	if err != nil {
 		return "", "", err
 	}
@@ -214,8 +212,8 @@ func InferProject(cfg *config.Config, workingDir string) (string, string, error)
 		return "", "", fmt.Errorf("failed to list git remotes: %v", err)
 	}
 	remotes := strings.Fields(strings.TrimSpace(string(output)))
-	for _, remote := range remotes {
-		cmd = exec.Command("git", "remote", "get-url", remote)
+	for _, remoteName := range remotes {
+		cmd = exec.Command("git", "remote", "get-url", remoteName)
 		cmd.Dir = workingDir
 		out, err := cmd.Output()
 		if err != nil {
@@ -227,7 +225,7 @@ func InferProject(cfg *config.Config, workingDir string) (string, string, error)
 			if err != nil {
 				return "", "", err
 			}
-			return remote, project, nil
+			return remoteName, project, nil
 		}
 	}
 	return "", "", fmt.Errorf("no remote found corresponding to an OneDev project")

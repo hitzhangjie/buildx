@@ -37,4 +37,4 @@ access-token=your-token
 
 ## API
 
-The CLI talks to the BuildX server at `/~api/cli/...` (see `client.APIPathPrefix`).
+The CLI talks to the BuildX server at `/~api/cli/...`.
