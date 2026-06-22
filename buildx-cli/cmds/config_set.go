@@ -46,9 +46,9 @@ func setFullConfig() error {
 	trustCertsFile := existing.TrustCertsFile
 
 	reader := bufio.NewReader(os.Stdin)
-	prompt := "BuildX server URL (e.g. https://config.example.com): "
+	prompt := "Server URL (e.g. https://config.example.com): "
 	if serverURL != "" {
-		prompt = fmt.Sprintf("BuildX server URL [%s]: ", serverURL)
+		prompt = fmt.Sprintf("Server URL [%s]: ", serverURL)
 	}
 	value, err := promptValue(reader, prompt)
 	if err != nil {
@@ -63,9 +63,9 @@ func setFullConfig() error {
 	}
 
 	if accessToken != "" {
-		prompt = "BuildX personal access token (press Enter to keep existing): "
+		prompt = "Personal access token (press Enter to keep existing): "
 	} else {
-		prompt = "BuildX personal access token (input is visible): "
+		prompt = "Personal access token (input is visible): "
 	}
 	value, err = promptValue(reader, prompt)
 	if err != nil {

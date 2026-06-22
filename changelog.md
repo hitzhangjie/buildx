@@ -8,7 +8,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Changed
 
-- `buildx-cli` root help groups subcommands (BuildX resources, misc, general); rename `codereview` command to `cr`
+- `buildx-cli` help text drops legacy OneDev/BuildX product wording from command descriptions and user-facing errors
 - Moved git submodules (`onedev`, `agent`, `commons`, `k8s-helper`, `maven-plugin`, `parent`, `tod`) under `references/`
 - Consolidated project documentation into repo-root `docs/` (vision, architecture, roadmap, CLI migration tracking)
 - Added Cursor rules for read-only `references/` and migration documentation workflow

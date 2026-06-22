@@ -209,7 +209,7 @@ func (c *Client) CheckVersion() (VersionInfo, error) {
 			return VersionInfo{}, fmt.Errorf("failed to parse minimum required server version %q: %w", minRequiredServerVersion, err)
 		}
 		if serverSemVer.LessThan(minServerSemVer) {
-			return VersionInfo{}, fmt.Errorf("this cli requires OneDev server version >= %s (current: %s)", minRequiredServerVersion, info.ServerVersion)
+			return VersionInfo{}, fmt.Errorf("this cli requires server version >= %s (current: %s)", minRequiredServerVersion, info.ServerVersion)
 		}
 	}
 	return info, nil
@@ -220,8 +220,8 @@ func (c *Client) InferProject(workingDir string) (remote string, project string,
 		return "", "", fmt.Errorf("git executable not found in system path")
 	}
 
-	prefix := "failed to infer BuildX project from working directory '" + workingDir + "': "
-	suffix := ". Working directory is expected to be inside a git repository, with one of the remotes pointing to a BuildX project"
+	prefix := "failed to infer project from working directory '" + workingDir + "': "
+	suffix := ". Working directory is expected to be inside a git repository, with one of the remotes pointing to a project on the configured server"
 
 	cmd := exec.Command("git", "rev-parse", "--git-dir")
 	cmd.Dir = workingDir
@@ -281,7 +281,7 @@ func (c *Client) InferProject(workingDir string) (remote string, project string,
 			return remoteName, project, nil
 		}
 	}
-	return "", "", fmt.Errorf("%sno remote found corresponding to a BuildX project%s", prefix, suffix)
+	return "", "", fmt.Errorf("%sno remote found corresponding to a project on the configured server%s", prefix, suffix)
 }
 
 func gitRemoteURL(workingDir, remoteName string) (string, error) {

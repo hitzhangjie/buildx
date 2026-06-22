@@ -12,7 +12,7 @@ import (
 
 var getLoginNameCmd = &cobra.Command{
 	Use:   "get-login-name",
-	Short: "Get the BuildX login name of the current user (or of --user)",
+	Short: "Get the login name of the current user (or of --user)",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		userName, _ := cmd.Flags().GetString("user")
@@ -41,7 +41,7 @@ var getUnixTimestampCmd = &cobra.Command{
 
 var remoteCmd = &cobra.Command{
 	Use:   "remote",
-	Short: "Print the git remote that points at the inferred BuildX project",
+	Short: "Print the git remote that points at the inferred project",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		remote, _, err := runtime.API.InferProject(workingDirOf(cmd))
@@ -55,12 +55,12 @@ var remoteCmd = &cobra.Command{
 
 var getValidLabelsCmd = &cobra.Command{
 	Use:   "get-valid-labels",
-	Short: "Print valid label names for this BuildX server",
-	Long: `Print valid label names for this BuildX server. Use this to
+	Short: "Print valid label names for this server",
+	Long: `Print valid label names for this server. Use this to
 discover which label names are accepted by --label when running
-'cli pr create'.
+'buildx-cli pr create'.
 
-The list is fetched from the BuildX server endpoint
+The list is fetched from the server endpoint
 /~api/cli/get-valid-labels.`,
 	Args: cobra.NoArgs,
 	RunE: func(_ *cobra.Command, _ []string) error {
@@ -77,7 +77,7 @@ var getCommitMessageRequirementCmd = &cobra.Command{
 	Use:   "get-commit-message-requirement [branch]",
 	Short: "Print commit message requirement",
 	Long: `Print commit message requirement for a branch.
-The project is inferred from the current git repository's BuildX project.
+The project is inferred from the current git repository.
 Branch defaults to the current git branch when omitted.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -141,8 +141,8 @@ the configured access-token.`,
 
 func init() {
 	getLoginNameCmd.Flags().String("user", "", "User name (defaults to the current user)")
-	remoteCmd.Flags().String("working-dir", "", "Working directory used to infer the BuildX project (defaults to current directory)")
-	getCommitMessageRequirementCmd.Flags().String("working-dir", "", "Working directory used to infer the BuildX project (defaults to current directory)")
+	remoteCmd.Flags().String("working-dir", "", "Working directory used to infer the project (defaults to current directory)")
+	getCommitMessageRequirementCmd.Flags().String("working-dir", "", "Working directory used to infer the project (defaults to current directory)")
 }
 
 func currentBranch(workingDir string) (string, error) {

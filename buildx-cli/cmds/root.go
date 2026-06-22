@@ -40,18 +40,18 @@ func NewRootCommand() *cobra.Command {
 
 func init() {
 	root.AddGroup(
-		&cobra.Group{ID: "resources", Title: "BuildX Resources:"},
+		&cobra.Group{ID: "project", Title: "Project:"},
 		&cobra.Group{ID: "misc", Title: "Misc:"},
 		&cobra.Group{ID: "general", Title: "General:"},
 	)
 	root.SetHelpCommandGroupID("general")
 	root.SetCompletionCommandGroupID("general")
 
-	projectCmd.GroupID = "resources"
-	issueCmd.GroupID = "resources"
-	prCmd.GroupID = "resources"
-	crCmd.GroupID = "resources"
-	buildCmd.GroupID = "resources"
+	projectCmd.GroupID = "project"
+	issueCmd.GroupID = "project"
+	prCmd.GroupID = "project"
+	crCmd.GroupID = "project"
+	buildCmd.GroupID = "project"
 
 	getLoginNameCmd.GroupID = "misc"
 	getUnixTimestampCmd.GroupID = "misc"

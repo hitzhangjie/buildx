@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 var prCmd = &cobra.Command{
 	Use:   "pr",
-	Short: "Interact with OneDev pull requests",
+	Short: "Interact with pull requests",
 }
 
 func init() {

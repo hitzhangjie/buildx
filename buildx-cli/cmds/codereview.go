@@ -5,7 +5,7 @@ import "github.com/spf13/cobra"
 var crCmd = &cobra.Command{
 	Use:     "cr",
 	Aliases: []string{"codereview"},
-	Short:   "Interact with OneDev code reviews (code comments)",
+	Short:   "Interact with code reviews (code comments)",
 }
 
 func init() {

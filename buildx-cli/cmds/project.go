@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 var projectCmd = &cobra.Command{
 	Use:   "project",
-	Short: "Interact with OneDev projects",
+	Short: "Interact with projects",
 }
 
 func init() {
