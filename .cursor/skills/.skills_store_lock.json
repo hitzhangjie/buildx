@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "hitzhangjie-go-programming": {
+      "name": "hitzhangjie-go-programming",
+      "zip_url": "https://api.skillhub.cn/api/v1/download?slug=hitzhangjie-go-programming",
+      "source": "community",
+      "installedAt": "2026-06-22T09:32:59Z"
+    }
+  }
+}
