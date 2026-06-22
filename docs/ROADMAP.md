@@ -71,9 +71,11 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 
 - [x] `buildx-web/` standalone Vite + React app
 - [x] Embed UI into `buildx-server` binary via `go:embed` (single-process deploy)
-- [ ] Evaluate OneDev visual asset reuse
-- [ ] API compatibility layer for full UI parity
-- [ ] Incremental page coverage (issues, PRs, builds, …)
+- [x] OneDev visual asset sync (`sync-onedev-assets`)
+- [x] Full page migration task list — [buildx-web-migration.md](buildx-web-migration.md) (**223 pages, UI-first**)
+- [ ] Wave 0 infrastructure (router, mocks, shared components)
+- [ ] All pages visually aligned with OneDev (parallel waves W1–W12)
+- [ ] buildx-server `/~api` backfill — [buildx-server-api-migration.md](buildx-server-api-migration.md)
 
 ---
 

@@ -47,4 +47,8 @@ buildx-server/bin/
 # buildx-web
 buildx-web/node_modules/
 buildx-web/dist/
+# synced from references/onedev — regenerate via make sync-onedev-assets
+buildx-web/public/onedev/
+buildx-web/public/~icon/
+buildx-web/public/~img/
 buildx-cli/bin/

@@ -21,6 +21,9 @@ Reference submodules under `references/` are **read-only** — use them for comp
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Server architecture and OneDev package mapping |
 | [ROADMAP.md](ROADMAP.md) | Migration phases and progress checklists |
 | [buildx-cli-migration.md](buildx-cli-migration.md) | CLI command parity tracking (tod → buildx-cli) |
+| [buildx-web-design.md](buildx-web-design.md) | Web UI OneDev visual parity principles |
+| [buildx-web-migration.md](buildx-web-migration.md) | **Full UI page migration checklist (223 pages, UI-first)** |
+| [buildx-server-api-migration.md](buildx-server-api-migration.md) | REST `/~api` backfill tracking (after UI) |
 
 ## Changelog
 

@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       "/~api": "http://127.0.0.1:6610",
       "/~health": "http://127.0.0.1:6610",
+      "/~icon": "http://127.0.0.1:6610",
+      "/~img": "http://127.0.0.1:6610",
     },
   },
   build: {

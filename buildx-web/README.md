@@ -1,31 +1,33 @@
 # BuildX Web UI
 
-独立前端工程，构建产物在 `make build` 时嵌入 `buildx-server` 二进制（单进程部署）。
+React 前端，**视觉与 OneDev Wicket UI 对齐**，数据来自 buildx-server `/~api`。
+
+设计规范：[../docs/buildx-web-design.md](../docs/buildx-web-design.md)  
+**全量页面任务清单**：[../docs/buildx-web-migration.md](../docs/buildx-web-migration.md)（223 页，UI 先行、API 后补）
 
 ## 开发
 
 ```bash
-# 终端 1：后端
+# 同步 OneDev CSS/图标（从 references/onedev 只读复制）
+make sync-onedev-assets
+
+# 终端 1
 cd ../buildx-server && go run . serve --dev
 
-# 终端 2：前端热更新（API 代理到 :6610）
-cd buildx-web && npm ci && npm run dev
+# 终端 2
+npm ci && npm run dev
 ```
 
-## 生产构建
+## 构建（嵌入 server 二进制）
 
-在仓库根目录执行 `make` 即可：先构建 `buildx-web/dist`，再同步到 `buildx-server/internal/server/webdist/` 并 `go:embed` 进二进制。
+仓库根目录 `make` 会自动：sync assets → vite build → sync-embed → go build。
 
-仅后端快速迭代（跳过前端）：
+## 页面对照
 
-```bash
-make build-server SKIP_WEB=1
+实现新页面时，对照 OneDev 源：
+
+```
+references/onedev/server-core/.../web/page/{area}/{Name}Page.html
 ```
 
-## 目录
-
-| 路径 | 说明 |
-|------|------|
-| `src/` | React 源码 |
-| `dist/` | Vite 构建输出（gitignore） |
-| `../buildx-server/internal/server/webdist/` | 嵌入用同步目录 |
+DOM class 名与 OneDev 保持一致，CSS 复用 `public/onedev/css/`。
