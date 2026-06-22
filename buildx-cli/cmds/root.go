@@ -39,6 +39,30 @@ func NewRootCommand() *cobra.Command {
 }
 
 func init() {
+	root.AddGroup(
+		&cobra.Group{ID: "resources", Title: "BuildX Resources:"},
+		&cobra.Group{ID: "misc", Title: "Misc:"},
+		&cobra.Group{ID: "general", Title: "General:"},
+	)
+	root.SetHelpCommandGroupID("general")
+	root.SetCompletionCommandGroupID("general")
+
+	projectCmd.GroupID = "resources"
+	issueCmd.GroupID = "resources"
+	prCmd.GroupID = "resources"
+	crCmd.GroupID = "resources"
+	buildCmd.GroupID = "resources"
+
+	getLoginNameCmd.GroupID = "misc"
+	getUnixTimestampCmd.GroupID = "misc"
+	getValidLabelsCmd.GroupID = "misc"
+	getCommitMessageRequirementCmd.GroupID = "misc"
+	remoteCmd.GroupID = "misc"
+	downloadCmd.GroupID = "misc"
+
+	configCmd.GroupID = "general"
+	versionCmd.GroupID = "general"
+
 	root.AddCommand(configCmd)
 	root.AddCommand(projectCmd)
 	root.AddCommand(buildCmd)
@@ -46,7 +70,6 @@ func init() {
 	root.AddCommand(prCmd)
 	root.AddCommand(crCmd)
 	root.AddCommand(versionCmd)
-	// misc
 	root.AddCommand(getLoginNameCmd)
 	root.AddCommand(getUnixTimestampCmd)
 	root.AddCommand(remoteCmd)

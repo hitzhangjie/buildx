@@ -19,7 +19,7 @@
 | `issue` | `buildx-cli issue` | Scaffolded |
 | `pr` | `buildx-cli pr` | Scaffolded |
 | `build` | `buildx-cli build` | Scaffolded |
-| `codereview` / CR helpers | `buildx-cli codereview` | Scaffolded |
+| `codereview` / CR helpers | `buildx-cli cr` | Scaffolded |
 | `config` | `buildx-cli config` | Scaffolded |
 
 **Scaffolded** = command structure and client wiring exist; behavior may not yet match tod end-to-end.

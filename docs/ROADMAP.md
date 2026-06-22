@@ -82,7 +82,7 @@ See [buildx-cli-migration.md](buildx-cli-migration.md) for command-level parity 
 - [x] CLI scaffold (`buildx-cli` binary)
 - [x] Config file and env overrides
 - [x] HTTP client to `/~api/cli/...`
-- [x] Command groups: `project`, `issue`, `pr`, `build`, `config`, `codereview`
+- [x] Command groups: `project`, `issue`, `pr`, `build`, `config`, `cr`
 
 ### Phase 1 — Core commands
 

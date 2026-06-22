@@ -3,8 +3,8 @@ package cmds
 import "github.com/spf13/cobra"
 
 var crCmd = &cobra.Command{
-	Use:     "codereview",
-	Aliases: []string{"cr"},
+	Use:     "cr",
+	Aliases: []string{"codereview"},
 	Short:   "Interact with OneDev code reviews (code comments)",
 }
 
