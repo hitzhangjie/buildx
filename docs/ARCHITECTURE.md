@@ -51,7 +51,7 @@ Reference source: `references/onedev/server-core/src/main/java/io/onedev/server`
 
 | OneDev package prefix | BuildX package prefix | Notes |
 |---|---|---|
-| `io.onedev.server.model` | `internal/model` (planned) | Keep entity names aligned (`Project`, `Issue`, `PullRequest`, `Build`, etc.) |
+| `io.onedev.server.model` | `internal/model` | Entity names aligned (`User`, `Project`, `Role`, `AccessToken`, …) |
 | `io.onedev.server.entitymanager` | `internal/entitymanager` (planned) | Service-manager naming stays close to OneDev |
 | `io.onedev.server.git` | `internal/git` | Keep Git protocol concepts aligned |
 | `io.onedev.server.buildspec` | `internal/buildspec` (planned) | Keep buildspec terminology aligned |
@@ -61,7 +61,7 @@ Reference source: `references/onedev/server-core/src/main/java/io/onedev/server`
 | `io.onedev.server.event` | `internal/event` (planned) | Keep event types and names close |
 | `io.onedev.server.plugin` + `server-plugin/*` | `internal/plugin` | Plugin extension points remain first-class |
 | `tod` CLI | `buildx-cli/cmd/buildx-cli` | CLI capability maps to standalone `buildx-cli` command model |
-| Persistence (Hibernate/JPA layer) | `internal/persistence` (planned) | Storage abstraction can exist, but persistence naming should be explicit |
+| Persistence (Hibernate/JPA layer) | `internal/persistence` + `internal/persistence/sqlite` | SQLite MVP; maps to OneDev `DataService`, not filesystem `StorageService` |
 
 ### Current naming deviations (tracked)
 

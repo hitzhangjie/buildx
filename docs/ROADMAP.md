@@ -10,16 +10,18 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 - [x] Module boundaries aligned with OneDev domains
 - [x] HTTP server with health/info endpoints
 - [x] Documentation (vision, architecture, roadmap) moved to repo `docs/`
-- [ ] `go mod tidy` and CI pipeline
+- [x] `go mod tidy` and core dependencies (chi, sqlite, bcrypt)
+- [ ] CI pipeline
 
 ### Phase 1 — Core platform (MVP)
 
-- [ ] Storage layer (SQLite + migrations)
-- [ ] User authentication (local accounts + access tokens)
-- [ ] Project CRUD and hierarchy
+- [x] Storage layer (SQLite + embedded migrations, OneDev `o_*` schema subset)
+- [x] User authentication (local accounts, Basic/Bearer, access token lookup)
+- [x] Project CRUD and hierarchy (`setup` path walk, git bare init on disk)
+- [ ] Replace bare repo init: `git init` CLI → `go-git` (OneDev uses in-process JGit; no git binary required for init)
 - [ ] Git smart HTTP (clone, push, pull)
 - [ ] Git SSH
-- [ ] Basic REST API (project, user, repo)
+- [x] Basic REST API (`/~api/users`, `/~api/projects`) — partial parity
 
 **Milestone**: Can create a project, push code via HTTP/SSH.
 

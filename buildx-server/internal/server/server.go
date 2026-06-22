@@ -5,34 +5,50 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/persistence/sqlite"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/security"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/server/api"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/version"
 )
 
 // Server is the BuildX application server.
 type Server struct {
 	cfg    *config.Config
+	store  *sqlite.Store
 	router chi.Router
 	http   *http.Server
 }
 
 // New constructs a Server with routes wired but not yet listening.
-func New(cfg *config.Config) *Server {
-	s := &Server{cfg: cfg}
+func New(cfg *config.Config) (*Server, error) {
+	store, err := sqlite.Open(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{cfg: cfg, store: store}
 	s.router = s.routes()
 	s.http = &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           s.router,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	return s
+	return s, nil
 }
 
 func (s *Server) routes() chi.Router {
+	sec := security.NewDBStore(s.store.DB())
+	projects := project.NewDBStore(s.store.DB(), s.cfg.DataDir)
+
+	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec}
+	userHandler := &api.UsersHandler{Security: sec}
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -42,6 +58,24 @@ func (s *Server) routes() chi.Router {
 	r.Get("/~health", s.handleHealth)
 	r.Get("/~api/v1/info", s.handleInfo)
 	r.Get("/~api/cli/check-version", s.handleCLICheckVersion)
+
+	r.Route("/~api", func(r chi.Router) {
+		r.Get("/users", userHandler.List)
+		r.Post("/users", userHandler.Create)
+		r.Get("/users/me", userHandler.Me)
+
+		r.Get("/projects", projectHandler.List)
+		r.Post("/projects", projectHandler.Create)
+		r.Post("/projects/setup", projectHandler.Setup)
+		r.Get("/projects/{projectId}", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			projectHandler.Get(w, r, id)
+		})
+	})
 
 	// Static web UI — placeholder until OneDev-compatible frontend is integrated.
 	r.Handle("/*", http.FileServer(http.Dir("web/dist")))
@@ -66,6 +100,16 @@ func (s *Server) handleCLICheckVersion(w http.ResponseWriter, _ *http.Request) {
 
 // Run starts the HTTP server and blocks until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
+	if err := s.store.Migrate(ctx); err != nil {
+		_ = s.store.Close()
+		return fmt.Errorf("migrate database: %w", err)
+	}
+	defer func() { _ = s.store.Close() }()
+
+	if err := s.store.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("bootstrap database: %w", err)
+	}
+
 	slog.Info("starting buildx-server",
 		"version", version.Version,
 		"http", s.cfg.HTTPAddr,

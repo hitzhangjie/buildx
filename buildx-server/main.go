@@ -57,7 +57,11 @@ func newRootCmd() *cobra.Command {
 			defer stop()
 
 			slog.Info("buildx server", "version", version.Version)
-			return server.New(cfg).Run(ctx)
+			srv, err := server.New(cfg)
+			if err != nil {
+				return err
+			}
+			return srv.Run(ctx)
 		},
 	}
 	serveCmd.Flags().Bool("dev", false, "Enable development mode")

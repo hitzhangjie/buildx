@@ -3,18 +3,18 @@
 // Maps to OneDev: io.onedev.server.security.*
 package security
 
-import "context"
+import (
+	"context"
+
+	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
+)
 
 // User represents an authenticated principal.
-type User struct {
-	ID       int64
-	Name     string
-	Email    string
-	FullName string
-}
+type User = model.User
 
 // Service handles login, tokens, and permission checks.
 type Service interface {
-	Authenticate(ctx context.Context, token string) (*User, error)
+	Authenticate(ctx context.Context, username, password string) (*User, error)
+	AuthenticateToken(ctx context.Context, token string) (*User, error)
 	Authorize(ctx context.Context, userID, projectID int64, action string) (bool, error)
 }
