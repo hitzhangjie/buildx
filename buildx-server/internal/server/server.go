@@ -77,8 +77,8 @@ func (s *Server) routes() chi.Router {
 		})
 	})
 
-	// Static web UI — placeholder until OneDev-compatible frontend is integrated.
-	r.Handle("/*", http.FileServer(http.Dir("web/dist")))
+	// Static web UI — embedded placeholder, or BUILDX_WEB_DIR when OneDev assets are deployed.
+	r.Handle("/*", webHandler(s.cfg.WebDir))
 
 	return r
 }

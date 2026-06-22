@@ -97,11 +97,13 @@ Plugin interface inspired by OneDev:
 
 ### Frontend strategy
 
-**Phase 1**: API-compatible backend; serve existing OneDev UI assets where possible  
-**Phase 2**: Incremental React migration of high-churn pages  
-**Phase 3**: Full modern SPA with shared design system
+**Layout**: `buildx-web/` is a standalone Vite + React project; `make build` syncs `buildx-web/dist` into `buildx-server/internal/server/webdist/` and embeds it with `go:embed` — **single binary, single process** at runtime.
 
-OneDev's Wicket UI is battle-tested. Rebuilding UX from scratch is unnecessary — we rebuild the engine, not the experience.
+**Development**: run `buildx-server serve` and `buildx-web` dev server separately (Vite proxies `/~api`).
+
+**Override**: set `BUILDX_WEB_DIR` to serve an external build without recompiling the server.
+
+**Phase 2+**: Incremental page replacement; OneDev Wicket UI is not portable as static assets.
 
 ### AI integration
 

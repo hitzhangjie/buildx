@@ -42,10 +42,9 @@ target/
 
 # buildx-server
 buildx-server/dist/
-buildx-server/web/node_modules/
-buildx-server/web/dist/
-buildx-server/web/.next/
-
-# Local build artifacts
 buildx-server/bin/
+
+# buildx-web
+buildx-web/node_modules/
+buildx-web/dist/
 buildx-cli/bin/

@@ -69,9 +69,11 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 
 ### Phase 6 — Frontend
 
-- [ ] Evaluate OneDev UI reuse strategy
-- [ ] API compatibility layer for existing frontend
-- [ ] Incremental modern UI where needed
+- [x] `buildx-web/` standalone Vite + React app
+- [x] Embed UI into `buildx-server` binary via `go:embed` (single-process deploy)
+- [ ] Evaluate OneDev visual asset reuse
+- [ ] API compatibility layer for full UI parity
+- [ ] Incremental page coverage (issues, PRs, builds, …)
 
 ---
 

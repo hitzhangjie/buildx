@@ -1,8 +1,9 @@
 .PHONY: all build clean install uninstall test format lint
-.PHONY: build-cli build-server clean-cli clean-server
+.PHONY: build-cli build-server build-web clean-cli clean-server clean-web
 .PHONY: install-cli install-server test-cli test-server format-cli format-server
 
 VERSION ?= dev
+SKIP_WEB ?=
 
 GOBIN := $(shell go env GOBIN)
 ifeq ($(GOBIN),)
@@ -17,13 +18,20 @@ all: build
 
 build: build-cli build-server
 
+build-web:
+	$(MAKE) -C buildx-web build
+	bash buildx-web/scripts/sync-embed.sh
+
 build-cli:
 	$(MAKE) -C buildx-cli build VERSION=$(VERSION)
 
 build-server:
-	$(MAKE) -C buildx-server build VERSION=$(VERSION)
+ifneq ($(SKIP_WEB),1)
+	$(MAKE) build-web
+endif
+	$(MAKE) -C buildx-server build VERSION=$(VERSION) SKIP_WEB=1
 
-clean: clean-cli clean-server
+clean: clean-cli clean-server clean-web
 
 clean-cli:
 	$(MAKE) -C buildx-cli clean
@@ -31,13 +39,19 @@ clean-cli:
 clean-server:
 	$(MAKE) -C buildx-server clean
 
+clean-web:
+	$(MAKE) -C buildx-web clean
+
 install: install-cli install-server
 
 install-cli:
 	$(MAKE) -C buildx-cli install VERSION=$(VERSION)
 
 install-server:
-	$(MAKE) -C buildx-server install VERSION=$(VERSION)
+ifneq ($(SKIP_WEB),1)
+	$(MAKE) build-web
+endif
+	$(MAKE) -C buildx-server install VERSION=$(VERSION) SKIP_WEB=1
 
 uninstall:
 	rm -f $(addprefix $(GOBIN)/,$(INSTALL_BINARIES))

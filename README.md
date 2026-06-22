@@ -8,6 +8,7 @@ Monorepo for the BuildX toolchain — a Go reimplementation of the [OneDev](http
 |------|------|-------------|
 | `buildx-server/` | Go module | BuildX server (ported from OneDev) |
 | `buildx-cli/` | Go module | BuildX CLI (`buildx-cli` binary, ported from tod) |
+| `buildx-web/` | npm (Vite + React) | Web UI; embedded into `buildx-server` at build time |
 | `references/onedev/` | git submodule | OneDev platform (read-only reference) |
 | `references/tod/` | git submodule | TOD CLI (read-only reference) |
 | `references/agent/` | git submodule | OneDev agent |

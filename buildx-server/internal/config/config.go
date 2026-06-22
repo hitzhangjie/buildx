@@ -14,6 +14,8 @@ type Config struct {
 	SSHAddr string
 	// DataDir is the root directory for repositories, database, and attachments.
 	DataDir string
+	// WebDir is an optional directory with built frontend assets (e.g. OneDev web/dist).
+	WebDir string
 	// Dev enables development mode (verbose logging, hot reload hooks).
 	Dev bool
 }
@@ -24,6 +26,7 @@ func Load() (*Config, error) {
 		HTTPAddr: envOr("BUILDX_HTTP_ADDR", ":6610"),
 		SSHAddr:  envOr("BUILDX_SSH_ADDR", ":6611"),
 		DataDir:  envOr("BUILDX_DATA_DIR", "./data"),
+		WebDir:   envOr("BUILDX_WEB_DIR", ""),
 		Dev:      envBool("BUILDX_DEV", false),
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
