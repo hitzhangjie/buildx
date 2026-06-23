@@ -4,8 +4,8 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile
     ports:
-      - "6610:6610"
-      - "6611:6611"
+      - "6666:6666"
+      - "6667:6667"
     volumes:
       - buildx-data:/data
     environment:

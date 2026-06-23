@@ -1,7 +1,6 @@
 import { type FormEvent, useState } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { createProject } from "../api/projects";
-import { useAuth } from "../context/AuthContext";
 import { Layout } from "../layout/Layout";
 import { setFlashMessage } from "../util/flash";
 
@@ -14,7 +13,6 @@ function deriveKey(name: string): string {
 }
 
 export function NewProjectPage() {
-  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const parentPath = searchParams.get("parent") ?? "";
@@ -28,10 +26,6 @@ export function NewProjectPage() {
   const [timeTracking, setTimeTracking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  if (!loading && !user) {
-    return <Navigate to="/~login" state={{ from: "/~projects/new" }} replace />;
-  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();

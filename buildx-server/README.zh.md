@@ -38,10 +38,57 @@ BuildX 从设计上解决这个问题：
 ```bash
 cd buildx-server
 make build
-./bin/buildx-server server --dev
+./bin/buildx-server serve --dev
 ```
 
-浏览器访问 http://localhost:6610/~health 确认服务已启动。
+浏览器访问 http://localhost:6666/~health 确认服务已启动。
+
+### 初始管理员账号
+
+在**全新的数据目录**下，只有在**首次启动前**同时设置以下三个环境变量，才会创建 root 管理员账号：
+
+| 变量 | 说明 |
+|---|---|
+| `BUILDX_INITIAL_USER` | 登录用户名 |
+| `BUILDX_INITIAL_PASSWORD` | 登录密码 |
+| `BUILDX_INITIAL_EMAIL` | 主邮箱（也可用于登录） |
+
+```bash
+export BUILDX_INITIAL_USER=admin
+export BUILDX_INITIAL_PASSWORD=changeme
+export BUILDX_INITIAL_EMAIL=admin@example.com
+./bin/buildx-server serve --dev
+```
+
+若缺少其中任意一项，启动时不会创建管理员，Web 界面将无法登录。该逻辑每个数据目录（`BUILDX_DATA_DIR`，默认 `./data`）仅执行一次；若管理员已存在，后续启动会忽略这些变量。
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `BUILDX_HTTP_ADDR` | `:6666` | HTTP/Web 监听地址（`host:port`、`:6666` 或纯端口号 `6666`） |
+| `BUILDX_SSH_ADDR` | `:6667` | Git SSH 监听地址 |
+| `BUILDX_DATA_DIR` | `./data` | 数据目录（数据库、仓库、附件等） |
+| `BUILDX_WEB_DIR` | （空） | 前端静态资源目录；为空时使用嵌入的 buildx-web |
+| `BUILDX_DEV` | `false` | 开发模式（更详细日志等） |
+| `BUILDX_INITIAL_USER` | — | 首次启动时的管理员登录名（见上） |
+| `BUILDX_INITIAL_PASSWORD` | — | 首次启动时的管理员密码 |
+| `BUILDX_INITIAL_EMAIL` | — | 首次启动时的管理员主邮箱 |
+
+环境变量需在**启动 `buildx-server serve` 的同一 shell** 中 `export`（服务端不读取 `.env` 文件）。启动日志会打印 `configuration http=...` 以确认生效。也可用命令行参数覆盖：
+
+```bash
+./bin/buildx-server serve --http-addr 0.0.0.0:6666 --data-dir ./data
+```
+
+```bash
+export BUILDX_HTTP_ADDR=0.0.0.0:6666
+export BUILDX_SSH_ADDR=0.0.0.0:6667
+export BUILDX_DATA_DIR=./data
+./bin/buildx-server serve --dev
+```
+
+前端开发（`npm run dev`）的 API 代理同样读取 `BUILDX_HTTP_ADDR`，需与后端端口一致。
 
 ```bash
 # CLI

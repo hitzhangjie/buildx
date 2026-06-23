@@ -36,6 +36,30 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if cmd.Flags().Changed("http-addr") {
+				v, err := cmd.Flags().GetString("http-addr")
+				if err != nil {
+					return err
+				}
+				cfg.HTTPAddr = v
+			}
+			if cmd.Flags().Changed("ssh-addr") {
+				v, err := cmd.Flags().GetString("ssh-addr")
+				if err != nil {
+					return err
+				}
+				cfg.SSHAddr = v
+			}
+			if cmd.Flags().Changed("data-dir") {
+				v, err := cmd.Flags().GetString("data-dir")
+				if err != nil {
+					return err
+				}
+				cfg.DataDir = v
+			}
+			if err := cfg.Revalidate(); err != nil {
+				return err
+			}
 			if v, ok := os.LookupEnv("BUILDX_DEV"); ok {
 				cfg.Dev, _ = strconv.ParseBool(v)
 			}
@@ -57,6 +81,13 @@ func newRootCmd() *cobra.Command {
 			defer stop()
 
 			slog.Info("buildx server", "version", version.Version)
+			slog.Info("configuration",
+				"http", cfg.HTTPAddr,
+				"ssh", cfg.SSHAddr,
+				"data_dir", cfg.DataDir,
+				"web_dir", cfg.WebDir,
+				"dev", cfg.Dev,
+			)
 			srv, err := server.New(cfg)
 			if err != nil {
 				return err
@@ -65,6 +96,9 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 	serveCmd.Flags().Bool("dev", false, "Enable development mode")
+	serveCmd.Flags().String("http-addr", "", "HTTP listen address (overrides BUILDX_HTTP_ADDR)")
+	serveCmd.Flags().String("ssh-addr", "", "SSH listen address (overrides BUILDX_SSH_ADDR)")
+	serveCmd.Flags().String("data-dir", "", "Data directory (overrides BUILDX_DATA_DIR)")
 
 	versionCmd := &cobra.Command{
 		Use:   "version",

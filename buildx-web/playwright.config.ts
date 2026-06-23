@@ -10,7 +10,7 @@ export default defineConfig({
   webServer: process.env.CI
     ? undefined
     : {
-        command: "npm run dev",
+        command: "VITE_USE_MOCK=true npm run dev",
         url: "http://127.0.0.1:5173",
         reuseExistingServer: true,
       },

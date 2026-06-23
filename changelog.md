@@ -8,6 +8,20 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **buildx-web LayoutPage auth guard** — mirrors OneDev `LayoutPage.isPermitted()` / `BasePage.unauthorized()`:
+  - `RequireLayoutAccess` redirects anonymous users to `/~login` with `state.from` for post-login return
+  - `SimplePage` routes (`layout: "simple"`) remain public (login, signup, init, …)
+  - `fetchSecuritySetting()` stub for `enableAnonymousAccess` (defaults false until server API)
+
+### Changed
+
+- **Default listen ports** — HTTP `6610` → `6666`, SSH `6611` → `6667` (config, Docker, vite proxy, docs)
+
+### Fixed
+
+- **buildx-server `/~api` 401 responses** — no longer send `WWW-Authenticate: Basic`, which caused the browser's native login dialog to appear on top of the React login form when credentials were missing or invalid
+- **buildx-server listen address config** — normalize plain port `6666` to `:6666`; add `--http-addr` / `--ssh-addr` / `--data-dir` CLI flags; log effective configuration at startup; vite dev proxy follows `BUILDX_HTTP_ADDR`; default HTTP/SSH ports `6666`/`6667`
+
 - **buildx-web UI-first migration complete** — all 223 OneDev routes render without white screen:
   - `PageRenderer` + `resolvePageTemplate`: list/form/detail/setting/log/board/stats templates
   - Global + project routes wired through unified renderer (specialized pages for login, blob, global lists)

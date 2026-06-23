@@ -2,6 +2,7 @@ import { Navigate, Route, Routes, matchPath, useLocation } from "react-router-do
 import { ProjectProvider } from "../context/ProjectContext";
 import { GLOBAL_ROUTES } from "./globalRoutes";
 import { matchProjectRoute } from "./matchProjectRoute";
+import { RequireLayoutAccess } from "./RequireLayoutAccess";
 import { BuildsPage } from "../pages/BuildsPage";
 import { IssuesPage } from "../pages/IssuesPage";
 import { LoginPage } from "../pages/LoginPage";
@@ -39,18 +40,25 @@ function GlobalRouteElement({ def }: { def: RouteDefinition }) {
   const matched = matchPath(def.path, pathname);
   const params = (matched?.params ?? {}) as Record<string, string>;
 
+  let content: React.ReactNode;
   if (def.known && GLOBAL_KNOWN[def.known]) {
-    return GLOBAL_KNOWN[def.known]!();
+    content = GLOBAL_KNOWN[def.known]!();
+  } else {
+    content = (
+      <PageRenderer
+        title={def.title}
+        page={def.page}
+        refPath={def.ref}
+        layout={def.layout}
+        params={params}
+      />
+    );
   }
-  return (
-    <PageRenderer
-      title={def.title}
-      page={def.page}
-      refPath={def.ref}
-      layout={def.layout}
-      params={params}
-    />
-  );
+
+  if (def.layout === "simple") {
+    return content;
+  }
+  return <RequireLayoutAccess>{content}</RequireLayoutAccess>;
 }
 
 function ProjectRouteElement() {
@@ -61,24 +69,25 @@ function ProjectRouteElement() {
     return <PageNotFoundPage />;
   }
 
+  let content: React.ReactNode;
   if (matched.def.known === "dashboard") {
-    return <ProjectDashboardPage />;
+    content = <ProjectDashboardPage />;
+  } else if (matched.def.known === "blob") {
+    content = <ProjectBlobPage />;
+  } else {
+    content = (
+      <PageRenderer
+        title={matched.def.title}
+        page={matched.def.page}
+        refPath={matched.def.ref}
+        layout="main"
+        projectPath={matched.projectPath}
+        params={matched.params}
+      />
+    );
   }
 
-  if (matched.def.known === "blob") {
-    return <ProjectBlobPage />;
-  }
-
-  return (
-    <PageRenderer
-      title={matched.def.title}
-      page={matched.def.page}
-      refPath={matched.def.ref}
-      layout="main"
-      projectPath={matched.projectPath}
-      params={matched.params}
-    />
-  );
+  return <RequireLayoutAccess>{content}</RequireLayoutAccess>;
 }
 
 function LegacyProjectRedirect() {

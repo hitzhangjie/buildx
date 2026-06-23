@@ -231,14 +231,21 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, security.ErrUnauthorized), errors.Is(err, security.ErrInvalidCredentials):
-		w.Header().Set("WWW-Authenticate", `Basic realm="BuildX"`)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	case errors.Is(err, security.ErrInvalidCredentials):
+		writeJSONError(w, http.StatusUnauthorized, "Invalid credentials")
+	case errors.Is(err, security.ErrUnauthorized):
+		writeJSONError(w, http.StatusUnauthorized, "Not authenticated")
 	case errors.Is(err, security.ErrUserDisabled):
-		http.Error(w, "user disabled", http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "user disabled")
 	default:
 		writeInternalError(w, err)
 	}
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 func writeInternalError(w http.ResponseWriter, err error) {
