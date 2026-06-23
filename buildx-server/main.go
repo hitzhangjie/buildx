@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/server"
@@ -74,6 +76,20 @@ func newRootCmd() *cobra.Command {
 				slog.SetLogLoggerLevel(slog.LevelDebug)
 			}
 
+			watch, _ := strconv.ParseBool(os.Getenv("BUILDX_HOTRELOAD"))
+			var (
+				restartNeeded atomic.Bool
+				exePath       string
+			)
+			if watch {
+				var err error
+				exePath, err = os.Executable()
+				if err != nil {
+					return fmt.Errorf("resolve executable: %w", err)
+				}
+				slog.Info("watching binary for changes", "path", exePath)
+			}
+
 			ctx, stop := signal.NotifyContext(context.Background(),
 				syscall.SIGINT,
 				syscall.SIGQUIT,
@@ -92,7 +108,20 @@ func newRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return srv.Run(ctx)
+			if watch {
+				go watchBinary(exePath, func() {
+					restartNeeded.Store(true)
+					stop()
+				})
+			}
+			if err := srv.Run(ctx); err != nil {
+				return err
+			}
+			if restartNeeded.Load() {
+				slog.Info("restarting with updated binary", "path", exePath)
+				return syscall.Exec(exePath, os.Args, os.Environ())
+			}
+			return nil
 		},
 	}
 	serveCmd.Flags().Bool("dev", false, "Enable development mode")
@@ -112,4 +141,31 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(versionCmd)
 
 	return root
+}
+
+// watchBinary polls exePath every second and calls onChange when the
+// modification time changes (e.g. after a rebuild).
+func watchBinary(exePath string, onChange func()) {
+	fi, err := os.Stat(exePath)
+	if err != nil {
+		slog.Warn("watch: cannot stat binary", "path", exePath, "error", err)
+		return
+	}
+	lastMod := fi.ModTime()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		fi, err := os.Stat(exePath)
+		if err != nil {
+			continue
+		}
+		if fi.ModTime().After(lastMod) {
+			slog.Info("binary changed, triggering restart")
+			onChange()
+			return
+		}
+		lastMod = fi.ModTime()
+	}
 }
