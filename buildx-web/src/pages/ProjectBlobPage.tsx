@@ -258,6 +258,7 @@ export function ProjectBlobPage() {
   const [blob, setBlob] = useState<BlobContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const displayRevision = revision || blob?.revision || "";
 
   // ADD/EDIT mode state
   const [newFileName, setNewFileName] = useState(initialPath ?? "");
@@ -324,13 +325,14 @@ export function ProjectBlobPage() {
     if (!filePath) return;
 
     try {
-      await createFile(projectPath!, revision, filePath, content, commitMessage);
+      const rev = displayRevision || revision;
+      await createFile(projectPath!, rev, filePath, content, commitMessage);
       // Navigate to the newly created file in view mode
-      navigate(blobUrl(projectPath!, revision, filePath), { replace: true });
+      navigate(blobUrl(projectPath!, rev, filePath), { replace: true });
     } catch (err) {
       setError((err as { message?: string }).message ?? "Failed to create file");
     }
-  }, [projectPath, revision, newFilePath, navigate]);
+  }, [projectPath, revision, displayRevision, newFilePath, navigate]);
 
   // Handle cancel from edit panels — go back to VIEW mode
   const handleCancelEdit = useCallback(() => {
@@ -347,7 +349,12 @@ export function ProjectBlobPage() {
   // --- Determine what to render in the content area ---
 
   const isEditMode = mode === "add" || mode === "edit";
-  const isEmpty = forceEmpty || (!loading && !error && !blob);
+  const hasNoCommits =
+    !loading &&
+    !error &&
+    path === "" &&
+    (!blob || (blob.type === "directory" && !(blob.entries?.length)));
+  const isEmpty = forceEmpty || hasNoCommits;
 
   let content: React.ReactNode;
 
@@ -360,7 +367,7 @@ export function ProjectBlobPage() {
           <NoNameEditPanel />
           {/* Also show the folder view beneath so user can see where they are */}
           {blob && blob.type === "directory" && !isEmpty && (
-            <FolderView projectPath={projectPath} revision={revision} path={path} blob={blob} />
+            <FolderView projectPath={projectPath} revision={displayRevision || revision} path={path} blob={blob} />
           )}
         </>
       );
@@ -371,7 +378,7 @@ export function ProjectBlobPage() {
         <BlobAddEditPanel
           filePath={newFilePath}
           initialContent={existingContent}
-          revision={revision}
+          revision={displayRevision || revision}
           onCancel={handleCancelEdit}
           onCommit={handleCommit}
         />
@@ -384,7 +391,7 @@ export function ProjectBlobPage() {
   } else if (!blob && !forceEmpty) {
     content = <div className="text-center py-10 text-muted">Path not found</div>;
   } else if (blob && blob.type === "directory") {
-    content = <FolderView projectPath={projectPath} revision={revision} path={path} blob={blob} />;
+    content = <FolderView projectPath={projectPath} revision={displayRevision || revision} path={path} blob={blob} />;
   } else if (blob) {
     content = <FileView blob={blob} />;
   } else {
@@ -400,11 +407,11 @@ export function ProjectBlobPage() {
           <div className="d-flex flex-wrap align-items-center">
             <span className="revision-picker mr-3 py-2 btn btn-sm btn-light">
               <img src="/~icon/branch.svg" alt="" className="icon mr-1" width={14} height={14} />
-              {revision}
+              {displayRevision || "…"}
             </span>
             <BlobNavigator
               projectPath={projectPath}
-              revision={revision}
+              revision={displayRevision || revision}
               path={path}
               mode={isEditMode ? mode : undefined}
               newFileName={newFileName}

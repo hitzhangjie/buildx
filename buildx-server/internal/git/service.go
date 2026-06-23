@@ -17,7 +17,9 @@ import (
 // Ref introspection
 // ---------------------------------------------------------------------------
 
-// HasRefs returns true if the repository has at least one reference.
+// HasRefs returns true when the repository has at least one branch pointing at
+// a commit. A freshly initialized bare repo only has a symbolic HEAD and must
+// return false so the UI shows the empty-project guidance.
 func (r *Repository) HasRefs() bool {
 	refs, err := r.inner.References()
 	if err != nil {
@@ -25,17 +27,32 @@ func (r *Repository) HasRefs() bool {
 		return false
 	}
 	defer refs.Close()
-	_, err = refs.Next()
-	return err == nil
+	for {
+		ref, err := refs.Next()
+		if err != nil {
+			break
+		}
+		if !ref.Name().IsBranch() {
+			continue
+		}
+		if _, err := r.inner.CommitObject(ref.Hash()); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
-// DefaultRevision returns the default branch name, or "main" if none exists.
+// DefaultRevision returns the default branch name, preferring HEAD when it
+// resolves, then main/master, then any branch with commits.
 func (r *Repository) DefaultRevision() string {
 	head, err := r.inner.Head()
 	if err == nil {
 		ref := head.Name()
 		if ref.IsBranch() {
-			return ref.Short()
+			short := ref.Short()
+			if r.revisionExists(short) {
+				return short
+			}
 		}
 	}
 	for _, name := range []string{"main", "master"} {
@@ -43,7 +60,31 @@ func (r *Repository) DefaultRevision() string {
 			return name
 		}
 	}
+	if branch := r.firstBranchWithCommits(); branch != "" {
+		return branch
+	}
 	return "main"
+}
+
+func (r *Repository) firstBranchWithCommits() string {
+	refs, err := r.inner.References()
+	if err != nil {
+		return ""
+	}
+	defer refs.Close()
+	for {
+		ref, err := refs.Next()
+		if err != nil {
+			break
+		}
+		if !ref.Name().IsBranch() {
+			continue
+		}
+		if _, err := r.inner.CommitObject(ref.Hash()); err == nil {
+			return ref.Name().Short()
+		}
+	}
+	return ""
 }
 
 func (r *Repository) revisionExists(revision string) bool {
@@ -68,14 +109,6 @@ func (r *Repository) Blob(ctx context.Context, revision, path string) (*BlobCont
 	}
 
 	if !r.revisionExists(revision) {
-		if path == "" {
-			return &BlobContent{
-				Revision: revision,
-				Path:     path,
-				Type:     "directory",
-				Entries:  []BlobEntry{},
-			}, nil
-		}
 		return nil, nil
 	}
 
@@ -133,38 +166,21 @@ func (r *Repository) listTree(revision, path string) ([]BlobEntry, error) {
 
 	var entries []BlobEntry
 
-	// Add files (blobs) from the tree.
-	iter := tree.Files()
-	defer iter.Close()
-	for {
-		file, err := iter.Next()
-		if err != nil {
-			break
-		}
-		entryPath := file.Name
+	// List only direct children — tree.Files() walks the entire subtree.
+	for _, te := range tree.Entries {
+		entryPath := te.Name
 		if path != "" {
-			entryPath = path + "/" + file.Name
+			entryPath = path + "/" + te.Name
+		}
+		entryType := "file"
+		if te.Mode == filemode.Dir {
+			entryType = "directory"
 		}
 		entries = append(entries, BlobEntry{
-			Name: file.Name,
+			Name: te.Name,
 			Path: entryPath,
-			Type: "file",
+			Type: entryType,
 		})
-	}
-
-	// Add subdirectory entries.
-	for _, te := range tree.Entries {
-		if te.Mode == filemode.Dir {
-			entryPath := te.Name
-			if path != "" {
-				entryPath = path + "/" + te.Name
-			}
-			entries = append(entries, BlobEntry{
-				Name: te.Name,
-				Path: entryPath,
-				Type: "directory",
-			})
-		}
 	}
 
 	// Populate last-commit info for each entry.

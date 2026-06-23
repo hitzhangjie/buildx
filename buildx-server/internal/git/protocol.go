@@ -2,11 +2,11 @@ package git
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
-	"os/exec"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
@@ -15,7 +15,9 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/protocol/packp"
 	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
 	"github.com/go-git/go-git/v5/plumbing/revlist"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/server"
 )
 
 // ---------------------------------------------------------------------------
@@ -34,11 +36,13 @@ func uploadPackCapabilities() *capability.List {
 }
 
 func receivePackCapabilities() *capability.List {
+	// go-git server receive-pack (plumbing/transport/server) does not support
+	// side-band-64k or atomic; advertising them causes native git push to fail
+	// with "unsupported capability: side-band-64k".
+	// https://github.com/go-git/go-git/issues/2203
 	caps := capability.NewList()
 	caps.Set(capability.ReportStatus)
 	caps.Set(capability.DeleteRefs)
-	caps.Set(capability.Sideband64k)
-	caps.Set(capability.Atomic)
 	caps.Set(capability.OFSDelta)
 	caps.Set(capability.Agent, "buildx-server")
 	return caps
@@ -158,34 +162,39 @@ func (r *Repository) UploadPack(w io.Writer, body io.Reader) error {
 // Smart HTTP: receive-pack (push)
 // ---------------------------------------------------------------------------
 
-// ReceivePack handles a git-receive-pack session.
-// It delegates to native git receive-pack --stateless-rpc, piping the HTTP
-// request body to git's stdin and git's stdout back to the HTTP response.
-// This matches OneDev's approach (GitUtils.receivePack → native git CLI)
-// and avoids edge cases in go-git's ReferenceUpdateRequest.Decode
-// (e.g. "capabilities delimiter not found" when the client sends a flush
-// packet as the first pkt-line, or omits capabilities).
+// ReceivePack handles a git-receive-pack session via go-git.
+// See receivePackCapabilities for capability limitations and protocol_test.go.
 func (r *Repository) ReceivePack(w io.Writer, body io.Reader) error {
-	cmd := exec.Command("git", "receive-pack", "--stateless-rpc", ".")
-	cmd.Dir = r.path
-	cmd.Stdin = body
-	cmd.Stdout = w
+	req := packp.NewReferenceUpdateRequest()
+	if err := req.Decode(body); err != nil {
+		return fmt.Errorf("decode receive-pack request: %w", err)
+	}
 
-	// Capture stderr for logging.
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	srv := server.NewServer(storerLoader{s: r.inner.Storer})
+	sess, err := srv.NewReceivePackSession(&transport.Endpoint{}, nil)
+	if err != nil {
+		return fmt.Errorf("new receive-pack session: %w", err)
+	}
+	defer sess.Close()
 
-	if err := cmd.Run(); err != nil {
-		if stderr.Len() > 0 {
-			slog.Error("git receive-pack failed",
-				"repo", r.path,
-				"stderr", stderr.String(),
-				"error", err,
-			)
+	rs, err := sess.ReceivePack(context.Background(), req)
+	if rs != nil {
+		if encErr := rs.Encode(w); encErr != nil {
+			return fmt.Errorf("encode report status: %w", encErr)
 		}
-		return fmt.Errorf("git receive-pack: %w", err)
+	}
+	if err != nil {
+		return fmt.Errorf("receive pack: %w", err)
 	}
 	return nil
+}
+
+type storerLoader struct {
+	s storer.Storer
+}
+
+func (l storerLoader) Load(*transport.Endpoint) (storer.Storer, error) {
+	return l.s, nil
 }
 
 // ---------------------------------------------------------------------------

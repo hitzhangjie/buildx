@@ -8,6 +8,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Fixed
 
+- **Project Files (blob) browsing** — `HasRefs` now requires a branch with commits (empty bare repos correctly show the no-commits panel); directory listings use immediate tree children only (was recursively listing all files, causing slow/wrong root view); default branch resolution falls back to any branch with commits; Files page shows resolved branch name from API
 - **NewProjectPage 1:1 alignment** — proper `bean-editor editable` DOM, Select2 choice widgets, synced `editable.css` + `select2.css`; **BeanSwitch** renders toggle track (`input` + sibling `span` per OneDev `BooleanPropertyEditor.html`)
 - **LoginPage** — `simple-page-spa.css` restores OneDev SimplePage flex centering in React SPA; settings endpoints no longer 404 (`/~api/v1/settings/branding`, `security`, `sso-providers`)
 

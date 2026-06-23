@@ -204,9 +204,8 @@ func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, r
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 
 	// Wrap body with a peek reader to capture the request preamble for
-	// diagnostic logging. If native git fails, the captured bytes help
-	// identify protocol-level issues (e.g. missing capabilities delimiter,
-	// empty body, or unexpected pkt-line format).
+	// diagnostic logging on protocol-level failures (e.g. missing capabilities
+	// delimiter, empty body, or unexpected pkt-line format).
 	const peekN = 128
 	peekReader := &peekReadCloser{rc: r.Body, peekN: peekN}
 
