@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -74,6 +75,7 @@ func ensureRootUser(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if count > 0 {
+		slog.Debug("root user already exists, skipping bootstrap")
 		return nil
 	}
 
@@ -81,6 +83,8 @@ func ensureRootUser(ctx context.Context, db *sql.DB) error {
 	password := os.Getenv(envInitialPassword)
 	email := os.Getenv(envInitialEmail)
 	if name == "" || password == "" || email == "" {
+		slog.Warn("BUILDX_INITIAL_* env vars not set, skipping root user creation",
+			"user", name, "password_set", password != "", "email", email)
 		return nil
 	}
 
@@ -104,7 +108,11 @@ func ensureRootUser(ctx context.Context, db *sql.DB) error {
 		INSERT INTO o_EmailAddress (o_value, o_owner_id, o_primary, o_git)
 		VALUES (?, ?, 1, 1)
 	`, email, model.UserRootID)
-	return err
+	if err != nil {
+		return err
+	}
+	slog.Info("root user created from BUILDX_INITIAL_*", "name", name)
+	return nil
 }
 
 func replicateUser(ctx context.Context, db *sql.DB, u model.User) error {
