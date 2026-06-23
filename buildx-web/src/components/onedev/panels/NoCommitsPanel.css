@@ -1,0 +1,25 @@
+/*
+ * Dropdown panel styles for NoCommitsPanel inline dropdowns.
+ * Image sizing and dark mode are provided by the synced OneDev no-commits.css.
+ */
+
+/* Dropdown panel — matches OneDev FloatingPanel */
+.no-commits .dropdown-menu {
+  display: block;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 0.35rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  background: var(--card-bg, #fff);
+  min-width: 160px;
+}
+
+.no-commits .dropdown-menu-content {
+  padding: 0;
+}
+
+/* Dropdown link states — matches OneDev dropdown-link */
+.no-commits .dropdown-link {
+  cursor: pointer;
+}
+
+/* Code block inside push instructions dropdown — styling provided by synced OneDev base.css (.code) */
