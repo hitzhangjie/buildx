@@ -18,24 +18,19 @@ type BlobHandler struct {
 // ServeHTTP handles wildcard requests under /~api/projects/* and dispatches
 // blob requests (those ending with /blob). Falls through to 404 for other paths.
 func (h *BlobHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// chi.URLParam(r, "*") returns the wildcard portion, e.g. "codehub/blob"
 	rest := chi.URLParam(r, "*")
 	if !strings.HasSuffix(rest, "/blob") {
-		http.NotFound(w, r)
+		writeNotFound(w, r, "api_path", "rest", rest)
 		return
 	}
 
-	// Extract project path: strip the trailing "/blob".
 	projectPath := strings.TrimSuffix(rest, "/blob")
 	if projectPath == "" || projectPath == "/" {
-		http.NotFound(w, r)
+		writeNotFound(w, r, "project_path")
 		return
 	}
 
-	// The project path in the URL may contain an encoded %2F for nested
-	// projects. Use RawPath to recover the original project path.
 	if !strings.Contains(projectPath, "/") {
-		// Simple project name — check RawPath for encoding.
 		if r.URL.RawPath != "" {
 			rawPrefix := "/~api/projects/"
 			rawSuffix := "/blob"
@@ -54,39 +49,51 @@ func (h *BlobHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	revision := r.URL.Query().Get("revision")
 	path := r.URL.Query().Get("path")
-
 	h.Blob(w, r, projectPath, revision, path)
 }
 
 // Blob looks up the project by path and returns the blob content at the
 // given revision:path.
 func (h *BlobHandler) Blob(w http.ResponseWriter, r *http.Request, projectPath, revision, path string) {
+	op := StartOp(r, "BlobHandler.Blob",
+		"project_path", projectPath,
+		"revision", revision,
+		"path", path,
+	)
+
 	proj, err := h.Projects.GetByPath(r.Context(), projectPath)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if proj == nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_path", projectPath)
 		return
 	}
+	op.With("project_id", proj.ID)
 
 	gitDir := h.Projects.GitDir(proj.ID)
 	repo, err := git.Open(gitDir)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError, "git_dir", gitDir)
+		writeInternalError(w, r, err)
 		return
 	}
 
 	content, err := repo.Blob(r.Context(), revision, path)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if content == nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "blob", "revision", revision, "path", path)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, content)
+	op.OK(http.StatusOK, "type", content.Type)
+	writeJSON(w, r, http.StatusOK, content)
 }

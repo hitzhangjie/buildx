@@ -18,37 +18,47 @@ type RepositoryHandler struct {
 }
 
 func (h *RepositoryHandler) ListBranches(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.ListBranches")
+	repo, proj, user, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
+	_ = user
+	_ = proj
 
 	names, err := repo.ListBranchNames()
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if names == nil {
 		names = []string{}
 	}
-	writeJSON(w, http.StatusOK, names)
+	op.OK(http.StatusOK, "count", len(names))
+	writeJSON(w, r, http.StatusOK, names)
 }
 
 func (h *RepositoryHandler) GetDefaultBranch(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.GetDefaultBranch")
+	repo, _, _, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
 
 	if !repo.HasRefs() {
+		op.OK(http.StatusNoContent, "has_refs", false)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	writeJSON(w, http.StatusOK, repo.DefaultRevision())
+	branch := repo.DefaultRevision()
+	op.OK(http.StatusOK, "branch", branch)
+	writeJSON(w, r, http.StatusOK, branch)
 }
 
 func (h *RepositoryHandler) ListCommits(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.ListCommits")
+	repo, _, _, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
@@ -57,145 +67,189 @@ func (h *RepositoryHandler) ListCommits(w http.ResponseWriter, r *http.Request) 
 	if countStr := r.URL.Query().Get("count"); countStr != "" {
 		parsed, err := strconv.Atoi(countStr)
 		if err != nil || parsed <= 0 {
-			http.Error(w, "invalid count", http.StatusBadRequest)
+			op.Fail(err, http.StatusBadRequest, "count", countStr)
+			writeBadRequest(w, r, "invalid count", err)
 			return
 		}
 		count = parsed
 	}
 
 	revision := r.URL.Query().Get("revision")
+	op.With("revision", revision, "count", count)
+
 	commits, err := repo.ListCommits(revision, count)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if commits == nil {
 		commits = []git.Commit{}
 	}
-	writeJSON(w, http.StatusOK, commits)
+	op.OK(http.StatusOK, "returned", len(commits))
+	writeJSON(w, r, http.StatusOK, commits)
 }
 
 func (h *RepositoryHandler) GetCommit(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.GetCommit")
+	repo, _, _, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
 
 	commitHash := chi.URLParam(r, "commitHash")
 	if commitHash == "" {
-		http.Error(w, "commit hash required", http.StatusBadRequest)
+		op.Fail(nil, http.StatusBadRequest)
+		writeBadRequest(w, r, "commit hash required", nil)
 		return
 	}
+	op.With("commit_hash", commitHash)
 
 	commit, err := repo.GetCommit(commitHash)
 	if err != nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "commit", "commit_hash", commitHash)
 		return
 	}
 	if commit == nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "commit", "commit_hash", commitHash)
 		return
 	}
-	writeJSON(w, http.StatusOK, commit)
+
+	if r.URL.Query().Get("diff") == "true" {
+		op.With("include_diff", true)
+		diffs, err := repo.DiffCommit(commitHash)
+		if err != nil {
+			op.Fail(err, http.StatusInternalServerError)
+			writeInternalError(w, r, err)
+			return
+		}
+		commit.Diffs = diffs
+	}
+
+	op.OK(http.StatusOK, "commit_hash", commitHash)
+	writeJSON(w, r, http.StatusOK, commit)
 }
 
 func (h *RepositoryHandler) GetBranch(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.GetBranch")
+	repo, _, _, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
 
 	branchName := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
 	if branchName == "" {
-		http.Error(w, "branch name required", http.StatusBadRequest)
+		op.Fail(nil, http.StatusBadRequest)
+		writeBadRequest(w, r, "branch name required", nil)
 		return
 	}
+	op.With("branch", branchName)
 
 	detail, err := repo.BranchDetail(branchName)
 	if err != nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "branch", "branch", branchName)
 		return
 	}
-	writeJSON(w, http.StatusOK, detail)
+	op.OK(http.StatusOK, "branch", branchName)
+	writeJSON(w, r, http.StatusOK, detail)
 }
 
 func (h *RepositoryHandler) ListTags(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.ListTags")
+	repo, _, _, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
 
 	names, err := repo.ListTagNames()
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if names == nil {
 		names = []string{}
 	}
-	writeJSON(w, http.StatusOK, names)
+	op.OK(http.StatusOK, "count", len(names))
+	writeJSON(w, r, http.StatusOK, names)
 }
 
 func (h *RepositoryHandler) GetTag(w http.ResponseWriter, r *http.Request) {
-	repo, ok := h.openRepo(w, r)
+	op := StartOp(r, "RepositoryHandler.GetTag")
+	repo, _, _, ok := h.openRepo(w, r, op)
 	if !ok {
 		return
 	}
 
 	tagName := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
 	if tagName == "" {
-		http.Error(w, "tag name required", http.StatusBadRequest)
+		op.Fail(nil, http.StatusBadRequest)
+		writeBadRequest(w, r, "tag name required", nil)
 		return
 	}
+	op.With("tag", tagName)
 
 	detail, err := repo.TagDetail(tagName)
 	if err != nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "tag", "tag", tagName)
 		return
 	}
-	writeJSON(w, http.StatusOK, detail)
+	op.OK(http.StatusOK, "tag", tagName)
+	writeJSON(w, r, http.StatusOK, detail)
 }
 
-func (h *RepositoryHandler) openRepo(w http.ResponseWriter, r *http.Request) (*git.Repository, bool) {
+func (h *RepositoryHandler) openRepo(w http.ResponseWriter, r *http.Request, op *OpLog) (*git.Repository, *project.Project, *security.User, bool) {
 	user, err := h.authenticate(r)
 	if err != nil {
-		writeError(w, err)
-		return nil, false
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return nil, nil, nil, false
 	}
 
 	projectID, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid project id", http.StatusBadRequest)
-		return nil, false
+		op.Fail(err, http.StatusBadRequest, "project_id_raw", chi.URLParam(r, "projectId"))
+		writeBadRequest(w, r, "invalid project id", err)
+		return nil, nil, nil, false
 	}
+	op.With("user_id", user.ID, "project_id", projectID)
 
 	proj, err := h.Projects.Get(r.Context(), projectID)
 	if err != nil {
-		writeInternalError(w, err)
-		return nil, false
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return nil, nil, nil, false
 	}
 	if proj == nil {
-		http.NotFound(w, r)
-		return nil, false
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_id", projectID)
+		return nil, nil, nil, false
 	}
 
 	ok, err := h.Security.HasProjectAccess(r.Context(), user.ID, proj.ID)
 	if err != nil {
-		writeInternalError(w, err)
-		return nil, false
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return nil, nil, nil, false
 	}
 	if !ok {
-		http.NotFound(w, r)
-		return nil, false
+		op.OK(http.StatusNotFound, "access", false)
+		writeNotFound(w, r, "project", "project_id", projectID)
+		return nil, nil, nil, false
 	}
 
 	gitDir := h.Projects.GitDir(proj.ID)
 	repo, err := git.Open(gitDir)
 	if err != nil {
-		writeInternalError(w, err)
-		return nil, false
+		op.Fail(err, http.StatusInternalServerError, "git_dir", gitDir)
+		writeInternalError(w, r, err)
+		return nil, nil, nil, false
 	}
-	return repo, true
+	return repo, proj, user, true
 }
 
 func (h *RepositoryHandler) authenticate(r *http.Request) (*security.User, error) {

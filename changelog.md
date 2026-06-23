@@ -8,6 +8,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **Server API observability** — structured `slog` logging for all `/~api` handlers: request entry (op, params), response outcome (status, counts/ids), and errors; HTTP access log middleware (`request_id`, method, path, status, duration)
 - **Project Commits API and page** — `GET /~api/repositories/{projectId}/commits` and `commits/{commitHash}` (OneDev `RepositoryResource` parity); `ProjectCommitsPage` loads live commit list with subject, author, and relative time
 - **Project Branches API and page** — `GET /~api/repositories/{projectId}/branches`, `default-branch`, and `branches/{branch}` (OneDev `RepositoryResource` parity); `ProjectBranchesPage` loads live branch list with commit hash and updated time
 

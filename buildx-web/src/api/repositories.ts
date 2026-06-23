@@ -69,6 +69,7 @@ export type RepositoryCommit = {
   author?: CommitPerson;
   committer?: CommitPerson;
   parentHashes?: string[];
+  diffs?: FileDiff[];
 };
 
 export async function fetchCommits(
@@ -91,6 +92,13 @@ export async function fetchCommit(
   commitHash: string,
 ): Promise<RepositoryCommit> {
   return apiFetch<RepositoryCommit>(
-    `/~api/repositories/${projectId}/commits/${encodeURIComponent(commitHash)}`,
+    `/~api/repositories/${projectId}/commits/${encodeURIComponent(commitHash)}?diff=true`,
   );
 }
+
+export type FileDiff = {
+  path: string;
+  additions: number;
+  deletions: number;
+  diff: string;
+};

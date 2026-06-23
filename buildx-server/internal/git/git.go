@@ -37,14 +37,23 @@ type Person struct {
 	TzOffset     int    `json:"tzOffset"`
 }
 
-// Commit matches OneDev REST commit object (subset used by commits list/detail).
+// Commit matches OneDev REST commit object.
 type Commit struct {
-	Hash         string   `json:"hash"`
-	Subject      string   `json:"subject,omitempty"`
-	Body         string   `json:"body,omitempty"`
-	Author       *Person  `json:"author,omitempty"`
-	Committer    *Person  `json:"committer,omitempty"`
-	ParentHashes []string `json:"parentHashes,omitempty"`
+	Hash         string     `json:"hash"`
+	Subject      string     `json:"subject,omitempty"`
+	Body         string     `json:"body,omitempty"`
+	Author       *Person    `json:"author,omitempty"`
+	Committer    *Person    `json:"committer,omitempty"`
+	ParentHashes []string   `json:"parentHashes,omitempty"`
+	Diffs        []FileDiff `json:"diffs,omitempty"`
+}
+
+// FileDiff describes changes to a single file within a commit.
+type FileDiff struct {
+	Path      string `json:"path"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Diff      string `json:"diff"`
 }
 
 // BlobContent is the result for a blob request — either a directory listing

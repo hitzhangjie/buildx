@@ -6,7 +6,7 @@ function suffixToRegex(suffix: string): RegExp | null {
     return null;
   }
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = escaped.replace(/\\:([A-Za-z][A-Za-z0-9_-]*)/g, (_, name: string) => {
+  const pattern = escaped.replace(/:([A-Za-z][A-Za-z0-9_-]*)/g, (_, name: string) => {
     return `(?<${name.replace(/-/g, "_")}>[^/]+)`;
   });
   return new RegExp(`^${pattern}$`);

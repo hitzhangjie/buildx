@@ -1,6 +1,7 @@
 package git
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
+	fdiff "github.com/go-git/go-git/v5/plumbing/format/diff"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -485,6 +487,103 @@ func (r *Repository) lastCommit(revision, path string) *CommitInfo {
 		When:    humanizeTime(commit.Author.When),
 	}
 }
+
+// ---------------------------------------------------------------------------
+// commit diff
+// ---------------------------------------------------------------------------
+
+// DiffCommit returns per-file diffs for a commit against its first parent.
+func (r *Repository) DiffCommit(commitHash string) ([]FileDiff, error) {
+	if !r.HasRefs() {
+		return nil, nil
+	}
+
+	hash := plumbing.NewHash(commitHash)
+	obj, err := r.inner.CommitObject(hash)
+	if err != nil {
+		resolved, resolveErr := r.inner.ResolveRevision(plumbing.Revision(commitHash))
+		if resolveErr != nil {
+			return nil, err
+		}
+		obj, err = r.inner.CommitObject(*resolved)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return r.commitDiffs(obj)
+}
+
+// commitDiffs returns per-file diffs for a commit object against its first parent.
+func (r *Repository) commitDiffs(obj *object.Commit) ([]FileDiff, error) {
+	var parent *object.Commit
+	parentIter := obj.Parents()
+	defer parentIter.Close()
+	parent, _ = parentIter.Next() // nil for root commits
+
+	patch, err := obj.Patch(parent)
+	if err != nil {
+		return nil, err
+	}
+
+	filePatches := patch.FilePatches()
+	diffs := make([]FileDiff, 0, len(filePatches))
+	for _, fp := range filePatches {
+		if fp.IsBinary() {
+			continue
+		}
+		from, to := fp.Files()
+		path := ""
+		if to != nil {
+			path = to.Path()
+		}
+		if from != nil {
+			path = from.Path()
+		}
+
+		adds, dels := 0, 0
+		for _, chunk := range fp.Chunks() {
+			s := chunk.Content()
+			switch chunk.Type() {
+			case fdiff.Add:
+				adds += strings.Count(s, "\n")
+				if len(s) > 0 && s[len(s)-1] != '\n' {
+					adds++
+				}
+			case fdiff.Delete:
+				dels += strings.Count(s, "\n")
+				if len(s) > 0 && s[len(s)-1] != '\n' {
+					dels++
+				}
+			}
+		}
+
+		var buf bytes.Buffer
+		enc := fdiff.NewUnifiedEncoder(&buf, fdiff.DefaultContextLines)
+		if err := enc.Encode(singleFilePatch{fp}); err != nil {
+			continue
+		}
+
+		diffs = append(diffs, FileDiff{
+			Path:      path,
+			Additions: adds,
+			Deletions: dels,
+			Diff:      buf.String(),
+		})
+	}
+	if diffs == nil {
+		diffs = []FileDiff{}
+	}
+	return diffs, nil
+}
+
+// singleFilePatch adapts a single fdiff.FilePatch to the fdiff.Patch interface.
+type singleFilePatch struct {
+	fp fdiff.FilePatch
+}
+
+func (p singleFilePatch) FilePatches() []fdiff.FilePatch { return []fdiff.FilePatch{p.fp} }
+func (p singleFilePatch) Message() string                { return "" }
 
 // ---------------------------------------------------------------------------
 // helpers

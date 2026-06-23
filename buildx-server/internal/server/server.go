@@ -17,6 +17,7 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/security"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/server/api"
+	bxmiddleware "github.com/hitzhangjie/buildx/buildx-server/internal/server/middleware"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/version"
 )
 
@@ -58,6 +59,7 @@ func (s *Server) routes() chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(bxmiddleware.AccessLog)
 	r.Use(gitHandler.Middleware) // intercept git HTTP before static catch-all
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))

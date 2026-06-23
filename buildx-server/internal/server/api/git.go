@@ -56,64 +56,73 @@ func isGitRequest(path string) bool {
 
 // serveHTTP dispatches to the appropriate handler.
 func (h *GitHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "GitHandler.serveHTTP", "path", r.URL.Path)
+
 	projectPath, gitSuffix, err := parseGitURL(r.URL.Path)
 	if err != nil {
+		op.Fail(err, http.StatusBadRequest)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	op.With("project_path", projectPath, "git_suffix", gitSuffix)
 
-	// Authenticate.
 	user, err := h.authenticateGit(r)
 	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
 		h.writeGitError(w, r, err)
 		return
 	}
+	op.With("user_id", user.ID)
 
-	// Resolve project.
 	proj, err := h.Projects.GetByPath(r.Context(), projectPath)
 	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if proj == nil {
+		op.OK(http.StatusNotFound, "found", false)
 		http.Error(w, "project not found: "+projectPath, http.StatusNotFound)
 		return
 	}
+	op.With("project_id", proj.ID)
 
-	// Check access.
 	if ok, err := h.Security.HasProjectAccess(r.Context(), user.ID, proj.ID); err != nil {
+		op.Fail(err, http.StatusInternalServerError)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	} else if !ok {
+		op.OK(http.StatusNotFound, "access", false)
 		http.Error(w, "project not found or inaccessible: "+projectPath, http.StatusNotFound)
 		return
 	}
 
 	gitDir := h.Projects.GitDir(proj.ID)
 
-	// Ensure the bare git repository exists.
 	if err := h.ensureGitRepo(gitDir); err != nil {
-		slog.Error("failed to ensure git repository", "gitDir", gitDir, "error", err)
+		op.Fail(err, http.StatusInternalServerError, "git_dir", gitDir)
+		slog.ErrorContext(r.Context(), "failed to ensure git repository", "git_dir", gitDir, "error", err)
 		http.Error(w, "repository unavailable", http.StatusInternalServerError)
 		return
 	}
 
-	// Open the repository with go-git.
 	repo, err := git.Open(gitDir)
 	if err != nil {
-		slog.Error("failed to open git repository", "gitDir", gitDir, "error", err)
+		op.Fail(err, http.StatusInternalServerError, "git_dir", gitDir)
+		slog.ErrorContext(r.Context(), "failed to open git repository", "git_dir", gitDir, "error", err)
 		http.Error(w, "repository unavailable", http.StatusInternalServerError)
 		return
 	}
 
 	switch gitSuffix {
 	case "info/refs":
-		h.handleInfoRefs(w, r, repo, user, proj)
+		h.handleInfoRefs(w, r, repo, user, proj, op)
 	case "git-upload-pack":
-		h.handleUploadPack(w, r, repo)
+		h.handleUploadPack(w, r, repo, op)
 	case "git-receive-pack":
-		h.handleReceivePack(w, r, repo)
+		h.handleReceivePack(w, r, repo, op)
 	default:
+		op.Fail(nil, http.StatusBadRequest, "git_suffix", gitSuffix)
 		http.Error(w, "unknown git service", http.StatusBadRequest)
 	}
 }
@@ -134,10 +143,11 @@ func parseGitURL(path string) (projectPath, gitSuffix string, err error) {
 
 // ---------- info/refs (reference advertisement) ----------
 
-func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, repo *git.Repository, user *security.User, proj *project.Project) {
+func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, repo *git.Repository, user *security.User, proj *project.Project, op *OpLog) {
 	service := r.URL.Query().Get("service")
+	op.With("service", service)
 	if service == "" {
-		// Dumb HTTP — not supported.
+		op.Fail(nil, http.StatusForbidden, "reason", "dumb_http_not_supported")
 		http.Error(w, "dumb HTTP protocol not supported", http.StatusForbidden)
 		return
 	}
@@ -146,15 +156,17 @@ func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, repo
 	case "git-upload-pack":
 		// Fetch/clone — any reader can access.
 	case "git-receive-pack":
-		// Push requires owner permission.
 		if ok, err := h.Security.IsProjectOwner(r.Context(), user.ID, proj.ID); err != nil {
+			op.Fail(err, http.StatusInternalServerError)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		} else if !ok {
+			op.Fail(nil, http.StatusForbidden, "reason", "push_not_allowed")
 			http.Error(w, "you do not have permission to push to this project", http.StatusForbidden)
 			return
 		}
 	default:
+		op.Fail(nil, http.StatusBadRequest, "service", service)
 		http.Error(w, "unknown git service: "+service, http.StatusBadRequest)
 		return
 	}
@@ -162,21 +174,22 @@ func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, repo
 	doNotCache(w)
 	w.Header().Set("Content-Type", "application/x-"+service+"-advertisement")
 
-	// Write the smart-HTTP service header.
 	writePktLine(w, "# service="+service+"\n")
 	writeFlushPkt(w)
 
-	// Advertise refs using go-git.
 	if err := repo.AdvertiseRefs(w, service); err != nil {
-		slog.Error("advertise refs failed", "service", service, "error", err)
+		op.Fail(err, http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "advertise refs failed", "service", service, "error", err)
 		return
 	}
+	op.OK(http.StatusOK, "service", service)
 }
 
 // ---------- git-upload-pack (fetch / clone) ----------
 
-func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, repo *git.Repository) {
+func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, repo *git.Repository, op *OpLog) {
 	if r.Method != http.MethodPost {
+		op.Fail(nil, http.StatusMethodNotAllowed)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -185,17 +198,20 @@ func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, re
 	w.Header().Set("Content-Type", "application/x-git-upload-pack-result")
 
 	if err := repo.UploadPack(w, r.Body); err != nil {
-		slog.Error("upload-pack failed", "error", err)
+		op.Fail(err, http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "upload-pack failed", "error", err)
 		return
 	}
+	op.OK(http.StatusOK)
 }
 
 // ---------- git-receive-pack (push) ----------
 
 // handleReceivePack delegates to native "git receive-pack --stateless-rpc".
 // go-git's server-side receive-pack has known issues; see protocol.go.
-func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, repo *git.Repository) {
+func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, repo *git.Repository, op *OpLog) {
 	if r.Method != http.MethodPost {
+		op.Fail(nil, http.StatusMethodNotAllowed)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -204,9 +220,11 @@ func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, r
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 
 	if err := repo.ReceivePack(w, r.Body); err != nil {
-		slog.Error("receive-pack failed", "error", err)
+		op.Fail(err, http.StatusInternalServerError)
+		slog.ErrorContext(r.Context(), "receive-pack failed", "error", err)
 		return
 	}
+	op.OK(http.StatusOK)
 }
 
 // ---------- helpers ----------
@@ -229,7 +247,7 @@ func (h *GitHandler) ensureGitRepo(gitDir string) error {
 		return fmt.Errorf("init bare repo: %w", err)
 	}
 
-	slog.Info("lazy-initialized bare git repository", "gitDir", gitDir)
+	slog.Info("lazy-initialized bare git repository", "git_dir", gitDir)
 	return nil
 }
 

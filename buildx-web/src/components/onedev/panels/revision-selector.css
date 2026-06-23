@@ -1,0 +1,18 @@
+.revision-selector {
+  min-width: 240px;
+}
+.revision-selector input + .icon {
+  margin-left: -1.8rem;
+}
+.revision-selector input {
+  padding-right: 2rem;
+}
+.revision-selector .items {
+  margin-bottom: 0;
+  max-height: 600px;
+  overflow-y: auto;
+}
+.revision-selector .items .icon {
+  width: 12px;
+  height: 12px;
+}

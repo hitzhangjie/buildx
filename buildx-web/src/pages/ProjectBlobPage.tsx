@@ -13,6 +13,7 @@ import {
   fileIcon,
   type BlobMode,
 } from "../util/blobPath";
+import { RevisionPicker } from "../components/onedev/panels/RevisionPicker";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
 
@@ -405,10 +406,11 @@ export function ProjectBlobPage() {
       <div className="project-blob flex-grow-1 d-flex flex-column">
         <div className="head d-flex align-items-center justify-content-between flex-wrap px-3 flex-shrink-0">
           <div className="d-flex flex-wrap align-items-center">
-            <span className="revision-picker mr-3 py-2 btn btn-sm btn-light">
-              <img src="/~icon/branch.svg" alt="" className="icon mr-1" width={14} height={14} />
-              {displayRevision || "…"}
-            </span>
+            <RevisionPicker
+              projectPath={projectPath}
+              currentRevision={displayRevision || revision}
+              currentPath={path}
+            />
             <BlobNavigator
               projectPath={projectPath}
               revision={displayRevision || revision}

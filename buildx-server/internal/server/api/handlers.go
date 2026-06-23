@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -17,42 +16,51 @@ type ProjectsHandler struct {
 }
 
 func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "ProjectsHandler.List")
 	user, err := h.authenticate(r)
 	if err != nil {
-		writeError(w, err)
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
 		return
 	}
-	_ = user
+	op.With("user_id", user.ID)
 
 	projects, err := h.Projects.List(r.Context())
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if projects == nil {
 		projects = []*project.Project{}
 	}
-	writeJSON(w, http.StatusOK, projects)
+	op.OK(http.StatusOK, "count", len(projects))
+	writeJSON(w, r, http.StatusOK, projects)
 }
 
 func (h *ProjectsHandler) Get(w http.ResponseWriter, r *http.Request, id int64) {
+	op := StartOp(r, "ProjectsHandler.Get", "project_id", id)
 	user, err := h.authenticate(r)
 	if err != nil {
-		writeError(w, err)
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
 		return
 	}
-	_ = user
+	op.With("user_id", user.ID)
 
 	p, err := h.Projects.Get(r.Context(), id)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	if p == nil {
-		http.NotFound(w, r)
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_id", id)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	op.OK(http.StatusOK, "project_key", p.Key)
+	writeJSON(w, r, http.StatusOK, p)
 }
 
 type createProjectRequest struct {
@@ -63,17 +71,22 @@ type createProjectRequest struct {
 }
 
 func (h *ProjectsHandler) Create(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "ProjectsHandler.Create")
 	user, err := h.authenticate(r)
 	if err != nil {
-		writeError(w, err)
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
 		return
 	}
+	op.With("user_id", user.ID)
 
 	var req createProjectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid json", err)
 		return
 	}
+	op.With("name", req.Name, "key", req.Key, "parent_id", req.ParentID)
 
 	p, err := h.Projects.Create(r.Context(), user.ID, &project.Project{
 		Name:        req.Name,
@@ -83,13 +96,16 @@ func (h *ProjectsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, project.ErrAlreadyExists) || errors.Is(err, project.ErrInvalidName) {
+			op.Fail(err, http.StatusNotAcceptable)
 			http.Error(w, err.Error(), http.StatusNotAcceptable)
 			return
 		}
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, p)
+	op.OK(http.StatusCreated, "project_id", p.ID, "project_key", p.Key)
+	writeJSON(w, r, http.StatusCreated, p)
 }
 
 type setupProjectRequest struct {
@@ -97,24 +113,31 @@ type setupProjectRequest struct {
 }
 
 func (h *ProjectsHandler) Setup(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "ProjectsHandler.Setup")
 	user, err := h.authenticate(r)
 	if err != nil {
-		writeError(w, err)
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
 		return
 	}
+	op.With("user_id", user.ID)
 
 	var req setupProjectRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid json", err)
 		return
 	}
+	op.With("path", req.Path)
 
 	p, err := h.Projects.Setup(r.Context(), user.ID, req.Path)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	op.OK(http.StatusOK, "project_id", p.ID, "project_key", p.Key)
+	writeJSON(w, r, http.StatusOK, p)
 }
 
 func (h *ProjectsHandler) authenticate(r *http.Request) (*security.User, error) {
@@ -135,13 +158,17 @@ type UsersHandler struct {
 }
 
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "UsersHandler.List")
 	if _, err := h.authenticate(r); err != nil {
-		writeError(w, err)
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
 		return
 	}
+
 	users, err := h.Security.ListUsers(r.Context())
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
 	type userView struct {
@@ -156,7 +183,8 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	if views == nil {
 		views = []userView{}
 	}
-	writeJSON(w, http.StatusOK, views)
+	op.OK(http.StatusOK, "count", len(views))
+	writeJSON(w, r, http.StatusOK, views)
 }
 
 type createUserRequest struct {
@@ -167,23 +195,32 @@ type createUserRequest struct {
 }
 
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if !h.allowBootstrap(r) {
+	bootstrap := h.allowBootstrap(r)
+	op := StartOp(r, "UsersHandler.Create", "bootstrap", bootstrap)
+	if !bootstrap {
 		if _, err := h.authenticate(r); err != nil {
-			writeError(w, err)
+			op.Fail(err, http.StatusUnauthorized)
+			writeError(w, r, err)
 			return
 		}
 	}
+
 	var req createUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+	if err := decodeJSON(r, &req); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid json", err)
 		return
 	}
+	op.With("name", req.Name, "email", req.Email)
+
 	user, err := h.Security.CreateUser(r.Context(), req.Name, req.FullName, req.Email, req.Password)
 	if err != nil {
-		writeInternalError(w, err)
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{
+	op.OK(http.StatusCreated, "user_id", user.ID, "user_name", user.Name)
+	writeJSON(w, r, http.StatusCreated, map[string]any{
 		"id":       user.ID,
 		"name":     user.Name,
 		"fullName": user.FullName,
@@ -191,12 +228,15 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "UsersHandler.Me")
 	user, err := h.authenticate(r)
 	if err != nil {
-		writeError(w, err)
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	op.OK(http.StatusOK, "user_id", user.ID, "user_name", user.Name)
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"id":       user.ID,
 		"name":     user.Name,
 		"fullName": user.FullName,
@@ -221,33 +261,4 @@ func (h *UsersHandler) allowBootstrap(r *http.Request) bool {
 		return false
 	}
 	return !hasUser
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-func writeError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, security.ErrInvalidCredentials):
-		writeJSONError(w, http.StatusUnauthorized, "Invalid credentials")
-	case errors.Is(err, security.ErrUnauthorized):
-		writeJSONError(w, http.StatusUnauthorized, "Not authenticated")
-	case errors.Is(err, security.ErrUserDisabled):
-		writeJSONError(w, http.StatusForbidden, "user disabled")
-	default:
-		writeInternalError(w, err)
-	}
-}
-
-func writeJSONError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
-}
-
-func writeInternalError(w http.ResponseWriter, err error) {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
