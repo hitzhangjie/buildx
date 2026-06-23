@@ -37,7 +37,7 @@ vendor/
 Thumbs.db
 
 # Claude Code
-.claude/
+.claude
 
 # Environment
 .env
