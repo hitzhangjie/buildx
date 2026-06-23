@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { Icon } from "../components/onedev/Icon";
 import { consumeFlashMessage } from "../util/flash";
 import { getGlobalSidebarMenu } from "./globalSidebar";
 import { ProjectSidebarHeader } from "./ProjectSidebarHeader";
@@ -97,7 +98,7 @@ export function Layout({
               setSidebarDocked((v) => !v);
             }}
           >
-            <img src="/~icon/expand3.svg" alt="" className="icon" width={20} height={20} />
+            <Icon name="expand3" className="icon" width={20} height={20} />
           </a>
         </div>
         <div className="sidebar-body">
@@ -142,9 +143,8 @@ export function Layout({
               toggleDark();
             }}
           >
-            <img
-              src={dark ? "/~icon/sun.svg" : "/~icon/moon.svg"}
-              alt=""
+            <Icon
+              name={dark ? "sun" : "moon"}
               className="icon"
               width={16}
               height={16}
@@ -153,23 +153,23 @@ export function Layout({
           {user ? (
             <div className="dropdown user-info d-inline-block">
               <a href="#" className="dropdown-toggle user-info no-dropdown-caret topbar-link">
-                <img src="/~icon/user.svg" alt="" className="icon" width={16} height={16} />
+                <Icon name="user" className="icon" width={16} height={16} />
                 <span className="ml-1 d-none d-lg-inline">{user.fullName || user.name}</span>
               </a>
               <div className="dropdown-menu dropdown-menu-right">
                 <Link to="/~my" className="dropdown-item">
-                  <img src="/~icon/profile.svg" alt="" className="icon mr-2" width={16} height={16} />
+                  <Icon name="profile" className="icon mr-2" width={16} height={16} />
                   Profile
                 </Link>
                 <Link to="/~logout" className="dropdown-item">
-                  <img src="/~icon/logout.svg" alt="" className="icon mr-2" width={16} height={16} />
+                  <Icon name="logout" className="icon mr-2" width={16} height={16} />
                   Sign Out
                 </Link>
               </div>
             </div>
           ) : (
             <Link to="/~login" className="topbar-link sign-in">
-              <img src="/~icon/login.svg" alt="" className="icon" width={16} height={16} />
+              <Icon name="login" className="icon" width={16} height={16} />
               <span className="d-none d-sm-inline ml-1">Sign In</span>
             </Link>
           )}

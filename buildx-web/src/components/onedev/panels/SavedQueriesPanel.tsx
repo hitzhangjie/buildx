@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-
-function OdIcon({ name, className = "icon" }: { name: string; className?: string }) {
-  return <img src={`/~icon/${name}.svg`} alt="" className={className} width={14} height={14} />;
-}
+import { Icon } from "../Icon";
 
 export type SavedQuery = {
   name: string;
@@ -34,7 +31,7 @@ export function SavedQueriesPanel({
           className="btn btn-sm btn-light"
           onClick={() => setVisible(true)}
         >
-          <OdIcon name="eye" /> Show Saved Queries
+          <Icon name="eye" /> Show Saved Queries
         </button>
       </div>
     );
@@ -52,7 +49,7 @@ export function SavedQueriesPanel({
               title="Edit saved queries"
               aria-label="Edit saved queries"
             >
-              <OdIcon name="edit" />
+              <Icon name="edit" />
             </button>
             <button
               type="button"
@@ -61,7 +58,7 @@ export function SavedQueriesPanel({
               aria-label="Hide saved queries"
               onClick={() => setVisible(false)}
             >
-              <OdIcon name="times" />
+              <Icon name="times" />
             </button>
           </div>
         </div>

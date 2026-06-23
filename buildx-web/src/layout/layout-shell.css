@@ -18,3 +18,47 @@
 .page-content {
   padding: 1.5rem 2rem;
 }
+
+/*
+ * Inline SVG icon color inheritance.
+ * OneDev uses inline <svg><use href="sprite.svg#name"/></svg> (SpriteImage)
+ * which picks up CSS color naturally. Our Icon component renders SVGs inline
+ * via dangerouslySetInnerHTML so they behave the same way.
+ */
+
+/* Sidebar menu icons: default color matches menu-header-text / menu-bullet */
+.sidebar-menu .menu-icon {
+  color: #5c5e81;
+}
+/* Force fill inheritance on elements without explicit stroke (fill-only icons) */
+.sidebar-menu .menu-icon svg :where(path, circle, rect, polygon):not([stroke]) {
+  fill: currentColor;
+}
+
+/* Hover / active / open: icons turn white to match menu text */
+.sidebar-menu .menu-link:hover .menu-icon,
+.sidebar-menu .menu-link:focus .menu-icon,
+.sidebar-menu .menu-link.active .menu-icon,
+.sidebar-menu .menu-link.open .menu-icon {
+  color: white;
+}
+
+/* Topbar icons: inherit from parent link color */
+.topbar-link .icon {
+  color: var(--muted);
+}
+.topbar-link .icon svg :where(path, circle, rect, polygon):not([stroke]) {
+  fill: currentColor;
+}
+
+/* Dropdown menu icons */
+.dropdown-item .icon {
+  color: var(--gray);
+}
+.dropdown-item .icon svg :where(path, circle, rect, polygon):not([stroke]) {
+  fill: currentColor;
+}
+.dropdown-item:hover .icon,
+.dropdown-item:focus .icon {
+  color: var(--primary);
+}

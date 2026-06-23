@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { Icon } from "../components/onedev/Icon";
 import type { ProjectMenuItem } from "./projectSidebar";
 
 export type SidebarMenuItemDef = {
@@ -36,7 +37,7 @@ function MenuBullet({ nestLevel }: { nestLevel: number }) {
 }
 
 function MenuIcon({ icon }: { icon: string }) {
-  return <img src={`/~icon/${icon}.svg`} alt="" className="icon menu-icon" width={20} height={20} />;
+  return <Icon name={icon} className="icon menu-icon" width={20} height={20} />;
 }
 
 function SidebarMenuItemRow({

@@ -1,3 +1,5 @@
+import { Icon } from "../components/onedev/Icon";
+
 type ProjectSidebarHeaderProps = {
   label: string;
   avatarUrl?: string;
@@ -23,7 +25,7 @@ export function ProjectSidebarHeader({ label, avatarUrl }: ProjectSidebarHeaderP
         title="More info"
         onClick={(e) => e.preventDefault()}
       >
-        <img src="/~icon/ellipsis.svg" alt="" className="icon" width={16} height={16} />
+        <Icon name="ellipsis" className="icon" width={16} height={16} />
       </a>
     </div>
   );
