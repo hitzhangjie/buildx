@@ -148,12 +148,43 @@ After completing a migration batch:
 
 ## Web UI page migration
 
-For each OneDev page being ported to React, follow the workflow in `docs/buildx-web-design.md`:
-1. Read the Wicket HTML source at `references/onedev/.../web/page/{area}/{Name}Page.html`
-2. Build a dedicated React component with matching DOM structure and CSS class names
-3. Register route in `AppRouter.tsx` → remove `PageRenderer` fallback for that page
-4. Verify with side-by-side screenshot comparison (OneDev vs buildx-web, same fixture data)
-5. The `PageRenderer` is a **temporary scaffold** — pages served by it are NOT considered done
+**Goal: 1:1 replication of OneDev Wicket UI.** Every page must match OneDev in DOM structure, CSS class names, layout, interactions, dark mode, and responsive behavior. OneDev source is the single source of truth — never invent new design.
+
+Reference root (read-only submodule): `references/onedev/server-core/src/main/java/io/onedev/server/web/`
+
+Detailed task checklist (by Wave, with routes): [buildx-web-migration.md](docs/buildx-web-migration.md)
+
+### PageRenderer rule
+
+`PageRenderer` is a **temporary routing scaffold** (prevents white screens during development). A page served by `PageRenderer` is **NOT done**. The only criteria for "done" is the DoD checklist below, fully satisfied, with side-by-side screenshot comparison passed.
+
+### Execution order
+
+1. **Wave 0** — infrastructure (layout shell, asset sync, shared components, API/mock layer)
+2. **Wave 1–11** — per-domain, **one page at a time** 1:1 port (dedicated React component per page, referencing Wicket HTML/CSS/JS)
+3. **Wave 12** — plugin dynamic pages
+4. API endpoints can be filled in parallel with page porting; data layer starts with mock/fixture, field shapes must match OneDev REST, then switch to live `/~api`
+
+Pages within the same Wave can be worked on in parallel, but **never** batch-check them as "done" with a generic template.
+
+### Single-page Definition of Done (DoD) — the only acceptance criteria
+
+- [ ] Cross-referenced `references/onedev/.../web/page/**/{Name}Page.html` + matching `.css` + associated Panel/Behavior classes
+- [ ] React component DOM structure and class names match Wicket rendered output (including aria attributes and nesting hierarchy)
+- [ ] Page-level interactions ported (filter, pagination, inline edit, Ajax feedback, etc.; complex widgets use OneDev's same vendored libraries)
+- [ ] Dark mode and responsive breakpoints match OneDev behavior
+- [ ] `src/api/` response fields match OneDev `*Resource.java` (mock first, then live API)
+- [ ] Playwright same-route screenshot diff passed (against reference OneDev instance, same fixture data)
+
+### Single-page porting workflow
+
+1. **Read the reference**: `{Name}Page.html`, `.java`, child Panels (`web/page/**`), page CSS, associated `web/asset` JS
+2. **(Optional) Generate scaffold**: `go run ./buildx-server/cmd/pagegen -html <Page.html> -page <Name> -out buildx-web/src/pages/...` — converts Wicket markup to JSX skeleton, then hand-wire state and API
+3. **Build dedicated component**: `buildx-web/src/pages/{area}/{Name}Page.tsx` (or subdirectory by domain); do NOT leave it in `PageRenderer` long-term
+4. **Extract shared Panels**: reusable blocks move to `src/components/onedev/panels/` (match Wicket Panel naming)
+5. **Wire data**: `src/api/` + fixture; field names align with REST resources
+6. **Register route**: `AppRouter` / `globalRoutes` / `projectRoutes` → point to dedicated component → remove `PageRenderer` fallback
+7. **Verify**: open OneDev and buildx-web side by side → screenshot diff → attach comparison images to PR
 
 ## Documentation index
 
