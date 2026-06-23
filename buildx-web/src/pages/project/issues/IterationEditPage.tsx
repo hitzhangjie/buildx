@@ -4,13 +4,15 @@ import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel"
 import { useProject } from "../../../context/ProjectContext";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 
-const MOCK_ITERATION = {
-  id: 1,
-  name: "Sprint 2",
-  startDate: "2026-06-15",
-  dueDate: "2026-06-28",
-  description: "Focus on authentication and CI/CD pipeline setup.",
-};
+interface IterationDetail {
+  id: number;
+  name: string;
+  startDate: string;
+  dueDate: string;
+  description: string;
+}
+
+const MOCK_ITERATION: IterationDetail | null = null;
 
 const TABS = [
   { id: "issues", label: "Issues", href: "" },
@@ -54,10 +56,10 @@ export function IterationEditPage() {
   const { iterationId } = useParams<{ iterationId: string }>();
   const id = parseInt(iterationId ?? "0", 10);
 
-  const [name, setName] = useState(MOCK_ITERATION.name);
-  const [startDate, setStartDate] = useState(MOCK_ITERATION.startDate);
-  const [dueDate, setDueDate] = useState(MOCK_ITERATION.dueDate);
-  const [description, setDescription] = useState(MOCK_ITERATION.description);
+  const [name, setName] = useState(MOCK_ITERATION?.name ?? "");
+  const [startDate, setStartDate] = useState(MOCK_ITERATION?.startDate ?? "");
+  const [dueDate, setDueDate] = useState(MOCK_ITERATION?.dueDate ?? "");
+  const [description, setDescription] = useState(MOCK_ITERATION?.description ?? "");
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -101,12 +103,14 @@ export function IterationEditPage() {
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={`${MOCK_ITERATION.name} - Edit`}
+      pageTitle={
+        MOCK_ITERATION ? `${MOCK_ITERATION.name} - Edit` : "Edit Iteration"
+      }
     >
       <div className="card m-3">
         <div className="card-body">
           <div className="d-flex align-items-center mb-3">
-            <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
+            <h4 className="mb-0 mr-3">{MOCK_ITERATION?.name}</h4>
           </div>
 
           <TabNav activeTab="edit" projectPath={projectPath} iterationId={id} />

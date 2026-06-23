@@ -3,13 +3,15 @@ import { Icon } from "../../../components/onedev/Icon";
 import { useProject } from "../../../context/ProjectContext";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 
-const MOCK_ITERATION = {
-  id: 1,
-  name: "Sprint 2",
-  startDate: "2026-06-15",
-  dueDate: "2026-06-28",
-  status: "active" as const,
-};
+interface IterationDetail {
+  id: number;
+  name: string;
+  startDate: string;
+  dueDate: string;
+  status: string;
+}
+
+const MOCK_ITERATION: IterationDetail | null = null;
 
 const TABS = [
   { id: "issues", label: "Issues", href: "" },
@@ -56,23 +58,29 @@ export function IterationBurndownPage() {
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={`${MOCK_ITERATION.name} - Burndown`}
+      pageTitle={
+        MOCK_ITERATION ? `${MOCK_ITERATION.name} - Burndown` : "Iteration Burndown"
+      }
     >
       <div className="card m-3">
         <div className="card-body">
           {/* Iteration Header */}
-          <div className="d-flex align-items-center mb-3">
-            <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
-            <span className="badge badge-light-primary font-size-sm">
-              {MOCK_ITERATION.status.charAt(0).toUpperCase() + MOCK_ITERATION.status.slice(1)}
-            </span>
-          </div>
-          <div className="text-muted font-size-sm mb-4">
-            <Icon name="calendar" />
-            <span className="ml-1">
-              {MOCK_ITERATION.startDate} &rarr; {MOCK_ITERATION.dueDate}
-            </span>
-          </div>
+          {MOCK_ITERATION && (
+            <>
+              <div className="d-flex align-items-center mb-3">
+                <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
+                <span className="badge badge-light-primary font-size-sm">
+                  {MOCK_ITERATION.status.charAt(0).toUpperCase() + MOCK_ITERATION.status.slice(1)}
+                </span>
+              </div>
+              <div className="text-muted font-size-sm mb-4">
+                <Icon name="calendar" />
+                <span className="ml-1">
+                  {MOCK_ITERATION.startDate} &rarr; {MOCK_ITERATION.dueDate}
+                </span>
+              </div>
+            </>
+          )}
 
           <TabNav activeTab="burndown" projectPath={projectPath} iterationId={id} />
 

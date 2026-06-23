@@ -12,40 +12,17 @@ interface MockIssue {
   assignee: string;
 }
 
-const MOCK_ITERATION = {
-  id: 1,
-  name: "Sprint 2",
-  startDate: "2026-06-15",
-  dueDate: "2026-06-28",
-  status: "active" as const,
-};
+interface IterationDetail {
+  id: number;
+  name: string;
+  startDate: string;
+  dueDate: string;
+  status: string;
+}
 
-const MOCK_ISSUES: MockIssue[] = [
-  {
-    id: 1,
-    number: 5,
-    title: "Add user authentication",
-    state: "Open",
-    stateColor: "badge-light-warning",
-    assignee: "admin",
-  },
-  {
-    id: 2,
-    number: 6,
-    title: "Setup CI/CD pipeline",
-    state: "In Progress",
-    stateColor: "badge-light-info",
-    assignee: "dev",
-  },
-  {
-    id: 3,
-    number: 7,
-    title: "Write API documentation",
-    state: "Closed",
-    stateColor: "badge-light-success",
-    assignee: "admin",
-  },
-];
+const MOCK_ITERATION: IterationDetail | null = null;
+
+const MOCK_ISSUES: MockIssue[] = [];
 
 const TABS = [
   { id: "issues", label: "Issues", href: "" },
@@ -92,30 +69,36 @@ export function IterationIssuesPage() {
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={`${MOCK_ITERATION.name} - Issues`}
+      pageTitle={
+        MOCK_ITERATION ? `${MOCK_ITERATION.name} - Issues` : "Iteration Issues"
+      }
     >
       <div className="card m-3">
         <div className="card-body">
           {/* Iteration Header */}
-          <div className="d-flex align-items-center mb-3">
-            <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
-            <span className="badge badge-light-primary font-size-sm">
-              {MOCK_ITERATION.status.charAt(0).toUpperCase() + MOCK_ITERATION.status.slice(1)}
-            </span>
-          </div>
-          <div className="text-muted font-size-sm mb-4 d-flex align-items-center flex-wrap">
-            <Icon name="calendar" />
-            <span className="ml-1 mr-3">
-              {MOCK_ITERATION.startDate} &rarr; {MOCK_ITERATION.dueDate}
-            </span>
-            <span className="mx-1">|</span>
-            <Link
-              to={`/${projectPath}/~iterations/${id}/burndown`}
-              className="ml-1 text-muted"
-            >
-              <Icon name="chart" /> Burndown
-            </Link>
-          </div>
+          {MOCK_ITERATION && (
+            <>
+              <div className="d-flex align-items-center mb-3">
+                <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
+                <span className="badge badge-light-primary font-size-sm">
+                  {MOCK_ITERATION.status.charAt(0).toUpperCase() + MOCK_ITERATION.status.slice(1)}
+                </span>
+              </div>
+              <div className="text-muted font-size-sm mb-4 d-flex align-items-center flex-wrap">
+                <Icon name="calendar" />
+                <span className="ml-1 mr-3">
+                  {MOCK_ITERATION.startDate} &rarr; {MOCK_ITERATION.dueDate}
+                </span>
+                <span className="mx-1">|</span>
+                <Link
+                  to={`/${projectPath}/~iterations/${id}/burndown`}
+                  className="ml-1 text-muted"
+                >
+                  <Icon name="chart" /> Burndown
+                </Link>
+              </div>
+            </>
+          )}
 
           <TabNav activeTab="issues" projectPath={projectPath} iterationId={id} />
 

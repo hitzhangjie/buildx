@@ -6,12 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 )
 
@@ -147,11 +147,22 @@ func (s *DBStore) Create(ctx context.Context, userID int64, p *Project) (*Projec
 		return nil, err
 	}
 
+	// Init bare git repo. Must happen after commit because we need the project ID
+	// for the directory path. If it fails, delete the DB record so we don't leave
+	// a project with no repository.
 	if err := s.initGitRepo(projectID); err != nil {
+		_ = s.deleteByID(ctx, projectID)
 		return nil, fmt.Errorf("init git repo: %w", err)
 	}
 
 	return s.Get(ctx, projectID)
+}
+
+// deleteByID removes a project row by ID. Used as a compensating action when
+// initGitRepo fails after the DB transaction has committed.
+func (s *DBStore) deleteByID(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM o_Project WHERE o_id = ?`, id)
+	return err
 }
 
 func (s *DBStore) Setup(ctx context.Context, userID int64, path string) (*Project, error) {
@@ -228,8 +239,7 @@ func (s *DBStore) initGitRepo(projectID int64) error {
 
 	// TODO(buildx-server): use go-git for bare init (OneDev: JGit Git.init().setBare(true)).
 	// MVP shells out to git; fails if git is not on PATH. See docs/ARCHITECTURE.md § Git engine.
-	cmd := exec.Command("git", "init", "--bare")
-	cmd.Dir = gitDir
+	cmd := git.Cmd(gitDir, "init", "--bare")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}

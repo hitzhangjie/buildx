@@ -4,28 +4,7 @@ import { Icon } from "../../../components/onedev/Icon";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
 
-const MOCK_LOG_LINES = [
-  "[2026-06-23 09:15:01] Starting CI Pipeline #101",
-  "[2026-06-23 09:15:02] Cloning repository...",
-  "[2026-06-23 09:15:03] Repository cloned successfully",
-  "[2026-06-23 09:15:03] Step 1/3: Checkout",
-  "[2026-06-23 09:15:04] Checking out branch: main",
-  "[2026-06-23 09:15:05] HEAD is now at a1b2c3d Add CI pipeline configuration",
-  "[2026-06-23 09:15:05] Step 2/3: Build",
-  "[2026-06-23 09:15:06] Running: make build",
-  "[2026-06-23 09:15:08] go build -o bin/buildx-server ./cmd/buildx-server",
-  "[2026-06-23 09:15:12] go build -o bin/buildx-cli ./cmd/buildx-cli",
-  "[2026-06-23 09:15:15] Build completed successfully",
-  "[2026-06-23 09:15:15] Step 3/3: Test",
-  "[2026-06-23 09:15:16] Running: make test",
-  "[2026-06-23 09:15:18] go test ./...",
-  "[2026-06-23 09:15:20] ok  buildx-server/model",
-  "[2026-06-23 09:15:22] ok  buildx-server/security",
-  "[2026-06-23 09:15:24] ok  buildx-server/persistence",
-  "[2026-06-23 09:15:26] All tests passed",
-  "[2026-06-23 09:15:27] Pipeline completed successfully",
-  "[2026-06-23 09:15:27] Build #101 finished with status: SUCCESSFUL",
-];
+const MOCK_LOG_LINES: string[] = [];
 
 export function BuildLogPage() {
   const { projectPath } = useProject();

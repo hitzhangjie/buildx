@@ -13,32 +13,7 @@ interface Iteration {
   status: "active" | "upcoming" | "closed";
 }
 
-const MOCK_ITERATIONS: Iteration[] = [
-  {
-    id: 1,
-    name: "Sprint 1",
-    startDate: "2026-06-01",
-    dueDate: "2026-06-14",
-    issuesCount: 8,
-    status: "closed",
-  },
-  {
-    id: 2,
-    name: "Sprint 2",
-    startDate: "2026-06-15",
-    dueDate: "2026-06-28",
-    issuesCount: 5,
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "Sprint 3",
-    startDate: "2026-06-29",
-    dueDate: "2026-07-12",
-    issuesCount: 0,
-    status: "upcoming",
-  },
-];
+const MOCK_ITERATIONS: Iteration[] = [];
 
 const STATUS_MAP: Record<
   Iteration["status"],

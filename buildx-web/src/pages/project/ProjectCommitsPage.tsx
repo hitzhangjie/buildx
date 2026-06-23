@@ -4,26 +4,20 @@ import { Icon } from "../../components/onedev/Icon";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 
-interface MockCommit {
+interface Commit {
   hash: string;
   message: string;
   author: string;
   date: string;
 }
 
-const MOCK_COMMITS: MockCommit[] = [
-  { hash: "a1b2c3d", message: "Initial commit", author: "admin", date: "2026-06-20" },
-  { hash: "e4f5g6h", message: "Add CI pipeline configuration", author: "admin", date: "2026-06-21" },
-  { hash: "i7j8k9l", message: "Fix login redirect issue", author: "dev", date: "2026-06-22" },
-  { hash: "m0n1o2p", message: "Update dependencies", author: "admin", date: "2026-06-22" },
-  { hash: "q3r4s5t", message: "Add README documentation", author: "dev", date: "2026-06-23" },
-];
+const commits: Commit[] = [];
 
 export function ProjectCommitsPage() {
   const { projectPath } = useProject();
   const [query, setQuery] = useState("");
 
-  const filtered = MOCK_COMMITS.filter(
+  const filtered = commits.filter(
     (c) => !query || c.message.toLowerCase().includes(query.toLowerCase())
   );
 

@@ -14,44 +14,7 @@ interface MockBuild {
   commit: string;
 }
 
-const MOCK_BUILDS: MockBuild[] = [
-  {
-    number: 101,
-    jobName: "CI Pipeline",
-    status: "SUCCESSFUL",
-    branch: "main",
-    submitter: "admin",
-    date: "2026-06-23 09:15",
-    commit: "a1b2c3d",
-  },
-  {
-    number: 100,
-    jobName: "CI Pipeline",
-    status: "FAILED",
-    branch: "feature/ci",
-    submitter: "dev",
-    date: "2026-06-23 08:30",
-    commit: "e4f5g6h",
-  },
-  {
-    number: 99,
-    jobName: "CI Pipeline",
-    status: "RUNNING",
-    branch: "bugfix/login",
-    submitter: "admin",
-    date: "2026-06-23 09:00",
-    commit: "i7j8k9l",
-  },
-  {
-    number: 98,
-    jobName: "CI Pipeline",
-    status: "CANCELLED",
-    branch: "develop",
-    submitter: "dev",
-    date: "2026-06-22 17:45",
-    commit: "m0n1o2p",
-  },
-];
+const MOCK_BUILDS: MockBuild[] = [];
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
   SUCCESSFUL: "badge-light-success",

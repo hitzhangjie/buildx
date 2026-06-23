@@ -3,7 +3,7 @@ import { Icon } from "../../../components/onedev/Icon";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
 
-interface MockCodeComment {
+interface CodeComment {
   id: number;
   file: string;
   line: number;
@@ -12,32 +12,7 @@ interface MockCodeComment {
   content: string;
 }
 
-const MOCK_CODE_COMMENTS: MockCodeComment[] = [
-  {
-    id: 1,
-    file: ".github/workflows/ci.yml",
-    line: 15,
-    author: "admin",
-    date: "2026-06-22 10:35",
-    content: "Should we use ubuntu-latest instead of a pinned version?",
-  },
-  {
-    id: 2,
-    file: "src/main.go",
-    line: 42,
-    author: "admin",
-    date: "2026-06-22 10:40",
-    content: "This error should be handled explicitly rather than ignored.",
-  },
-  {
-    id: 3,
-    file: "src/config.go",
-    line: 8,
-    author: "dev",
-    date: "2026-06-22 11:00",
-    content: "Applied the requested changes. The default is now configurable.",
-  },
-];
+const codeComments: CodeComment[] = [];
 
 export function PullRequestCodeCommentsPage() {
   const { projectPath } = useProject();
@@ -85,7 +60,7 @@ export function PullRequestCodeCommentsPage() {
               </tr>
             </thead>
             <tbody>
-              {MOCK_CODE_COMMENTS.map((comment) => (
+              {codeComments.map((comment) => (
                 <tr key={comment.id}>
                   <td className="text-nowrap">
                     <div>
@@ -104,7 +79,7 @@ export function PullRequestCodeCommentsPage() {
                   </td>
                 </tr>
               ))}
-              {MOCK_CODE_COMMENTS.length === 0 && (
+              {codeComments.length === 0 && (
                 <tr>
                   <td colSpan={3} className="text-center text-muted py-5">
                     No code comments

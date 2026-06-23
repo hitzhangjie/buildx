@@ -1,0 +1,33 @@
+/* Matches OneDev blob-edit.css */
+.blob-edit > .head {
+  border-bottom: 1px solid var(--light-gray);
+  height: 3rem;
+}
+
+.blob-edit > .head .tab a {
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  color: var(--dark);
+}
+
+.blob-edit > .head .active.tab a,
+.blob-edit > .head .tab a:focus,
+.blob-edit > .head .tab a:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.blob-edit > .head .cancel a {
+  color: var(--danger);
+}
+
+.blob-edit > .head .cancel a:hover {
+  text-decoration: underline;
+}
+
+/* Changes diff view styling */
+.changes-viewer .diff-view {
+  white-space: pre-wrap;
+  word-break: break-all;
+}

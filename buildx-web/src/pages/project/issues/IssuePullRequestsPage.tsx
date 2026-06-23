@@ -13,26 +13,7 @@ interface MockPullRequest {
   author: string;
 }
 
-const MOCK_PRS: MockPullRequest[] = [
-  {
-    id: 1,
-    number: 3,
-    title: "Fix race condition in issue state machine",
-    status: "Open",
-    sourceBranch: "fix/issue-state-machine",
-    targetBranch: "main",
-    author: "admin",
-  },
-  {
-    id: 2,
-    number: 2,
-    title: "Add unit tests for issue transitions",
-    status: "Merged",
-    sourceBranch: "test/issue-transitions",
-    targetBranch: "main",
-    author: "dev",
-  },
-];
+const MOCK_PRS: MockPullRequest[] = [];
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
   Open: "badge-light-warning",

@@ -10,11 +10,7 @@ interface MockFileChange {
   status: "Added" | "Modified" | "Deleted";
 }
 
-const MOCK_FILE_CHANGES: MockFileChange[] = [
-  { path: ".github/workflows/ci.yml", additions: 45, deletions: 0, status: "Added" },
-  { path: "src/main.go", additions: 12, deletions: 5, status: "Modified" },
-  { path: "src/config.go", additions: 3, deletions: 10, status: "Modified" },
-];
+const MOCK_FILE_CHANGES: MockFileChange[] = [];
 
 export function BuildChangesPage() {
   const { projectPath } = useProject();

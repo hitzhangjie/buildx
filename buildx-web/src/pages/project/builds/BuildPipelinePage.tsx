@@ -10,26 +10,7 @@ interface MockPipelineStep {
   logSummary: string;
 }
 
-const MOCK_PIPELINE_STEPS: MockPipelineStep[] = [
-  {
-    name: "Checkout",
-    status: "SUCCESSFUL",
-    duration: "3s",
-    logSummary: "Cloned repository and checked out main branch",
-  },
-  {
-    name: "Build",
-    status: "SUCCESSFUL",
-    duration: "12s",
-    logSummary: "Built server and CLI binaries successfully",
-  },
-  {
-    name: "Test",
-    status: "SUCCESSFUL",
-    duration: "10s",
-    logSummary: "All tests passed across all packages",
-  },
-];
+const MOCK_PIPELINE_STEPS: MockPipelineStep[] = [];
 
 const STATUS_ICON: Record<string, string> = {
   SUCCESSFUL: "check-circle",

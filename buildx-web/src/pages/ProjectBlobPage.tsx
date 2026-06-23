@@ -1,22 +1,42 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { fetchBlob, type BlobContent, type BlobEntry } from "../api/blob";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { fetchBlob, createFile, type BlobContent, type BlobEntry } from "../api/blob";
+import { NoCommitsPanel } from "../components/onedev/panels/NoCommitsPanel";
 import { useProjectContext } from "../context/ProjectContext";
 import { ProjectLayout } from "../layout/ProjectLayout";
 import { getMockReadme } from "../mocks/fixtures/blob";
 import { USE_MOCK } from "../mocks/config";
-import { blobUrl, fileIcon, parentBlobUrl, parseBlobSegments } from "../util/blobPath";
+import {
+  blobUrl,
+  parentBlobUrl,
+  parseBlobSegments,
+  fileIcon,
+  type BlobMode,
+} from "../util/blobPath";
+import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
+import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
+
+// ---------------------------------------------------------------------------
+// BlobNavigator – breadcrumb with optional inline file-name input
+// ---------------------------------------------------------------------------
 
 function BlobNavigator({
   projectPath,
   revision,
   path,
+  mode,
+  newFileName,
+  onNewFileNameChange,
 }: {
   projectPath: string;
   revision: string;
   path: string;
+  mode?: BlobMode;
+  newFileName?: string;
+  onNewFileNameChange?: (name: string) => void;
 }) {
   const parts = path ? path.split("/") : [];
+  const isEditing = mode === "add" || mode === "edit";
 
   return (
     <div className="blob-navigator d-flex align-items-center flex-wrap">
@@ -25,21 +45,45 @@ function BlobNavigator({
       </Link>
       {parts.map((part, index) => {
         const subPath = parts.slice(0, index + 1).join("/");
-        const isLast = index === parts.length - 1;
         return (
           <span key={subPath} className="d-inline-flex align-items-center">
             <span className="text-muted mx-1">/</span>
-            {isLast ? (
-              <span>{part}</span>
-            ) : (
-              <Link to={blobUrl(projectPath, revision, subPath)}>{part}</Link>
-            )}
+            <Link to={blobUrl(projectPath, revision, subPath)}>{part}</Link>
           </span>
         );
       })}
+      {isEditing ? (
+        <span className="d-inline-flex align-items-center">
+          <span className="text-muted mx-1">/</span>
+          <span className="last-segment">
+            <form
+              className="leave-confirm name"
+              onSubmit={(e) => e.preventDefault()}
+            >
+              <input
+                type="text"
+                className="form-control form-control-sm form-control-solid"
+                placeholder="Name your file"
+                value={newFileName ?? ""}
+                onChange={(e) => onNewFileNameChange?.(e.target.value)}
+                autoFocus={mode === "add"}
+              />
+            </form>
+          </span>
+        </span>
+      ) : path ? (
+        <span className="d-inline-flex align-items-center">
+          <span className="text-muted mx-1">/</span>
+          <span>{parts[parts.length - 1]}</span>
+        </span>
+      ) : null}
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// FolderRow
+// ---------------------------------------------------------------------------
 
 function FolderRow({
   projectPath,
@@ -76,6 +120,10 @@ function FolderRow({
     </tr>
   );
 }
+
+// ---------------------------------------------------------------------------
+// FolderView
+// ---------------------------------------------------------------------------
 
 function FolderView({
   projectPath,
@@ -127,6 +175,10 @@ function FolderView({
   );
 }
 
+// ---------------------------------------------------------------------------
+// FileView
+// ---------------------------------------------------------------------------
+
 function FileView({ blob }: { blob: BlobContent }) {
   return (
     <>
@@ -150,24 +202,85 @@ function FileView({ blob }: { blob: BlobContent }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// InlineDropdown — used for the "Add" button dropdown
+// ---------------------------------------------------------------------------
+
+function InlineDropdown({
+  isOpen,
+  onClose,
+  triggerRef,
+  children,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLElement | null>;
+  children: React.ReactNode;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      onClose();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [isOpen, onClose, triggerRef]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div ref={menuRef} className="floating dropdown-menu show" style={{ position: "absolute", zIndex: 1050 }}>
+      <div className="dropdown-menu-content">{children}</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProjectBlobPage
+// ---------------------------------------------------------------------------
+
 export function ProjectBlobPage() {
   const { projectPath, blobSegments } = useProjectContext();
   const { revision, path } = parseBlobSegments(blobSegments ?? []);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  // Parse mode and extra params from URL
+  const mode: BlobMode = (searchParams.get("mode") as BlobMode) || "view";
+  const initialPath = searchParams.get("initialPath") || undefined;
+
+  // Blob data state
   const [blob, setBlob] = useState<BlobContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // ADD/EDIT mode state
+  const [newFileName, setNewFileName] = useState(initialPath ?? "");
+  const [addDropdownOpen, setAddDropdownOpen] = useState(false);
+  const addTriggerRef = useRef<HTMLAnchorElement>(null);
+
+  // Support ?empty=1 to preview the empty-project guidance
+  const forceEmpty = searchParams.get("empty") === "1";
+
+  // Compute effective new path (directory + file name)
+  const newFilePath = newFileName ? (path ? `${path}/${newFileName}` : newFileName) : "";
+
   useEffect(() => {
-    if (!projectPath) {
+    if (!projectPath || forceEmpty) {
       return;
     }
-    const pathForFetch = projectPath;
+    const pp = projectPath; // narrowed to string
     let cancelled = false;
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const data = await fetchBlob(pathForFetch, revision, path);
+        const data = await fetchBlob(pp, revision, path);
         if (!cancelled) {
           setBlob(data);
         }
@@ -185,11 +298,100 @@ export function ProjectBlobPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectPath, revision, path]);
+  }, [projectPath, revision, path, forceEmpty]);
+
+  // Clear edit state when mode changes to view
+  useEffect(() => {
+    if (mode === "view") {
+      setNewFileName("");
+    }
+  }, [mode]);
+
+  // Enter ADD mode in the given directory
+  const enterAddMode = useCallback((newFilePath?: string) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("mode", "add");
+    if (newFilePath) {
+      params.set("initialPath", newFilePath);
+    }
+    setSearchParams(params, { replace: false });
+    setNewFileName(newFilePath ?? "");
+  }, [searchParams, setSearchParams]);
+
+  // Handle commit from BlobAddEditPanel
+  const handleCommit = useCallback(async (commitMessage: string, content: string) => {
+    const filePath = newFilePath;
+    if (!filePath) return;
+
+    try {
+      await createFile(projectPath!, revision, filePath, content, commitMessage);
+      // Navigate to the newly created file in view mode
+      navigate(blobUrl(projectPath!, revision, filePath), { replace: true });
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Failed to create file");
+    }
+  }, [projectPath, revision, newFilePath, navigate]);
+
+  // Handle cancel from edit panels — go back to VIEW mode
+  const handleCancelEdit = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("mode");
+    params.delete("initialPath");
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   if (!projectPath) {
     return null;
   }
+
+  // --- Determine what to render in the content area ---
+
+  const isEditMode = mode === "add" || mode === "edit";
+  const isEmpty = forceEmpty || (!loading && !error && !blob);
+
+  let content: React.ReactNode;
+
+  if (isEditMode) {
+    // ADD or EDIT mode override the normal view
+    if (mode === "add" && !newFileName) {
+      // No file name entered yet — show prompt
+      content = (
+        <>
+          <NoNameEditPanel />
+          {/* Also show the folder view beneath so user can see where they are */}
+          {blob && blob.type === "directory" && !isEmpty && (
+            <FolderView projectPath={projectPath} revision={revision} path={path} blob={blob} />
+          )}
+        </>
+      );
+    } else if (mode === "add" || mode === "edit") {
+      // File name entered — show editor
+      const existingContent = mode === "edit" && blob?.type === "file" ? (blob.content ?? "") : "";
+      content = (
+        <BlobAddEditPanel
+          filePath={newFilePath}
+          initialContent={existingContent}
+          revision={revision}
+          onCancel={handleCancelEdit}
+          onCommit={handleCommit}
+        />
+      );
+    }
+  } else if (isEmpty && path === "") {
+    content = <NoCommitsPanel projectPath={projectPath} />;
+  } else if (loading && !forceEmpty) {
+    content = <div className="text-center py-10 text-muted">Loading…</div>;
+  } else if (!blob && !forceEmpty) {
+    content = <div className="text-center py-10 text-muted">Path not found</div>;
+  } else if (blob && blob.type === "directory") {
+    content = <FolderView projectPath={projectPath} revision={revision} path={path} blob={blob} />;
+  } else if (blob) {
+    content = <FileView blob={blob} />;
+  } else {
+    content = null;
+  }
+
+  // --- Render ---
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Files">
@@ -200,7 +402,14 @@ export function ProjectBlobPage() {
               <img src="/~icon/branch.svg" alt="" className="icon mr-1" width={14} height={14} />
               {revision}
             </span>
-            <BlobNavigator projectPath={projectPath} revision={revision} path={path} />
+            <BlobNavigator
+              projectPath={projectPath}
+              revision={revision}
+              path={path}
+              mode={isEditMode ? mode : undefined}
+              newFileName={newFileName}
+              onNewFileNameChange={setNewFileName}
+            />
           </div>
           <div className="blob-operations py-2">
             <a
@@ -211,9 +420,57 @@ export function ProjectBlobPage() {
               <img src="/~icon/download2.svg" alt="" className="icon mr-1" width={16} height={16} />
               Clone
             </a>
-            <a href="#" className="mr-3 text-nowrap" onClick={(e) => e.preventDefault()}>
-              Add
-            </a>
+
+            {/* "Add" dropdown — matches OneDev's DropdownLink behavior */}
+            {!isEditMode && (
+              <span className="dropdown-aware d-inline-block position-relative mr-3">
+                <a
+                  ref={addTriggerRef}
+                  className={`text-nowrap${addDropdownOpen ? " dropdown-open" : ""}`}
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setAddDropdownOpen(!addDropdownOpen);
+                  }}
+                >
+                  Add
+                </a>
+                <InlineDropdown
+                  isOpen={addDropdownOpen}
+                  onClose={() => setAddDropdownOpen(false)}
+                  triggerRef={addTriggerRef}
+                >
+                  <div className="list-group list-group-flush">
+                    <a
+                      className="list-group-item list-group-item-action"
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setAddDropdownOpen(false);
+                        enterAddMode();
+                      }}
+                    >
+                      Create New File
+                    </a>
+                    <a
+                      className="list-group-item list-group-item-action"
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setAddDropdownOpen(false);
+                        // Upload mode — navigate to upload page
+                        const params = new URLSearchParams(searchParams);
+                        params.set("mode", "upload");
+                        setSearchParams(params);
+                      }}
+                    >
+                      Upload Files
+                    </a>
+                  </div>
+                </InlineDropdown>
+              </span>
+            )}
+
             <a href="#" className="mr-3 text-nowrap" onClick={(e) => e.preventDefault()}>
               Search
             </a>
@@ -227,16 +484,8 @@ export function ProjectBlobPage() {
         </div>
 
         <div className="blob-content autofit flex-grow-1 d-flex flex-column overflow-auto">
-          {error && <div className="alert alert-light-danger m-3">{error}</div>}
-          {loading ? (
-            <div className="text-center py-10 text-muted">Loading…</div>
-          ) : !blob ? (
-            <div className="text-center py-10 text-muted">Path not found</div>
-          ) : blob.type === "directory" ? (
-            <FolderView projectPath={projectPath} revision={revision} path={path} blob={blob} />
-          ) : (
-            <FileView blob={blob} />
-          )}
+          {error && !forceEmpty && <div className="alert alert-light-danger m-3">{error}</div>}
+          {content}
         </div>
       </div>
     </ProjectLayout>

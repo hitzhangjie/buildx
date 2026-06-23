@@ -7,13 +7,4 @@ export type Workspace = {
   owner: string;
 };
 
-export const mockWorkspaces: Workspace[] = [
-  {
-    id: 1,
-    name: "dev-env",
-    projectPath: "demo",
-    branch: "main",
-    status: "Running",
-    owner: "admin",
-  },
-];
+export const mockWorkspaces: Workspace[] = [];

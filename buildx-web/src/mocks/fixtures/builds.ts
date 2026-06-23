@@ -8,23 +8,4 @@ export type Build = {
   submitter: string;
 };
 
-export const mockBuilds: Build[] = [
-  {
-    id: 1,
-    number: 42,
-    job: "CI",
-    projectPath: "demo",
-    branch: "main",
-    status: "SUCCESSFUL",
-    submitter: "admin",
-  },
-  {
-    id: 2,
-    number: 43,
-    job: "CI",
-    projectPath: "demo",
-    branch: "feature/metrics",
-    status: "RUNNING",
-    submitter: "admin",
-  },
-];
+export const mockBuilds: Build[] = [];

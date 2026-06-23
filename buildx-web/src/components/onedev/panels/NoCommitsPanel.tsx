@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "./NoCommitsPanel.css";
 
 type NoCommitsPanelProps = {
@@ -83,7 +84,23 @@ function InlineDropdown({
  * Matches OneDev's NoCommitsPanel in DOM structure, CSS classes, and behavior.
  */
 export function NoCommitsPanel({ projectPath }: NoCommitsPanelProps) {
+  const navigate = useNavigate();
   const cloneUrl = `${window.location.origin}/${projectPath}.git`;
+
+  const handleCreateNewFile = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/${projectPath}/~files/main?mode=add`);
+  };
+
+  const handleUploadFiles = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/${projectPath}/~files/main?mode=upload`);
+  };
+
+  const handleSetupCICD = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/${projectPath}/~files/main?mode=add&initialPath=.onedev-buildspec.yml`);
+  };
 
   return (
     <div className="m-4 no-commits text-center flex-grow-1 d-flex flex-column justify-content-center align-items-center">
@@ -95,15 +112,15 @@ export function NoCommitsPanel({ projectPath }: NoCommitsPanelProps) {
           <div className="list-group list-group-flush">
             <a
               className="list-group-item list-group-item-action"
-              href={`/${projectPath}/~files/main/~add`}
-              onClick={(e) => e.preventDefault()}
+              href={`/${projectPath}/~files/main?mode=add`}
+              onClick={handleCreateNewFile}
             >
               Create New File
             </a>
             <a
               className="list-group-item list-group-item-action"
-              href={`/${projectPath}/~files/main/~upload`}
-              onClick={(e) => e.preventDefault()}
+              href={`/${projectPath}/~files/main?mode=upload`}
+              onClick={handleUploadFiles}
             >
               Upload Files
             </a>
@@ -111,9 +128,9 @@ export function NoCommitsPanel({ projectPath }: NoCommitsPanelProps) {
         </InlineDropdown>
         {", "}
         <a
-          href={`/${projectPath}/~files/main/.onedev-buildspec.yml/~add`}
+          href={`/${projectPath}/~files/main?mode=add&initialPath=.onedev-buildspec.yml`}
           className="link-primary"
-          onClick={(e) => e.preventDefault()}
+          onClick={handleSetupCICD}
         >
           setting up CI/CD
         </a>

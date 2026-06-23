@@ -9,15 +9,4 @@ export type PullRequest = {
   submitter: string;
 };
 
-export const mockPullRequests: PullRequest[] = [
-  {
-    id: 1,
-    number: 1,
-    title: "Add build metrics dashboard",
-    projectPath: "demo",
-    sourceBranch: "feature/metrics",
-    targetBranch: "main",
-    status: "Open",
-    submitter: "admin",
-  },
-];
+export const mockPullRequests: PullRequest[] = [];

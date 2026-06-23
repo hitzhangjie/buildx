@@ -11,26 +11,7 @@ interface MockComment {
   content: string;
 }
 
-const MOCK_COMMENTS: MockComment[] = [
-  {
-    id: 1,
-    author: "admin",
-    date: "2026-06-22 10:30",
-    content: "This looks good to me. I left a minor comment on the configuration file.",
-  },
-  {
-    id: 2,
-    author: "dev",
-    date: "2026-06-22 11:15",
-    content: "Thanks for the review! I've addressed the comments. PTAL.",
-  },
-  {
-    id: 3,
-    author: "admin",
-    date: "2026-06-22 14:00",
-    content: "Approved. Let's merge this once CI passes.",
-  },
-];
+const MOCK_COMMENTS: MockComment[] = [];
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
   Open: "badge-light-warning",
@@ -44,13 +25,13 @@ export function PullRequestActivitiesPage() {
   const [comments] = useState<MockComment[]>(MOCK_COMMENTS);
   const [newComment, setNewComment] = useState("");
 
-  // Mock PR detail
-  const prTitle = "Add CI pipeline configuration";
-  const prStatus = "Open";
-  const sourceBranch = "feature/ci";
-  const targetBranch = "main";
-  const submitter = "admin";
-  const createdAt = "2026-06-20";
+  // TODO: Fetch PR detail from API
+  const prTitle = "";
+  const prStatus = "";
+  const sourceBranch = "";
+  const targetBranch = "";
+  const submitter = "";
+  const createdAt = "";
 
   function handleAddComment() {
     if (!newComment.trim()) return;

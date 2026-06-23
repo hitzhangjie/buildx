@@ -3,6 +3,8 @@ package git
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -43,22 +45,56 @@ func NewCommandService(gitDir string) *CommandService {
 	return &CommandService{gitDir: gitDir}
 }
 
+// cmd creates an exec.Cmd for git operations with GIT_DIR set explicitly.
+// This bypasses the safe.bareRepository=explicit safety check in Git ≥2.35.2
+// that otherwise blocks commands running inside bare repositories.
+func (s *CommandService) cmd(args ...string) *exec.Cmd {
+	c := exec.Command("git", args...)
+	c.Dir = s.gitDir
+	c.Env = append(os.Environ(), "GIT_DIR="+s.gitDir)
+	return c
+}
+
+// cmdContext is like cmd but includes a context for cancellation.
+func (s *CommandService) cmdContext(ctx context.Context, args ...string) *exec.Cmd {
+	c := exec.CommandContext(ctx, "git", args...)
+	c.Dir = s.gitDir
+	c.Env = append(os.Environ(), "GIT_DIR="+s.gitDir)
+	return c
+}
+
+// Cmd creates an exec.Cmd for git operations on a bare repo with GIT_DIR set.
+// Exported for use by other packages (e.g. the git HTTP handler).
+func Cmd(gitDir string, args ...string) *exec.Cmd {
+	c := exec.Command("git", args...)
+	c.Dir = gitDir
+	c.Env = append(os.Environ(), "GIT_DIR="+gitDir)
+	return c
+}
+
+// CmdContext is like Cmd but includes a context.
+func CmdContext(ctx context.Context, gitDir string, args ...string) *exec.Cmd {
+	c := exec.CommandContext(ctx, "git", args...)
+	c.Dir = gitDir
+	c.Env = append(os.Environ(), "GIT_DIR="+gitDir)
+	return c
+}
+
 // HasRefs returns true if the repository has at least one ref (commit).
 func (s *CommandService) HasRefs() bool {
-	cmd := exec.Command("git", "for-each-ref", "--count=1", "refs/")
-	cmd.Dir = s.gitDir
+	cmd := s.cmd("for-each-ref", "--count=1", "--format=%(refname)", "refs/")
 	out, err := cmd.Output()
 	if err != nil {
+		slog.Error("git for-each-ref failed", "gitDir", s.gitDir, "error", err)
 		return false
 	}
-	return strings.TrimSpace(string(out)) == "1"
+	return strings.TrimSpace(string(out)) != ""
 }
 
 // DefaultRevision returns the default branch name, or "main" if none exists.
 func (s *CommandService) DefaultRevision() string {
 	// Try to resolve HEAD
-	cmd := exec.Command("git", "symbolic-ref", "--short", "HEAD")
-	cmd.Dir = s.gitDir
+	cmd := s.cmd("symbolic-ref", "--short", "HEAD")
 	out, err := cmd.Output()
 	if err == nil {
 		ref := strings.TrimSpace(string(out))
@@ -76,9 +112,7 @@ func (s *CommandService) DefaultRevision() string {
 }
 
 func (s *CommandService) revisionExists(revision string) bool {
-	cmd := exec.Command("git", "rev-parse", "--verify", revision)
-	cmd.Dir = s.gitDir
-	return cmd.Run() == nil
+	return s.cmd("rev-parse", "--verify", revision).Run() == nil
 }
 
 // Blob returns the content at revision:path. If the repo has no commits
@@ -147,8 +181,7 @@ func (s *CommandService) listTree(ctx context.Context, revision, path string) ([
 
 	// git ls-tree -l --full-tree <tree-ish>
 	// Output format: <mode> <type> <object> <size>\t<name>
-	cmd := exec.CommandContext(ctx, "git", "ls-tree", "-l", "--full-tree", treeRef)
-	cmd.Dir = s.gitDir
+	cmd := s.cmdContext(ctx, "ls-tree", "-l", "--full-tree", treeRef)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -210,8 +243,7 @@ func parseLsTreeLine(line string) *BlobEntry {
 
 func (s *CommandService) lastCommit(revision, path string) *CommitInfo {
 	// git log -1 --format="%an|%s|%ar" <revision> -- <path>
-	cmd := exec.Command("git", "log", "-1", "--format=%an|%s|%ar", revision, "--", path)
-	cmd.Dir = s.gitDir
+	cmd := s.cmd("log", "-1", "--format=%an|%s|%ar", revision, "--", path)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil
@@ -240,17 +272,13 @@ func (s *CommandService) readFile(ctx context.Context, revision, path string) (s
 	ref := revision + ":" + path
 
 	// Get content
-	cmd := exec.CommandContext(ctx, "git", "show", ref)
-	cmd.Dir = s.gitDir
-	out, err := cmd.Output()
+	out, err := s.cmdContext(ctx, "show", ref).Output()
 	if err != nil {
 		return "", 0, err
 	}
 
 	// Get size in bytes
-	sizeCmd := exec.CommandContext(ctx, "git", "cat-file", "-s", ref)
-	sizeCmd.Dir = s.gitDir
-	sizeOut, err := sizeCmd.Output()
+	sizeOut, err := s.cmdContext(ctx, "cat-file", "-s", ref).Output()
 	size := int64(0)
 	if err == nil {
 		fmt.Sscanf(strings.TrimSpace(string(sizeOut)), "%d", &size)

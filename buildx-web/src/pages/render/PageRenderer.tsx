@@ -6,7 +6,8 @@ import { SideMainPage } from "../../components/global-list/SideMainPage";
 import { Layout } from "../../layout/Layout";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { SimpleLayout } from "../../layout/SimpleLayout";
-import { detailTabsForPage, mockRowsForPage, settingNavForProject } from "./mockEntity";
+import { detailTabsForPage, mockRowsForPage } from "./mockEntity";
+import { SettingsLayout } from "../../components/onedev/SettingsLayout";
 import { resolvePageTemplate } from "./resolveTemplate";
 import type { PageRenderContext, PageTemplate } from "./types";
 
@@ -215,28 +216,13 @@ function PageBody(props: TemplateProps) {
         return null;
       }
       return (
-        <ProjectLayout projectPath={projectPath} pageTitle={title}>
-          <div className="d-flex">
-            <div className="side d-none d-xl-block p-3" style={{ minWidth: 220 }}>
-              <div className="card card-custom">
-                <div className="card-body p-2">
-                  {settingNavForProject(projectPath, page).map((item) => (
-                    <Link
-                      key={item.href}
-                      to={item.href}
-                      className={`d-block px-3 py-2 rounded${item.active ? " bg-light-primary" : ""}`}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex-grow-1">
+        <SettingsLayout projectPath={projectPath} pageTitle={title}>
+          <div className="card">
+            <div className="card-body">
               <FormCard title={title} fields={["Setting name", "Value", "Description"]} />
             </div>
           </div>
-        </ProjectLayout>
+        </SettingsLayout>
       );
 
     case "log-viewer":

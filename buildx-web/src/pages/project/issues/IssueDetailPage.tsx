@@ -13,33 +13,19 @@ interface Comment {
   content: string;
 }
 
-const MOCK_ISSUE = {
-  number: 1,
-  title: "Setup CI pipeline",
-  state: "Open",
-  stateColor: "light-warning" as const,
-  author: "admin",
-  date: "2026-06-20",
-  description:
-    "We need to set up a CI pipeline for automated builds and tests on every push to the main branch.",
-};
+interface IssueDetail {
+  number: number;
+  title: string;
+  state: string;
+  stateColor: string;
+  author: string;
+  date: string;
+  description: string;
+}
 
-const MOCK_COMMENTS: Comment[] = [
-  {
-    id: 1,
-    author: "alice",
-    date: "2026-06-21",
-    content:
-      "I can help with the GitHub Actions workflow configuration.",
-  },
-  {
-    id: 2,
-    author: "bob",
-    date: "2026-06-22",
-    content:
-      "Let's use the existing buildx build system. It already supports multiple environments.",
-  },
-];
+const MOCK_ISSUE: IssueDetail | null = null;
+
+const MOCK_COMMENTS: Comment[] = [];
 
 const TABS: { id: TabId; label: string; href: string }[] = [
   { id: "activities", label: "Activities", href: "" },
@@ -90,29 +76,37 @@ export function IssueDetailPage() {
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={`#${issueNumber} ${MOCK_ISSUE.title}`}
+      pageTitle={
+        MOCK_ISSUE
+          ? `#${issueNumber} ${MOCK_ISSUE.title}`
+          : `Issue #${issueNumber}`
+      }
     >
       <div className="card m-3">
         <div className="card-body">
-          <div className="d-flex align-items-center mb-3">
-            <h4 className="mb-0 mr-3">
-              #{issueNumber} {MOCK_ISSUE.title}
-            </h4>
-            <span
-              className={`badge badge-${MOCK_ISSUE.stateColor} font-size-sm`}
-            >
-              {MOCK_ISSUE.state}
-            </span>
-          </div>
-          <div className="text-muted font-size-sm mb-4">
-            <span className="mr-3">
-              <Icon name="user" /> {MOCK_ISSUE.author}
-            </span>
-            <span>{MOCK_ISSUE.date}</span>
-          </div>
-          <div className="mb-4 p-3 bg-light rounded">
-            {MOCK_ISSUE.description}
-          </div>
+          {MOCK_ISSUE && (
+            <>
+              <div className="d-flex align-items-center mb-3">
+                <h4 className="mb-0 mr-3">
+                  #{issueNumber} {MOCK_ISSUE.title}
+                </h4>
+                <span
+                  className={`badge badge-${MOCK_ISSUE.stateColor} font-size-sm`}
+                >
+                  {MOCK_ISSUE.state}
+                </span>
+              </div>
+              <div className="text-muted font-size-sm mb-4">
+                <span className="mr-3">
+                  <Icon name="user" /> {MOCK_ISSUE.author}
+                </span>
+                <span>{MOCK_ISSUE.date}</span>
+              </div>
+              <div className="mb-4 p-3 bg-light rounded">
+                {MOCK_ISSUE.description}
+              </div>
+            </>
+          )}
 
           <TabNav
             activeTab={activeTab}

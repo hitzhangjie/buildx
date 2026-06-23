@@ -15,28 +15,7 @@ interface MockPullRequest {
   date: string;
 }
 
-const MOCK_PRS: MockPullRequest[] = [
-  {
-    number: 1,
-    title: "Add CI pipeline configuration",
-    status: "Open",
-    sourceBranch: "feature/ci",
-    targetBranch: "main",
-    comments: 3,
-    submitter: "admin",
-    date: "2026-06-22",
-  },
-  {
-    number: 2,
-    title: "Fix login redirect issue",
-    status: "Merged",
-    sourceBranch: "bugfix/login",
-    targetBranch: "main",
-    comments: 1,
-    submitter: "dev",
-    date: "2026-06-20",
-  },
-];
+const MOCK_PRS: MockPullRequest[] = [];
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
   Open: "badge-light-warning",

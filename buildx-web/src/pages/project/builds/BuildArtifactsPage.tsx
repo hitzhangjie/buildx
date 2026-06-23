@@ -10,26 +10,7 @@ interface MockArtifact {
   downloadUrl: string;
 }
 
-const MOCK_ARTIFACTS: MockArtifact[] = [
-  {
-    id: 1,
-    name: "buildx-server-linux-amd64",
-    size: "24.5 MB",
-    downloadUrl: "#",
-  },
-  {
-    id: 2,
-    name: "buildx-cli-linux-amd64",
-    size: "12.3 MB",
-    downloadUrl: "#",
-  },
-  {
-    id: 3,
-    name: "buildx-web-dist.tar.gz",
-    size: "8.1 MB",
-    downloadUrl: "#",
-  },
-];
+const MOCK_ARTIFACTS: MockArtifact[] = [];
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", href: "" },

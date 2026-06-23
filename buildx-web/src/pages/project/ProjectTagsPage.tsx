@@ -4,24 +4,20 @@ import { Icon } from "../../components/onedev/Icon";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 
-interface MockTag {
+interface Tag {
   name: string;
   commit: string;
   date: string;
   message: string;
 }
 
-const MOCK_TAGS: MockTag[] = [
-  { name: "v1.0.0", commit: "a1b2c3d", date: "2026-06-23", message: "Release v1.0.0" },
-  { name: "v0.9.0", commit: "e4f5g6h", date: "2026-06-15", message: "Beta release" },
-  { name: "v0.1.0", commit: "i7j8k9l", date: "2026-06-01", message: "Initial alpha" },
-];
+const tags: Tag[] = [];
 
 export function ProjectTagsPage() {
   const { projectPath } = useProject();
   const [query, setQuery] = useState("");
 
-  const filtered = MOCK_TAGS.filter(
+  const filtered = tags.filter(
     (t) => !query || t.name.toLowerCase().includes(query.toLowerCase()) || t.message.toLowerCase().includes(query.toLowerCase())
   );
 
@@ -77,6 +73,11 @@ export function ProjectTagsPage() {
                   <td className="text-muted">{tag.date}</td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="text-center text-muted py-5">No tags found</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

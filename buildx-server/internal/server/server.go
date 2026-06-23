@@ -50,10 +50,13 @@ func (s *Server) routes() chi.Router {
 	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec}
 	userHandler := &api.UsersHandler{Security: sec}
 	settingsHandler := &api.SettingsHandler{}
+	blobHandler := &api.BlobHandler{Projects: projects}
+	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(gitHandler.Middleware) // intercept git HTTP before static catch-all
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -80,6 +83,9 @@ func (s *Server) routes() chi.Router {
 			}
 			projectHandler.Get(w, r, id)
 		})
+
+		// Blob: wildcard catches project paths with optional slashes (nested projects).
+		r.Get("/projects/*", blobHandler.ServeHTTP)
 	})
 
 	// Static web UI — embedded placeholder, or BUILDX_WEB_DIR when OneDev assets are deployed.

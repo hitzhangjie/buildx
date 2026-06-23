@@ -116,8 +116,20 @@ function listEntries(path: string, node: MockNode): BlobEntry[] {
     });
 }
 
+/** Toggle to simulate an empty project (no commits yet) in mock mode. */
+export let MOCK_EMPTY_PROJECT = false;
+
+/** Enable/disable empty project simulation for development testing. */
+export function setMockEmptyProject(empty: boolean) {
+  MOCK_EMPTY_PROJECT = empty;
+}
+
 export function getMockBlob(revision: string, path: string): BlobContent | null {
   if (revision !== "main") {
+    return null;
+  }
+  // When simulating an empty project, return null at root to trigger NoCommitsPanel.
+  if (MOCK_EMPTY_PROJECT && path === "") {
     return null;
   }
   const node = resolveNode(path);
@@ -150,4 +162,66 @@ export function getMockReadme(path: string): { title: string; content: string } 
     return null;
   }
   return { title: "README.md", content: readme.content };
+}
+
+/**
+ * Create a new file in the in-memory mock tree.
+ * Also creates intermediate directories as needed.
+ */
+export function createMockFile(
+  _revision: string,
+  path: string,
+  content: string,
+  commitMessage: string,
+): void {
+  if (!path) return;
+  const parts = path.split("/");
+  const fileName = parts.pop()!;
+
+  // Walk / create intermediate directories
+  let node = mockTree;
+  for (const part of parts) {
+    if (!node.children) node.children = {};
+    if (!node.children[part]) {
+      node.children[part] = { type: "directory", children: {} };
+    }
+    node = node.children[part];
+    if (node.type !== "directory") {
+      // Path exists as a file — can't create file under it
+      throw new Error(`Cannot create file: "${part}" is not a directory`);
+    }
+  }
+
+  if (!node.children) node.children = {};
+  node.children[fileName] = {
+    type: "file",
+    content,
+    lastCommit: {
+      author: "admin",
+      message: commitMessage,
+      when: "just now",
+    },
+  };
+}
+
+/**
+ * Update an existing file in the in-memory mock tree.
+ */
+export function updateMockFile(
+  _revision: string,
+  path: string,
+  content: string,
+  commitMessage: string,
+): void {
+  if (!path) return;
+  const node = resolveNode(path);
+  if (!node || node.type !== "file") {
+    throw new Error(`File not found: ${path}`);
+  }
+  node.content = content;
+  node.lastCommit = {
+    author: "admin",
+    message: commitMessage,
+    when: "just now",
+  };
 }

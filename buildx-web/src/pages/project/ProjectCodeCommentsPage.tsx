@@ -4,7 +4,7 @@ import { Icon } from "../../components/onedev/Icon";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 
-interface MockComment {
+interface CodeComment {
   id: number;
   file: string;
   line: number;
@@ -14,17 +14,13 @@ interface MockComment {
   preview: string;
 }
 
-const MOCK_COMMENTS: MockComment[] = [
-  { id: 1, file: "src/main.go", line: 42, author: "admin", date: "2026-06-22", status: "Open", preview: "This should use a constant instead of magic number" },
-  { id: 2, file: "src/config.go", line: 15, author: "dev", date: "2026-06-21", status: "Resolved", preview: "Add validation for empty config values" },
-  { id: 3, file: "Makefile", line: 8, author: "admin", date: "2026-06-20", status: "Open", preview: "Consider adding a help target" },
-];
+const codeComments: CodeComment[] = [];
 
 export function ProjectCodeCommentsPage() {
   const { projectPath } = useProject();
   const [query, setQuery] = useState("");
 
-  const filtered = MOCK_COMMENTS.filter(
+  const filtered = codeComments.filter(
     (c) => !query || c.file.toLowerCase().includes(query.toLowerCase()) || c.preview.toLowerCase().includes(query.toLowerCase())
   );
 
@@ -84,6 +80,11 @@ export function ProjectCodeCommentsPage() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="text-center text-muted py-5">No code comments found</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

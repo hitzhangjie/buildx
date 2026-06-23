@@ -1,6 +1,6 @@
 import { apiFetch } from "./client";
 import { USE_MOCK } from "../mocks/config";
-import { getMockBlob, type BlobContent } from "../mocks/fixtures/blob";
+import { getMockBlob, createMockFile, updateMockFile, type BlobContent } from "../mocks/fixtures/blob";
 
 export type { BlobContent, BlobEntry, BlobCommitInfo } from "../mocks/fixtures/blob";
 
@@ -24,4 +24,55 @@ export async function fetchBlob(
     }
     throw err;
   }
+}
+
+/**
+ * Create a new file in the repository.
+ * Matches OneDev's RepositoryResource.editFile (POST) with FileCreateOrUpdateRequest.
+ */
+export async function createFile(
+  projectPath: string,
+  revision: string,
+  path: string,
+  content: string,
+  commitMessage: string,
+): Promise<void> {
+  if (USE_MOCK) {
+    createMockFile(revision, path, content, commitMessage);
+    return;
+  }
+  const bytes = new TextEncoder().encode(content);
+  const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${revision}/${encodeURIComponent(path)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      commitMessage,
+      base64Content: btoa(binary),
+    }),
+  });
+}
+
+/**
+ * Update an existing file in the repository.
+ */
+export async function updateFile(
+  projectPath: string,
+  revision: string,
+  path: string,
+  content: string,
+  commitMessage: string,
+): Promise<void> {
+  if (USE_MOCK) {
+    updateMockFile(revision, path, content, commitMessage);
+    return;
+  }
+  const bytes = new TextEncoder().encode(content);
+  const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${revision}/${encodeURIComponent(path)}`, {
+    method: "POST",
+    body: JSON.stringify({
+      commitMessage,
+      base64Content: btoa(binary),
+    }),
+  });
 }

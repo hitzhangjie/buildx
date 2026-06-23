@@ -9,10 +9,7 @@ interface MockChild {
   description: string;
 }
 
-const MOCK_CHILDREN: MockChild[] = [
-  { name: "Frontend", path: "demo/frontend", description: "Frontend application" },
-  { name: "Backend", path: "demo/backend", description: "Backend services" },
-];
+const MOCK_CHILDREN: MockChild[] = [];
 
 export function ProjectChildrenPage() {
   const { projectPath } = useProject();

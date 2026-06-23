@@ -3,7 +3,7 @@ import { Icon } from "../../../components/onedev/Icon";
 import { useProject } from "../../../context/ProjectContext";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 
-interface MockCommit {
+interface Commit {
   id: number;
   message: string;
   sha: string;
@@ -11,29 +11,7 @@ interface MockCommit {
   date: string;
 }
 
-const MOCK_COMMITS: MockCommit[] = [
-  {
-    id: 1,
-    message: "Fix race condition in issue state machine",
-    sha: "a1b2c3d",
-    author: "admin",
-    date: "2026-06-22 14:30",
-  },
-  {
-    id: 2,
-    message: "Add unit tests for issue transition logic",
-    sha: "e4f5g6h",
-    author: "dev",
-    date: "2026-06-22 11:15",
-  },
-  {
-    id: 3,
-    message: "Initial implementation of issue workflow",
-    sha: "i7j8k9l",
-    author: "admin",
-    date: "2026-06-21 09:00",
-  },
-];
+const commits: Commit[] = [];
 
 const TABS = [
   { id: "activities", label: "Activities", href: "" },
@@ -106,7 +84,7 @@ export function IssueCommitsPage() {
               </tr>
             </thead>
             <tbody>
-              {MOCK_COMMITS.map((commit) => (
+              {commits.map((commit) => (
                 <tr key={commit.id}>
                   <td>
                     <Link
@@ -127,7 +105,7 @@ export function IssueCommitsPage() {
                   </td>
                 </tr>
               ))}
-              {MOCK_COMMITS.length === 0 && (
+              {commits.length === 0 && (
                 <tr>
                   <td colSpan={4} className="text-center text-muted py-5">
                     No commits found

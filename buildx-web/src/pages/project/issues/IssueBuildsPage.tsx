@@ -12,24 +12,7 @@ interface MockBuild {
   date: string;
 }
 
-const MOCK_BUILDS: MockBuild[] = [
-  {
-    id: 1,
-    number: 105,
-    jobName: "CI Pipeline",
-    status: "SUCCESSFUL",
-    branch: "main",
-    date: "2026-06-22 14:30",
-  },
-  {
-    id: 2,
-    number: 104,
-    jobName: "CI Pipeline",
-    status: "FAILED",
-    branch: "fix/issue-state-machine",
-    date: "2026-06-22 11:00",
-  },
-];
+const MOCK_BUILDS: MockBuild[] = [];
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
   SUCCESSFUL: "badge-light-success",

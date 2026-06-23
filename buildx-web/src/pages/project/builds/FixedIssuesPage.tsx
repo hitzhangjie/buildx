@@ -10,22 +10,7 @@ interface MockFixedIssue {
   stateColor: string;
 }
 
-const MOCK_FIXED_ISSUES: MockFixedIssue[] = [
-  {
-    id: 1,
-    number: 5,
-    title: "Fix login redirect after authentication",
-    state: "Closed",
-    stateColor: "badge-light-success",
-  },
-  {
-    id: 2,
-    number: 8,
-    title: "Resolve database connection timeout on startup",
-    state: "Closed",
-    stateColor: "badge-light-success",
-  },
-];
+const MOCK_FIXED_ISSUES: MockFixedIssue[] = [];
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", href: "" },

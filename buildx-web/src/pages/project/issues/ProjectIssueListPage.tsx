@@ -20,62 +20,11 @@ interface IssueItem {
   date: string;
 }
 
-const MOCK_ISSUES: IssueItem[] = [
-  {
-    id: 1,
-    number: 1,
-    title: "Setup CI pipeline",
-    state: "Open",
-    stateColor: "light-warning",
-    votes: 2,
-    comments: 3,
-    submitter: "admin",
-    date: "2026-06-20",
-  },
-  {
-    id: 2,
-    number: 2,
-    title: "Fix login redirect",
-    state: "In Progress",
-    stateColor: "light-primary",
-    votes: 1,
-    comments: 1,
-    submitter: "admin",
-    date: "2026-06-21",
-  },
-  {
-    id: 3,
-    number: 3,
-    title: "Add dark mode support",
-    state: "Open",
-    stateColor: "light-warning",
-    votes: 5,
-    comments: 0,
-    submitter: "alice",
-    date: "2026-06-22",
-  },
-  {
-    id: 4,
-    number: 4,
-    title: "Refactor API client",
-    state: "Done",
-    stateColor: "light-success",
-    votes: 0,
-    comments: 2,
-    submitter: "bob",
-    date: "2026-06-19",
-  },
-];
+const MOCK_ISSUES: IssueItem[] = [];
 
-const MOCK_PERSONAL_QUERIES: SavedQuery[] = [
-  { name: "My open issues", query: "state:open submitter:me", href: "" },
-  { name: "Assigned to me", query: "assignee:me state:open", href: "" },
-];
+const MOCK_PERSONAL_QUERIES: SavedQuery[] = [];
 
-const MOCK_COMMON_QUERIES: SavedQuery[] = [
-  { name: "All open", query: "state:open", href: "" },
-  { name: "In Progress", query: 'state:"In Progress"', href: "" },
-];
+const MOCK_COMMON_QUERIES: SavedQuery[] = [];
 
 /**
  * Mirrors OneDev ProjectIssueListPage.

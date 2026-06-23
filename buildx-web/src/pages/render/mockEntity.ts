@@ -6,51 +6,36 @@ export type MockRow = {
   href?: string;
 };
 
-export function mockRowsForPage(page: string, projectPath?: string, params?: Record<string, string>): MockRow[] {
-  const base = projectPath ? `/${projectPath}` : "";
-  const p = params ?? {};
-
+export function mockRowsForPage(page: string, _projectPath?: string, _params?: Record<string, string>): MockRow[] {
   if (page.includes("Commit")) {
-    return [
-      { id: "1", primary: "Initial commit", secondary: "admin", meta: "2 days ago", href: `${base}/~commits/abc1234` },
-      { id: "2", primary: "Add CI pipeline", secondary: "admin", meta: "1 day ago", href: `${base}/~commits/def5678` },
-    ];
+    return [];
   }
   if (page.includes("Branch")) {
-    return [
-      { id: "main", primary: "main", secondary: "default", meta: "abc1234" },
-      { id: "dev", primary: "develop", secondary: "", meta: "def5678" },
-    ];
+    return [];
   }
   if (page.includes("Tag")) {
-    return [{ id: "v1", primary: "v1.0.0", secondary: "Release", meta: "abc1234" }];
+    return [];
   }
   if (page.includes("Issue") || page.includes("Iteration")) {
-    const issue = p.issue ?? "1";
-    return [
-      { id: "1", primary: "#1 Setup project", secondary: "Open", meta: "admin", href: `${base}/~issues/1` },
-      { id: "2", primary: "#2 Fix build", secondary: "In Progress", meta: "admin", href: `${base}/~issues/2` },
-    ].filter((r) => !page.includes("Detail") || r.id === issue);
+    return [];
   }
   if (page.includes("Pull")) {
-    return [{ id: "1", primary: "Add metrics dashboard", secondary: "Open", meta: "feature/metrics → main", href: `${base}/~pulls/1` }];
+    return [];
   }
   if (page.includes("Build")) {
-    const build = p.build ?? "42";
-    return [{ id: build, primary: `#${build} CI`, secondary: "SUCCESSFUL", meta: "main", href: `${base}/~builds/${build}` }];
+    return [];
   }
   if (page.includes("Pack") || page.includes("Package")) {
-    return [{ id: "demo-app", primary: "demo-app", secondary: "1.0.0", meta: "docker", href: `${base}/~packages/demo-app` }];
+    return [];
   }
   if (page.includes("Workspace")) {
-    const ws = p.workspace ?? "1";
-    return [{ id: ws, primary: "dev-env", secondary: "Running", meta: "main", href: `${base}/~workspaces/${ws}` }];
+    return [];
   }
   if (page.includes("CodeComment")) {
-    return [{ id: "1", primary: "Comment on main.go:12", secondary: "admin", meta: "2 days ago" }];
+    return [];
   }
   if (page.includes("Children")) {
-    return [{ id: "child", primary: "child-project", secondary: "CHILD", meta: "Sub project" }];
+    return [];
   }
   if (page.includes("UserList")) {
     return [{ id: "admin", primary: "admin", secondary: "Administrator", meta: "admin@localhost" }];

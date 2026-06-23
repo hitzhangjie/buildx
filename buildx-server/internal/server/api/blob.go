@@ -1,0 +1,89 @@
+package api
+
+import (
+	"net/http"
+	"net/url"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
+)
+
+// BlobHandler serves file and directory browsing from project git repos.
+type BlobHandler struct {
+	Projects *project.DBStore
+}
+
+// ServeHTTP handles wildcard requests under /~api/projects/* and dispatches
+// blob requests (those ending with /blob). Falls through to 404 for other paths.
+func (h *BlobHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// chi.URLParam(r, "*") returns the wildcard portion, e.g. "codehub/blob"
+	rest := chi.URLParam(r, "*")
+	if !strings.HasSuffix(rest, "/blob") {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Extract project path: strip the trailing "/blob".
+	projectPath := strings.TrimSuffix(rest, "/blob")
+	if projectPath == "" || projectPath == "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// The project path in the URL may contain an encoded %2F for nested
+	// projects. Use RawPath to recover the original project path.
+	if !strings.Contains(projectPath, "/") {
+		// Simple project name — check RawPath for encoding.
+		if r.URL.RawPath != "" {
+			rawPrefix := "/~api/projects/"
+			rawSuffix := "/blob"
+			rawPath := r.URL.RawPath
+			if idx := strings.Index(rawPath, rawPrefix); idx >= 0 {
+				start := idx + len(rawPrefix)
+				if end := strings.LastIndex(rawPath, rawSuffix); end > start {
+					decoded, err := url.PathUnescape(rawPath[start:end])
+					if err == nil {
+						projectPath = decoded
+					}
+				}
+			}
+		}
+	}
+
+	revision := r.URL.Query().Get("revision")
+	path := r.URL.Query().Get("path")
+
+	h.Blob(w, r, projectPath, revision, path)
+}
+
+// Blob looks up the project by path and returns the blob content at the
+// given revision:path.
+func (h *BlobHandler) Blob(w http.ResponseWriter, r *http.Request, projectPath, revision, path string) {
+	proj, err := h.Projects.GetByPath(r.Context(), projectPath)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if proj == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	gitDir := h.Projects.GitDir(proj.ID)
+	gitSvc := git.NewCommandService(gitDir)
+
+	content, err := gitSvc.Blob(r.Context(), revision, path)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if content == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, content)
+}
+

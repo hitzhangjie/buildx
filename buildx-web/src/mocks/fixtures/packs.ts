@@ -6,12 +6,4 @@ export type Pack = {
   type: string;
 };
 
-export const mockPacks: Pack[] = [
-  {
-    id: 1,
-    name: "demo-app",
-    projectPath: "demo",
-    version: "1.0.0",
-    type: "docker",
-  },
-];
+export const mockPacks: Pack[] = [];

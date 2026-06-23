@@ -4,26 +4,20 @@ import { Icon } from "../../components/onedev/Icon";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 
-interface MockBranch {
+interface Branch {
   name: string;
   isDefault: boolean;
   lastCommit: string;
   lastCommitDate: string;
 }
 
-const MOCK_BRANCHES: MockBranch[] = [
-  { name: "main", isDefault: true, lastCommit: "a1b2c3d", lastCommitDate: "2026-06-23" },
-  { name: "develop", isDefault: false, lastCommit: "e4f5g6h", lastCommitDate: "2026-06-22" },
-  { name: "feature/auth", isDefault: false, lastCommit: "i7j8k9l", lastCommitDate: "2026-06-21" },
-  { name: "feature/metrics", isDefault: false, lastCommit: "m0n1o2p", lastCommitDate: "2026-06-20" },
-  { name: "bugfix/login", isDefault: false, lastCommit: "q3r4s5t", lastCommitDate: "2026-06-19" },
-];
+const branches: Branch[] = [];
 
 export function ProjectBranchesPage() {
   const { projectPath } = useProject();
   const [query, setQuery] = useState("");
 
-  const filtered = MOCK_BRANCHES.filter(
+  const filtered = branches.filter(
     (b) => !query || b.name.toLowerCase().includes(query.toLowerCase())
   );
 
@@ -78,6 +72,11 @@ export function ProjectBranchesPage() {
                   <td className="text-muted">{branch.lastCommitDate}</td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="text-center text-muted py-5">No branches found</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

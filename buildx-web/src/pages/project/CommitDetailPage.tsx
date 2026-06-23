@@ -10,12 +10,7 @@ interface ChangedFile {
   deletions: number;
 }
 
-const MOCK_FILES: ChangedFile[] = [
-  { path: "src/main.go", additions: 42, deletions: 12 },
-  { path: "src/config.go", additions: 15, deletions: 3 },
-  { path: "Makefile", additions: 8, deletions: 0 },
-  { path: "README.md", additions: 20, deletions: 5 },
-];
+const files: ChangedFile[] = [];
 
 export function CommitDetailPage() {
   const { projectPath } = useProject();
@@ -32,12 +27,9 @@ export function CommitDetailPage() {
                 <Icon name="arrow-left" /> Commits
               </Link>
             </div>
-            <h5 className="font-weight-bold">Initial commit</h5>
+            <h5 className="font-weight-bold">{commit ?? "-"}</h5>
             <div className="text-muted font-size-sm">
-              <span className="badge badge-light-secondary mr-2">{commit ?? "abc1234"}</span>
-              <Icon name="user" /> admin
-              <span className="mx-2">|</span>
-              2026-06-20 10:00:00
+              <span className="badge badge-light-secondary mr-2">{commit ?? "-"}</span>
             </div>
           </div>
         </div>
@@ -73,7 +65,7 @@ export function CommitDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_FILES.map((file) => (
+                {files.map((file) => (
                   <tr key={file.path}>
                     <td>
                       <code className="text-primary">{file.path}</code>
@@ -84,6 +76,13 @@ export function CommitDetailPage() {
                     </td>
                   </tr>
                 ))}
+                {files.length === 0 && (
+                  <tr>
+                    <td colSpan={2} className="text-center text-muted py-5">
+                      No files changed
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

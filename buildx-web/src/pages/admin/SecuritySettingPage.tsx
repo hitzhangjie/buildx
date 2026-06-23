@@ -29,11 +29,8 @@ export function SecuritySettingPage() {
 
   return (
     <Layout title="Security Settings">
-      <div className="container m-2 m-sm-5">
+      <div className="m-2 m-sm-5">
         <div className="card">
-          <div className="card-header">
-            <h5 className="mb-0">Security Settings</h5>
-          </div>
           <div className="card-body">
             <form method="post" onSubmit={handleSubmit}>
               <FormFeedbackPanel messages={errors} />
