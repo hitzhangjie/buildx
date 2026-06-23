@@ -1,5 +1,14 @@
-# Binaries
-bin/
+# Ignore extensionless files (typically binary build outputs).
+# Common text files without extension are explicitly allowed.
+*
+!*.*
+!*/
+!Makefile
+!Dockerfile
+!LICENSE
+!README
+
+# Binary file extensions (re-ignore after !*.* above)
 *.exe
 *.exe~
 *.dll
@@ -42,7 +51,7 @@ target/
 
 # buildx-server
 buildx-server/dist/
-buildx-server/bin/
+buildx-server/internal/server/webdist/
 
 # buildx-web
 buildx-web/node_modules/
@@ -51,4 +60,3 @@ buildx-web/dist/
 buildx-web/public/onedev/
 buildx-web/public/~icon/
 buildx-web/public/~img/
-buildx-cli/bin/
