@@ -3,10 +3,12 @@ import { USE_MOCK } from "../mocks/config";
 
 export type SecuritySetting = {
   enableAnonymousAccess: boolean;
+  enableSelfRegister: boolean;
 };
 
 const MOCK_SECURITY_SETTING: SecuritySetting = {
   enableAnonymousAccess: false,
+  enableSelfRegister: true,
 };
 
 export async function fetchSecuritySetting(): Promise<SecuritySetting> {

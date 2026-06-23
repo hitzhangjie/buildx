@@ -6,6 +6,30 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ## [Unreleased]
 
+### Fixed
+
+- **NewProjectPage 1:1 alignment** — proper `bean-editor editable` DOM, Select2 choice widgets, synced `editable.css` + `select2.css`; **BeanSwitch** renders toggle track (`input` + sibling `span` per OneDev `BooleanPropertyEditor.html`)
+- **LoginPage** — `simple-page-spa.css` restores OneDev SimplePage flex centering in React SPA; settings endpoints no longer 404 (`/~api/v1/settings/branding`, `security`, `sso-providers`)
+
+### Changed
+
+- **buildx-web 1:1 port batch 2** — SignUpPage + NewProjectPage against OneDev BeanEditor markup:
+  - Shared `BeanFormGroup`, `BeanSwitch`, `BeanProperties` (mirrors `BeanEditor.html` / `BooleanPropertyEditor.html`)
+  - `SignUpPage`: Login Name / Password / Full Name / Email Address fields, `feedbackPanel`, SimplePage footer
+  - `NewProjectPage`: project bean fields + Default Roles / Labels / Parent editors; `switch-sm` toggles; child-project title
+  - Pages moved to `src/pages/security/` and `src/pages/project/`
+
+- **buildx-web 1:1 port batch 1** — LoginPage + ProjectListPage against OneDev Wicket HTML:
+  - `LoginPage`: password / passcode / recovery fragments, `feedbackPanel`, SSO slot, `SimplePage` html classes, mesh background assets
+  - `ProjectListPage` + `ProjectListPanel` + `SavedQueriesPanel` panels matching OneDev DOM
+  - Shared: `BrandLogo`, `FormFeedbackPanel`, `useSimplePage`; `sync-onedev-assets` copies `mesh.jpg` / `dark-mesh.jpg`
+  - `buildx-server/cmd/pagegen` — Go `text/template` scaffold from Wicket HTML (optional accelerator)
+
+- **buildx-web migration strategy** — canonical goal is **1:1 OneDev Wicket UI port**, not route-only scaffold:
+  - [buildx-web-design.md](docs/buildx-web-design.md): `PageRenderer` is temporary; per-page DoD requires DOM/class/interaction match + screenshot gate
+  - [buildx-web-migration.md](docs/buildx-web-migration.md): split **路由** vs **复刻** progress; honest status 223 routes / 0 parity-complete pages
+  - [ROADMAP.md](docs/ROADMAP.md) Phase 6 retitled to reflect full UI port milestone
+
 ### Added
 
 - **buildx-web LayoutPage auth guard** — mirrors OneDev `LayoutPage.isPermitted()` / `BasePage.unauthorized()`:

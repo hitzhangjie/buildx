@@ -2,29 +2,26 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { consumeFlashMessage } from "../util/flash";
+import { getGlobalSidebarMenu } from "./globalSidebar";
+import { ProjectSidebarHeader } from "./ProjectSidebarHeader";
+import { SidebarMenuItems } from "./SidebarMenuItems";
 import "./layout-shell.css";
+
+export type ProjectSidebarSection = {
+  header: { label: string; avatarUrl?: string };
+  menu: ReactNode;
+};
 
 type LayoutProps = {
   title?: string;
   children: ReactNode;
-  mode?: "global" | "project";
   topbarTitle?: ReactNode;
-  projectSidebar?: ReactNode;
+  projectSidebar?: ProjectSidebarSection;
 };
-
-const GLOBAL_NAV = [
-  { href: "/~projects", label: "Projects", icon: "project" },
-  { href: "/~issues", label: "Issues", icon: "bug" },
-  { href: "/~pulls", label: "Pull Requests", icon: "pull-request" },
-  { href: "/~builds", label: "Builds", icon: "play-circle" },
-  { href: "/~packages", label: "Packages", icon: "package" },
-  { href: "/~workspaces", label: "Workspaces", icon: "workspace" },
-] as const;
 
 export function Layout({
   title = "BuildX",
   children,
-  mode = "global",
   topbarTitle,
   projectSidebar,
 }: LayoutProps) {
@@ -72,13 +69,6 @@ export function Layout({
     });
   }
 
-  function isActive(href: string): boolean {
-    if (href === "/~projects") {
-      return pathname === "/~projects" || pathname.startsWith("/~projects/");
-    }
-    return pathname === href || pathname.startsWith(`${href}/`);
-  }
-
   return (
     <div className={`LayoutPage${dark ? " dark-mode" : ""}`}>
       <div id="session-feedback" className="session-feedback" aria-live="polite" />
@@ -113,26 +103,18 @@ export function Layout({
         <div className="sidebar-body">
           <div className="sidebar-menu">
             <div className="menu-body">
-              {mode === "project" && projectSidebar}
-              {mode === "global" &&
-                GLOBAL_NAV.map((item) => (
-                  <Link
-                    key={item.href}
-                    className={`menu-item${isActive(item.href) ? " active" : ""}`}
-                    to={item.href}
-                  >
-                    <img
-                      src={`/~icon/${item.icon}.svg`}
-                      alt=""
-                      className="icon mr-3"
-                      width={16}
-                      height={16}
-                    />
-                    {item.label}
-                  </Link>
-                ))}
+              <SidebarMenuItems items={getGlobalSidebarMenu()} />
             </div>
           </div>
+          {projectSidebar ? (
+            <div className="sidebar-menu">
+              <ProjectSidebarHeader
+                label={projectSidebar.header.label}
+                avatarUrl={projectSidebar.header.avatarUrl}
+              />
+              <div className="menu-body">{projectSidebar.menu}</div>
+            </div>
+          ) : null}
         </div>
         <div className="sidebar-footer">
           <a href="/~help/api" className="sidebar-version" target="_blank" rel="noreferrer">

@@ -67,15 +67,17 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 
 **Milestone**: Production-ready for enterprise self-hosting.
 
-### Phase 6 — Frontend
+### Phase 6 — Frontend (1:1 OneDev UI port)
 
 - [x] `buildx-web/` standalone Vite + React app
 - [x] Embed UI into `buildx-server` binary via `go:embed` (single-process deploy)
 - [x] OneDev visual asset sync (`sync-onedev-assets`)
-- [x] Full page migration task list — [buildx-web-migration.md](buildx-web-migration.md) (**223 pages, UI-first**)
-- [x] Wave 0 infrastructure — router, layouts, mocks, PageRenderer, Playwright smoke
-- [x] All 223 pages routable (UI-first): specialized pages + template renderer
-- [ ] Per-page visual parity polish with OneDev screenshots (post UI-first)
+- [x] Migration task list — [buildx-web-migration.md](buildx-web-migration.md) (**223 pages**)
+- [x] Wave 0 scaffolding — router, layouts, mocks, `PageRenderer` placeholders, Playwright smoke
+- [x] All 223 routes reachable (scaffold only; **not** parity)
+- [ ] **1:1 page port** — each Wicket page → dedicated React component; DOM/class/interaction match; screenshot gate ([buildx-web-design.md](buildx-web-design.md))
+- [ ] Retire `PageRenderer` fallbacks as pages reach `✓`
+- [ ] Complex controls from OneDev assets (CodeMirror, diff, xterm, Kanban, …)
 - [ ] Live API wiring (see buildx-server-api-migration.md)
 - [ ] buildx-server `/~api` backfill — [buildx-server-api-migration.md](buildx-server-api-migration.md)
 

@@ -1,8 +1,9 @@
-import type { ReactNode } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { getProjectSidebarMenu, isProjectMenuActive, type ProjectMenuItem } from "./projectSidebar";
+import { type ReactNode, useEffect, useState } from "react";
+import { fetchProjects } from "../api/projects";
+import { getProjectSidebarMenu } from "./projectSidebar";
 import { Layout } from "./Layout";
 import { ProjectTopbarTitle } from "./ProjectTopbarTitle";
+import { SidebarMenuItems, sidebarMenuFromProjectItems } from "./SidebarMenuItems";
 
 type ProjectLayoutProps = {
   projectPath: string;
@@ -10,68 +11,48 @@ type ProjectLayoutProps = {
   children: ReactNode;
 };
 
-function ProjectMenuLink({
-  item,
-  projectPath,
-  depth = 0,
-}: {
-  item: ProjectMenuItem;
-  projectPath: string;
-  depth?: number;
-}) {
-  const { pathname } = useLocation();
-  const active = isProjectMenuActive(pathname, projectPath, item);
+function useProjectSidebarHeader(projectPath: string) {
+  const fallbackName = projectPath.split("/").filter(Boolean).pop() ?? projectPath;
+  const [header, setHeader] = useState({ label: fallbackName, avatarUrl: undefined as string | undefined });
 
-  if (item.children?.length) {
-    return (
-      <div className={`menu-item${active ? " active" : ""}`}>
-        <div className="menu-link" style={{ paddingLeft: depth ? `${depth * 0.75}rem` : undefined }}>
-          {item.icon && (
-            <img src={`/~icon/${item.icon}.svg`} alt="" className="icon mr-3" width={16} height={16} />
-          )}
-          <span className="menu-text">{item.label}</span>
-        </div>
-        <div className="menu-submenu">
-          {item.children.map((child) => (
-            <ProjectMenuLink key={child.label} item={child} projectPath={projectPath} depth={depth + 1} />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+    fetchProjects()
+      .then((projects) => {
+        if (cancelled) {
+          return;
+        }
+        const project = projects.find((item) => item.path === projectPath);
+        if (!project) {
+          return;
+        }
+        setHeader({
+          label: project.name,
+          avatarUrl: `/avatars/projects/${project.id}.png`,
+        });
+      })
+      .catch(() => {
+        // Keep path-derived fallback when projects API is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
 
-  if (!item.href) {
-    return null;
-  }
-
-  return (
-    <Link
-      className={`menu-item menu-link${active ? " active" : ""}`}
-      to={item.href}
-      style={{ paddingLeft: depth ? `${1 + depth * 0.75}rem` : undefined }}
-    >
-      {item.icon && depth === 0 && (
-        <img src={`/~icon/${item.icon}.svg`} alt="" className="icon mr-3" width={16} height={16} />
-      )}
-      <span className="menu-text">{item.label}</span>
-    </Link>
-  );
+  return header;
 }
 
 export function ProjectLayout({ projectPath, pageTitle, children }: ProjectLayoutProps) {
-  const menu = getProjectSidebarMenu(projectPath);
+  const menu = sidebarMenuFromProjectItems(getProjectSidebarMenu(projectPath), projectPath);
+  const header = useProjectSidebarHeader(projectPath);
 
   return (
     <Layout
-      mode="project"
       topbarTitle={<ProjectTopbarTitle projectPath={projectPath} pageTitle={pageTitle} />}
-      projectSidebar={
-        <>
-          {menu.map((item) => (
-            <ProjectMenuLink key={item.label} item={item} projectPath={projectPath} />
-          ))}
-        </>
-      }
+      projectSidebar={{
+        header,
+        menu: <SidebarMenuItems items={menu} />,
+      }}
     >
       <div className="project flex-grow-1 d-flex flex-column fit-content">{children}</div>
     </Layout>

@@ -1,0 +1,33 @@
+/**
+ * OneDev SimplePage.css assumes Wicket renders .main as a direct child of <body>.
+ * In the React SPA, #root sits between body and .main — restore flex centering here.
+ */
+html.SimplePage,
+html.SimplePage body {
+  height: 100%;
+  margin: 0;
+}
+
+html.SimplePage body {
+  display: flex;
+  background: transparent;
+}
+
+html.SimplePage #root {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-height: 100vh;
+}
+
+html.SimplePage .main {
+  margin: auto;
+  padding: 1.75rem;
+  width: 480px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+html.SimplePage:not(.force-ordinary-style) .main .form-group {
+  text-align: left;
+}

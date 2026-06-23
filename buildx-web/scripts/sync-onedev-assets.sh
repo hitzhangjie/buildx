@@ -10,14 +10,20 @@ if [[ ! -d "$ONEDEV_WEB" ]]; then
   exit 1
 fi
 
-mkdir -p "$PUBLIC/onedev/css" "$PUBLIC/~icon"
+mkdir -p "$PUBLIC/onedev/css" "$PUBLIC/~icon" "$PUBLIC/~img"
 
 cp "$ONEDEV_WEB/asset/bootstrap/css/bootstrap.min.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/asset/bootstrap/css/bootstrap-custom.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/base/base.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/layout/layout.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/simple/simple.css" "$PUBLIC/onedev/css/"
+cp "$ONEDEV_WEB/editable/editable.css" "$PUBLIC/onedev/css/"
+SELECT2_RES="$ONEDEV_WEB/component/select2/res"
+cp "$SELECT2_RES/select2.css" "$SELECT2_RES/select2-bootstrap.css" "$PUBLIC/onedev/css/"
+cp "$SELECT2_RES/select2.png" "$SELECT2_RES/select2x2.png" "$SELECT2_RES/select2-spinner.gif" "$SELECT2_RES/dark-select2-spinner.gif" "$PUBLIC/onedev/css/" 2>/dev/null || true
 cp "$ONEDEV_WEB/asset/icon/"*.svg "$PUBLIC/~icon/"
+cp "$ONEDEV_WEB/img/mesh.jpg" "$PUBLIC/~img/"
+cp "$ONEDEV_WEB/img/dark-mesh.jpg" "$PUBLIC/~img/"
 
 if [[ -f "$ROOT/references/onedev/server-product/system/site/assets/logo.png" ]]; then
   mkdir -p "$PUBLIC/~img"

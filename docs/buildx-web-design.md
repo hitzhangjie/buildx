@@ -37,20 +37,47 @@ make -C buildx-web sync-onedev-assets
 
 ## 页面迁移策略
 
-**UI 先行，全量搬迁，API 后补。** 不以 buildx-server API 就绪作为页面开发的 gate。全部 223 个 OneDev 页面均需在 buildx-web 中实现路由与视觉；数据层经 mock/stub，后续替换为真实 `/~api`。
+**目标：对 OneDev Wicket UI 做 1:1 复刻。** BuildX 是 OneDev 的 ground-up 移植，前端不是换皮 MVP，也不是「能打开就行」的占位页。每一页都必须以 OneDev 源码为唯一参照物，在 DOM 结构、class 名、布局、交互与暗色/响应式行为上与原站一致。
 
 详细任务清单（按 Wave 分组、含路由与 DoD）：[buildx-web-migration.md](buildx-web-migration.md)
 
-### 执行顺序（可并行，非 API 阻塞）
+### 与占位方案的关系
 
-Wave 0 基础设施 → Wave 1–11 按域并行认领 → Wave 12 插件动态页
+当前 `PageRenderer` 通用模板仅作**路由脚手架**（保证 URL 可导航、开发期不白屏），**不算完成**。某页标记为「完成」的唯一标准是下方 DoD 全部满足，且与 OneDev 并排截图对比通过。
 
-### 单页完成定义（DoD）
+### 执行顺序
 
-- [ ] 对照 `{Page}.html` + `{Page}.css` + 关联 JS 行为
-- [ ] React 组件使用相同 class 名
-- [ ] API 字段与 OneDev REST 响应形状一致
-- [ ] 截图对比通过
+1. **Wave 0** 基础设施（布局壳、资产同步、共享组件、API/mock 层）— 已基本就绪
+2. **Wave 1–11** 按域**逐页 1:1 移植**（每页独立 React 组件，对照 Wicket HTML/CSS/JS）
+3. **Wave 12** 插件动态页
+4. API 可在页面复刻过程中并行补齐；数据层经 mock/fixture 先行，字段形状须与 OneDev REST 一致，后续切换为 live `/~api`
+
+同一 Wave 内多页可并行，但**不得**用通用模板批量「勾选完成」。
+
+### 单页完成定义（DoD）— 唯一验收标准
+
+- [ ] 对照 `references/onedev/.../web/page/**/{Name}Page.html` + 同名 `.css` + 页面关联 Panel/Behavior
+- [ ] React 组件 DOM 结构与 class 名与 Wicket 渲染结果一致（含 aria、嵌套层级）
+- [ ] 页面级交互已移植（筛选、分页、内联编辑、Ajax 反馈等；复杂控件用 OneDev 同款 vendored 库）
+- [ ] 暗色模式与响应式断点与 OneDev 一致
+- [ ] `src/api/` 声明的响应字段与 OneDev `*Resource.java` 一致（可先 mock）
+- [ ] Playwright 同路由截图对比通过（与 reference OneDev 实例、相同 fixture 数据）
+
+### 单页移植工作流
+
+1. **读参照物**：`{Name}Page.html`、`.java`、子 Panel（`web/page/**`）、页面 CSS、关联 `web/asset` JS
+2. **（可选）生成脚手架**：`go run ./buildx-server/cmd/pagegen -html <Page.html> -page <Name> -out buildx-web/src/pages/...` — 将 Wicket 标记转为 JSX 骨架，再手工接状态与 API
+3. **建专项组件**：`buildx-web/src/pages/{area}/{Name}Page.tsx`（或按域分子目录），禁止长期留在 `PageRenderer`
+3. **抽共享 Panel**：多个页面复用的块迁入 `src/components/onedev/panels/`（对照 Wicket Panel 命名）
+4. **接数据**：`src/api/` + fixture；字段名与 REST 资源对齐
+5. **注册路由**：`AppRouter` / `globalRoutes` / `projectRoutes` 指向专项组件
+6. **验收**：本地并排打开 OneDev 与 buildx-web → 截图 diff → PR 附对比图
+
+参照源码根目录（只读 submodule）：
+
+```
+references/onedev/server-core/src/main/java/io/onedev/server/web/
+```
 
 ## 技术栈
 

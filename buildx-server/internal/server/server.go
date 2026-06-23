@@ -49,6 +49,7 @@ func (s *Server) routes() chi.Router {
 
 	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec}
 	userHandler := &api.UsersHandler{Security: sec}
+	settingsHandler := &api.SettingsHandler{}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -59,6 +60,9 @@ func (s *Server) routes() chi.Router {
 	r.Get("/~health", s.handleHealth)
 	r.Get("/~api/v1/info", s.handleInfo)
 	r.Get("/~api/cli/check-version", s.handleCLICheckVersion)
+	r.Get("/~api/v1/settings/branding", settingsHandler.Branding)
+	r.Get("/~api/v1/settings/security", settingsHandler.Security)
+	r.Get("/~api/v1/sso-providers", settingsHandler.SsoProviders)
 
 	r.Route("/~api", func(r chi.Router) {
 		r.Get("/users", userHandler.List)
