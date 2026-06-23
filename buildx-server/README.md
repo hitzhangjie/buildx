@@ -41,7 +41,7 @@ make build
 ./bin/buildx-server serve --dev
 ```
 
-Open http://localhost:6666/~health to verify the server is running.
+Open http://localhost:9910/~health to verify the server is running.
 
 ### Initial admin account
 
@@ -66,8 +66,8 @@ If any of these is missing, bootstrap skips creating the admin account and the w
 
 | Variable | Default | Description |
 |---|---|---|
-| `BUILDX_HTTP_ADDR` | `:6666` | HTTP/Web listen address (`host:port`, `:6666`, or plain port `6666`) |
-| `BUILDX_SSH_ADDR` | `:6667` | Git SSH listen address |
+| `BUILDX_HTTP_ADDR` | `:9910` | HTTP/Web listen address (`host:port`, `:9910`, or plain port `9910`) |
+| `BUILDX_SSH_ADDR` | `:9911` | Git SSH listen address |
 | `BUILDX_DATA_DIR` | `./data` | Data directory (database, repos, attachments) |
 | `BUILDX_WEB_DIR` | (empty) | Frontend static assets; embedded buildx-web when unset |
 | `BUILDX_DEV` | `false` | Development mode (verbose logging, etc.) |
@@ -78,12 +78,12 @@ If any of these is missing, bootstrap skips creating the admin account and the w
 Variables must be **exported in the same shell** that runs `buildx-server serve` (the server does not load `.env` files). Startup logs print `configuration http=...` so you can verify the effective address. CLI flags override env:
 
 ```bash
-./bin/buildx-server serve --http-addr 0.0.0.0:6666 --data-dir ./data
+./bin/buildx-server serve --http-addr 0.0.0.0:9910 --data-dir ./data
 ```
 
 ```bash
-export BUILDX_HTTP_ADDR=0.0.0.0:6666
-export BUILDX_SSH_ADDR=0.0.0.0:6667
+export BUILDX_HTTP_ADDR=0.0.0.0:9910
+export BUILDX_SSH_ADDR=0.0.0.0:9911
 export BUILDX_DATA_DIR=./data
 ./bin/buildx-server serve --dev
 ```

@@ -25,8 +25,8 @@ type Config struct {
 // Load reads configuration from environment variables with sensible defaults.
 func Load() (*Config, error) {
 	cfg := &Config{
-		HTTPAddr: envOr("BUILDX_HTTP_ADDR", ":6666"),
-		SSHAddr:  envOr("BUILDX_SSH_ADDR", ":6667"),
+		HTTPAddr: envOr("BUILDX_HTTP_ADDR", ":9910"),
+		SSHAddr:  envOr("BUILDX_SSH_ADDR", ":9911"),
 		DataDir:  envOr("BUILDX_DATA_DIR", "./data"),
 		WebDir:   envOr("BUILDX_WEB_DIR", ""),
 		Dev:      envBool("BUILDX_DEV", false),
@@ -54,7 +54,7 @@ func (c *Config) normalizeAndPrepare() error {
 	return nil
 }
 
-// normalizeListenAddr accepts Go listen forms (:6666, 0.0.0.0:6666) and plain port numbers (6666).
+// normalizeListenAddr accepts Go listen forms (:9910, 0.0.0.0:9910) and plain port numbers (9910).
 func normalizeListenAddr(addr string) (string, error) {
 	addr = strings.TrimSpace(addr)
 	if addr == "" {

@@ -15,6 +15,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Changed
 
+- **Default listen ports** — HTTP `6666` → `9910`, SSH `6667` → `9911` (avoids Chromium `ERR_UNSAFE_PORT` on IRC-blocked 666x; config, Docker, vite proxy, docs)
 - **Default listen ports** — HTTP `6610` → `6666`, SSH `6611` → `6667` (config, Docker, vite proxy, docs)
 
 ### Fixed

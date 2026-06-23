@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -110,9 +111,13 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("bootstrap database: %w", err)
 	}
 
-	slog.Info("starting buildx-server",
+	listener, err := net.Listen("tcp", s.cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("listen http %s: %w", s.cfg.HTTPAddr, err)
+	}
+	slog.Info("listening",
 		"version", version.Version,
-		"http", s.cfg.HTTPAddr,
+		"http", listener.Addr().String(),
 		"ssh", s.cfg.SSHAddr,
 		"data_dir", s.cfg.DataDir,
 		"dev", s.cfg.Dev,
@@ -120,7 +125,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		if err := s.http.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.http.Serve(listener); err != nil && err != http.ErrServerClosed {
 			errCh <- err
 		}
 		close(errCh)

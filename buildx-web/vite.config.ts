@@ -3,9 +3,9 @@ import react from "@vitejs/plugin-react";
 
 const isRelease = process.env.BUILD_MODE === "RELEASE";
 
-/** Proxy target for buildx-server; follows BUILDX_HTTP_ADDR (default :6666). */
+/** Proxy target for buildx-server; follows BUILDX_HTTP_ADDR (default :9910). */
 function buildxApiOrigin(): string {
-  const raw = (process.env.BUILDX_HTTP_ADDR || ":6666").trim();
+  const raw = (process.env.BUILDX_HTTP_ADDR || ":9910").trim();
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     return raw;
   }

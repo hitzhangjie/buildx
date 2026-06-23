@@ -13,10 +13,10 @@ RUN adduser -D -u 1000 buildx
 WORKDIR /app
 COPY --from=builder /buildx-server /app/buildx-server
 USER buildx
-EXPOSE 6666 6667
+EXPOSE 9910 9911
 VOLUME ["/data"]
 ENV BUILDX_DATA_DIR=/data
-ENV BUILDX_HTTP_ADDR=:6666
-ENV BUILDX_SSH_ADDR=:6667
+ENV BUILDX_HTTP_ADDR=:9910
+ENV BUILDX_SSH_ADDR=:9911
 ENTRYPOINT ["/app/buildx-server"]
 CMD ["serve"]

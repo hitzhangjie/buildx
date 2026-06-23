@@ -126,8 +126,8 @@ The `internal/agent` package provides:
 
 Default ports (OneDev-compatible):
 
-- `6666` — HTTP (Git smart HTTP + UI + API)
-- `6667` — SSH (Git over SSH)
+- `9910` — HTTP (Git smart HTTP + UI + API)
+- `9911` — SSH (Git over SSH)
 
 ## Cross-cutting concerns
 

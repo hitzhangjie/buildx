@@ -41,7 +41,7 @@ make build
 ./bin/buildx-server serve --dev
 ```
 
-浏览器访问 http://localhost:6666/~health 确认服务已启动。
+浏览器访问 http://localhost:9910/~health 确认服务已启动。
 
 ### 初始管理员账号
 
@@ -66,8 +66,8 @@ export BUILDX_INITIAL_EMAIL=admin@example.com
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `BUILDX_HTTP_ADDR` | `:6666` | HTTP/Web 监听地址（`host:port`、`:6666` 或纯端口号 `6666`） |
-| `BUILDX_SSH_ADDR` | `:6667` | Git SSH 监听地址 |
+| `BUILDX_HTTP_ADDR` | `:9910` | HTTP/Web 监听地址（`host:port`、`:9910` 或纯端口号 `9910`） |
+| `BUILDX_SSH_ADDR` | `:9911` | Git SSH 监听地址 |
 | `BUILDX_DATA_DIR` | `./data` | 数据目录（数据库、仓库、附件等） |
 | `BUILDX_WEB_DIR` | （空） | 前端静态资源目录；为空时使用嵌入的 buildx-web |
 | `BUILDX_DEV` | `false` | 开发模式（更详细日志等） |
@@ -78,12 +78,12 @@ export BUILDX_INITIAL_EMAIL=admin@example.com
 环境变量需在**启动 `buildx-server serve` 的同一 shell** 中 `export`（服务端不读取 `.env` 文件）。启动日志会打印 `configuration http=...` 以确认生效。也可用命令行参数覆盖：
 
 ```bash
-./bin/buildx-server serve --http-addr 0.0.0.0:6666 --data-dir ./data
+./bin/buildx-server serve --http-addr 0.0.0.0:9910 --data-dir ./data
 ```
 
 ```bash
-export BUILDX_HTTP_ADDR=0.0.0.0:6666
-export BUILDX_SSH_ADDR=0.0.0.0:6667
+export BUILDX_HTTP_ADDR=0.0.0.0:9910
+export BUILDX_SSH_ADDR=0.0.0.0:9911
 export BUILDX_DATA_DIR=./data
 ./bin/buildx-server serve --dev
 ```
