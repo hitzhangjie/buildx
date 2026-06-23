@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
+import { fetchProjects } from "../../api/projects";
+import { fetchBranch, fetchBranches, fetchDefaultBranch } from "../../api/repositories";
+import { blobUrl } from "../../util/blobPath";
 
 interface Branch {
   name: string;
@@ -11,14 +14,69 @@ interface Branch {
   lastCommitDate: string;
 }
 
-const branches: Branch[] = [];
-
 export function ProjectBranchesPage() {
   const { projectPath } = useProject();
   const [query, setQuery] = useState("");
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectPath) {
+      return;
+    }
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const projects = await fetchProjects();
+        const project = projects.find((item) => item.path === projectPath);
+        if (!project) {
+          if (!cancelled) {
+            setBranches([]);
+            setError("Project not found");
+          }
+          return;
+        }
+
+        const [names, defaultBranch] = await Promise.all([
+          fetchBranches(project.id),
+          fetchDefaultBranch(project.id),
+        ]);
+        const details = await Promise.all(names.map((name) => fetchBranch(project.id, name)));
+
+        if (!cancelled) {
+          setBranches(
+            names.map((name, index) => ({
+              name,
+              isDefault: name === defaultBranch,
+              lastCommit: details[index].commitHash.slice(0, 8),
+              lastCommitDate: details[index].updated ?? "",
+            })),
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError((err as { message?: string }).message ?? "Failed to load branches");
+          setBranches([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
 
   const filtered = branches.filter(
-    (b) => !query || b.name.toLowerCase().includes(query.toLowerCase())
+    (b) => !query || b.name.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
@@ -43,6 +101,7 @@ export function ProjectBranchesPage() {
               </div>
             </form>
           </div>
+          {error && <div className="alert alert-light-danger">{error}</div>}
           <table className="table">
             <thead>
               <tr>
@@ -52,11 +111,16 @@ export function ProjectBranchesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((branch) => (
+              {loading && (
+                <tr>
+                  <td colSpan={3} className="text-center text-muted py-5">Loading…</td>
+                </tr>
+              )}
+              {!loading && filtered.map((branch) => (
                 <tr key={branch.name}>
                   <td>
                     <div className="d-flex align-items-center">
-                      <Link to={`/${projectPath}/~files`} className="font-weight-bold mr-2">
+                      <Link to={blobUrl(projectPath, branch.name, "")} className="font-weight-bold mr-2">
                         <Icon name="branch" /> {branch.name}
                       </Link>
                       {branch.isDefault && (
@@ -72,7 +136,7 @@ export function ProjectBranchesPage() {
                   <td className="text-muted">{branch.lastCommitDate}</td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={3} className="text-center text-muted py-5">No branches found</td>
                 </tr>

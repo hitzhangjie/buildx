@@ -31,7 +31,7 @@
 | JobRunResource | `/job-runs` | — | |
 | TriggerJobResource | `/trigger-job` | — | |
 | CodeCommentResource | `/code-comments` | — | |
-| RepositoryResource | `/repositories` | — | Git 浏览 |
+| RepositoryResource | `/repositories` | partial | branches list/detail, default-branch |
 | PackResource | `/packs` | — | |
 | PackBlobResource | `/pack-blobs` | — | |
 | ArtifactResource | `/artifacts` | — | |

@@ -51,6 +51,7 @@ func (s *Server) routes() chi.Router {
 	userHandler := &api.UsersHandler{Security: sec}
 	settingsHandler := &api.SettingsHandler{}
 	blobHandler := &api.BlobHandler{Projects: projects}
+	repoHandler := &api.RepositoryHandler{Projects: projects, Security: sec}
 	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
 
 	r := chi.NewRouter()
@@ -84,6 +85,10 @@ func (s *Server) routes() chi.Router {
 			projectHandler.Get(w, r, id)
 		})
 
+		r.Get("/repositories/{projectId}/branches", repoHandler.ListBranches)
+		r.Get("/repositories/{projectId}/default-branch", repoHandler.GetDefaultBranch)
+		r.Get("/repositories/{projectId}/branches/*", repoHandler.GetBranch)
+
 		// Blob: wildcard catches project paths with optional slashes (nested projects).
 		r.Get("/projects/*", blobHandler.ServeHTTP)
 	})
@@ -109,17 +114,34 @@ func (s *Server) handleCLICheckVersion(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, `{"serverVersion":%q,"minRequiredCliVersion":%q}`, version.Version, "0.1.0")
 }
 
-// Run starts the HTTP server and blocks until ctx is cancelled.
-func (s *Server) Run(ctx context.Context) error {
+// Handler returns the root HTTP handler (chi router with all routes).
+func (s *Server) Handler() http.Handler {
+	return s.router
+}
+
+// Init runs database migrations and bootstrap seeding.
+func (s *Server) Init(ctx context.Context) error {
 	if err := s.store.Migrate(ctx); err != nil {
-		_ = s.store.Close()
 		return fmt.Errorf("migrate database: %w", err)
 	}
-	defer func() { _ = s.store.Close() }()
-
 	if err := s.store.Bootstrap(ctx); err != nil {
 		return fmt.Errorf("bootstrap database: %w", err)
 	}
+	return nil
+}
+
+// Close releases server resources (database connections).
+func (s *Server) Close() error {
+	return s.store.Close()
+}
+
+// Run starts the HTTP server and blocks until ctx is cancelled.
+func (s *Server) Run(ctx context.Context) error {
+	if err := s.Init(ctx); err != nil {
+		_ = s.store.Close()
+		return err
+	}
+	defer func() { _ = s.store.Close() }()
 
 	listener, err := net.Listen("tcp", s.cfg.HTTPAddr)
 	if err != nil {

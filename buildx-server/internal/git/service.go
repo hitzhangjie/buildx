@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -90,6 +91,56 @@ func (r *Repository) firstBranchWithCommits() string {
 func (r *Repository) revisionExists(revision string) bool {
 	_, err := r.inner.ResolveRevision(plumbing.Revision(revision))
 	return err == nil
+}
+
+// BranchDetail is the REST shape for a single branch ref.
+type BranchDetail struct {
+	RefName    string `json:"refName"`
+	CommitHash string `json:"commitHash"`
+	Updated    string `json:"updated,omitempty"`
+}
+
+// ListBranchNames returns sorted branch names that point at commits.
+func (r *Repository) ListBranchNames() ([]string, error) {
+	refs, err := r.inner.References()
+	if err != nil {
+		return nil, err
+	}
+	defer refs.Close()
+
+	var names []string
+	for {
+		ref, err := refs.Next()
+		if err != nil {
+			break
+		}
+		if !ref.Name().IsBranch() {
+			continue
+		}
+		if _, err := r.inner.CommitObject(ref.Hash()); err != nil {
+			continue
+		}
+		names = append(names, ref.Name().Short())
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// BranchDetail looks up a branch by short name.
+func (r *Repository) BranchDetail(branchName string) (*BranchDetail, error) {
+	ref, err := r.inner.Reference(plumbing.NewBranchReferenceName(branchName), true)
+	if err != nil {
+		return nil, err
+	}
+	commit, err := r.inner.CommitObject(ref.Hash())
+	if err != nil {
+		return nil, err
+	}
+	return &BranchDetail{
+		RefName:    ref.Name().String(),
+		CommitHash: commit.Hash.String(),
+		Updated:    humanizeTime(commit.Committer.When),
+	}, nil
 }
 
 // ---------------------------------------------------------------------------

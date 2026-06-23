@@ -6,6 +6,10 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ## [Unreleased]
 
+### Added
+
+- **Project Branches API and page** — `GET /~api/repositories/{projectId}/branches`, `default-branch`, and `branches/{branch}` (OneDev `RepositoryResource` parity); `ProjectBranchesPage` loads live branch list with commit hash and updated time
+
 ### Fixed
 
 - **Project Files (blob) browsing** — `HasRefs` now requires a branch with commits (empty bare repos correctly show the no-commits panel); directory listings use immediate tree children only (was recursively listing all files, causing slow/wrong root view); default branch resolution falls back to any branch with commits; Files page shows resolved branch name from API
