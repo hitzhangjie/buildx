@@ -1,8 +1,6 @@
 package api
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -194,6 +192,8 @@ func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, re
 
 // ---------- git-receive-pack (push) ----------
 
+// handleReceivePack delegates to native "git receive-pack --stateless-rpc".
+// go-git's server-side receive-pack has known issues; see protocol.go.
 func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, repo *git.Repository) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -203,14 +203,7 @@ func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, r
 	doNotCache(w)
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 
-	// Wrap body with a peek reader to capture the request preamble for
-	// diagnostic logging on protocol-level failures (e.g. missing capabilities
-	// delimiter, empty body, or unexpected pkt-line format).
-	const peekN = 128
-	peekReader := &peekReadCloser{rc: r.Body, peekN: peekN}
-
-	if err := repo.ReceivePack(w, peekReader); err != nil {
-		peekReader.logPeek("receive-pack failed")
+	if err := repo.ReceivePack(w, r.Body); err != nil {
 		slog.Error("receive-pack failed", "error", err)
 		return
 	}
@@ -274,69 +267,4 @@ func writePktLine(w io.Writer, data string) {
 // writeFlushPkt writes a Git flush packet ("0000").
 func writeFlushPkt(w io.Writer) {
 	_, _ = w.Write([]byte("0000"))
-}
-
-// peekReadCloser wraps an io.ReadCloser and captures the first peekN bytes
-// read from it. The captured bytes are available via logPeek for diagnostic
-// logging (e.g. inspecting git protocol handshake data on error).
-type peekReadCloser struct {
-	rc    io.ReadCloser
-	peekN int
-	buf   bytes.Buffer // stores up to peekN bytes read through this reader
-}
-
-func (p *peekReadCloser) Read(b []byte) (int, error) {
-	n, err := p.rc.Read(b)
-	if n > 0 && p.buf.Len() < p.peekN {
-		remaining := p.peekN - p.buf.Len()
-		if n > remaining {
-			p.buf.Write(b[:remaining])
-		} else {
-			p.buf.Write(b[:n])
-		}
-	}
-	return n, err
-}
-
-func (p *peekReadCloser) Close() error {
-	return p.rc.Close()
-}
-
-// logPeek logs the captured preamble bytes for debugging git protocol issues.
-func (p *peekReadCloser) logPeek(context string) {
-	raw := p.buf.Bytes()
-	if len(raw) == 0 {
-		slog.Warn("git protocol peek: empty body", "context", context)
-		return
-	}
-
-	// Try to decode the first 4 bytes as a pkt-line length header.
-	var preamble string
-	if len(raw) >= 4 {
-		pktLen64, err := hex.DecodeString(string(raw[:4]))
-		if err != nil {
-			preamble = fmt.Sprintf("(invalid pkt-len hex: %q)", string(raw[:4]))
-		} else {
-			pktLen := int(pktLen64[0])
-			if pktLen == 0 {
-				preamble = "flush-pkt (0000) → no ref-update commands"
-			} else {
-				preamble = fmt.Sprintf("pkt-len=%d", pktLen)
-			}
-		}
-	} else {
-		preamble = fmt.Sprintf("(< 4 bytes: %d)", len(raw))
-	}
-
-	// Truncate raw hex dump to 128 bytes for readability.
-	hexDump := fmt.Sprintf("%x", raw)
-	if len(hexDump) > 256 {
-		hexDump = hexDump[:256] + "..."
-	}
-
-	slog.Warn("git receive-pack preamble",
-		"context", context,
-		"preamble", preamble,
-		"bodyHex", hexDump,
-	)
 }

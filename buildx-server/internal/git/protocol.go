@@ -2,11 +2,11 @@ package git
 
 import (
 	"bytes"
-	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
+	"os/exec"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/packfile"
@@ -15,9 +15,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/protocol/packp"
 	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
 	"github.com/go-git/go-git/v5/plumbing/revlist"
-	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/plumbing/transport"
-	"github.com/go-git/go-git/v5/plumbing/transport/server"
 )
 
 // ---------------------------------------------------------------------------
@@ -35,40 +33,43 @@ func uploadPackCapabilities() *capability.List {
 	return caps
 }
 
-func receivePackCapabilities() *capability.List {
-	// go-git server receive-pack (plumbing/transport/server) does not support
-	// side-band-64k or atomic; advertising them causes native git push to fail
-	// with "unsupported capability: side-band-64k".
-	// https://github.com/go-git/go-git/issues/2203
-	caps := capability.NewList()
-	caps.Set(capability.ReportStatus)
-	caps.Set(capability.DeleteRefs)
-	caps.Set(capability.OFSDelta)
-	caps.Set(capability.Agent, "buildx-server")
-	return caps
-}
+// receivePackCapabilities was removed in favor of native git receive-pack.
+// go-git's server-side receive-pack (plumbing/transport/server) has known
+// issues with certain push scenarios, particularly tag pushes.
+//
+// Issues tracked at: https://github.com/go-git/go-git/issues/2203
+// Reproduction tests at: ~/test/gogit_push_bug
+//
+// The native git approach is consistent with OneDev's GitFilter which uses
+// "git receive-pack --stateless-rpc" (see references/onedev/.../ReceivePackCommand.java).
 
 // ---------------------------------------------------------------------------
 // Smart HTTP: info/refs (reference advertisement)
 // ---------------------------------------------------------------------------
 
-// AdvertiseRefs writes a Git smart-HTTP reference advertisement for the
-// given service ("git-upload-pack" or "git-receive-pack") to w.
+// AdvertiseRefs writes a Git smart-HTTP reference advertisement.
+// For upload-pack (clone/fetch), go-git is used. For receive-pack (push),
+// native git ("git receive-pack --stateless-rpc --advertise-refs") is used
+// because go-git's server-side receive-pack has known issues.
+//
+// See: https://github.com/go-git/go-git/issues/2203
 func (r *Repository) AdvertiseRefs(w io.Writer, service string) error {
-	var caps *capability.List
 	switch service {
 	case transport.UploadPackServiceName:
-		caps = uploadPackCapabilities()
+		return r.advertiseUploadRefs(w)
 	case transport.ReceivePackServiceName:
-		caps = receivePackCapabilities()
+		return r.advertiseReceiveRefs(w)
 	default:
 		return fmt.Errorf("unknown git service: %s", service)
 	}
+}
+
+func (r *Repository) advertiseUploadRefs(w io.Writer) error {
+	caps := uploadPackCapabilities()
 
 	ar := packp.NewAdvRefs()
 	ar.Capabilities = caps
 
-	// Collect refs.
 	refs, err := r.inner.References()
 	if err != nil {
 		return fmt.Errorf("iterate refs: %w", err)
@@ -85,7 +86,6 @@ func (r *Repository) AdvertiseRefs(w io.Writer, service string) error {
 		}
 	}
 
-	// Set HEAD if it exists.
 	head, err := r.inner.Head()
 	if err == nil && head.Name().IsBranch() {
 		headHash := head.Hash()
@@ -93,6 +93,22 @@ func (r *Repository) AdvertiseRefs(w io.Writer, service string) error {
 	}
 
 	return ar.Encode(w)
+}
+
+// advertiseReceiveRefs runs "git receive-pack --stateless-rpc --advertise-refs ."
+// and pipes its stdout to w. Native git handles capability negotiation correctly.
+func (r *Repository) advertiseReceiveRefs(w io.Writer) error {
+	cmd := exec.Command("git", "receive-pack", "--stateless-rpc", "--advertise-refs", ".")
+	cmd.Dir = r.path
+	cmd.Stdout = w
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git receive-pack --advertise-refs: %w (stderr: %s)", err, stderr.String())
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -162,39 +178,25 @@ func (r *Repository) UploadPack(w io.Writer, body io.Reader) error {
 // Smart HTTP: receive-pack (push)
 // ---------------------------------------------------------------------------
 
-// ReceivePack handles a git-receive-pack session via go-git.
-// See receivePackCapabilities for capability limitations and protocol_test.go.
+// ReceivePack handles a git-receive-pack session via native git.
+// go-git's server-side receive-pack has known bugs with tag pushes,
+// so we shell out to "git receive-pack --stateless-rpc" instead.
+//
+// See: https://github.com/go-git/go-git/issues/2203
+// Reproduction tests: ~/test/gogit_push_bug
 func (r *Repository) ReceivePack(w io.Writer, body io.Reader) error {
-	req := packp.NewReferenceUpdateRequest()
-	if err := req.Decode(body); err != nil {
-		return fmt.Errorf("decode receive-pack request: %w", err)
-	}
+	cmd := exec.Command("git", "receive-pack", "--stateless-rpc", ".")
+	cmd.Dir = r.path
+	cmd.Stdin = body
+	cmd.Stdout = w
 
-	srv := server.NewServer(storerLoader{s: r.inner.Storer})
-	sess, err := srv.NewReceivePackSession(&transport.Endpoint{}, nil)
-	if err != nil {
-		return fmt.Errorf("new receive-pack session: %w", err)
-	}
-	defer sess.Close()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 
-	rs, err := sess.ReceivePack(context.Background(), req)
-	if rs != nil {
-		if encErr := rs.Encode(w); encErr != nil {
-			return fmt.Errorf("encode report status: %w", encErr)
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("receive pack: %w", err)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("git receive-pack: %w (stderr: %s)", err, stderr.String())
 	}
 	return nil
-}
-
-type storerLoader struct {
-	s storer.Storer
-}
-
-func (l storerLoader) Load(*transport.Endpoint) (storer.Storer, error) {
-	return l.s, nil
 }
 
 // ---------------------------------------------------------------------------
