@@ -89,6 +89,8 @@ func (s *Server) routes() chi.Router {
 		r.Get("/repositories/{projectId}/branches", repoHandler.ListBranches)
 		r.Get("/repositories/{projectId}/default-branch", repoHandler.GetDefaultBranch)
 		r.Get("/repositories/{projectId}/branches/*", repoHandler.GetBranch)
+		r.Get("/repositories/{projectId}/tags", repoHandler.ListTags)
+		r.Get("/repositories/{projectId}/tags/*", repoHandler.GetTag)
 		r.Get("/repositories/{projectId}/commits", repoHandler.ListCommits)
 		r.Get("/repositories/{projectId}/commits/{commitHash}", repoHandler.GetCommit)
 

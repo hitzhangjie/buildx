@@ -37,6 +37,24 @@ export async function fetchBranch(projectId: number, branch: string): Promise<Br
   );
 }
 
+export type TagRef = {
+  refName: string;
+  commitHash: string;
+  updated?: string;
+  message?: string;
+};
+
+export async function fetchTags(projectId: number): Promise<string[]> {
+  const data = await apiFetch<string[] | null>(`/~api/repositories/${projectId}/tags`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchTag(projectId: number, tag: string): Promise<TagRef> {
+  return apiFetch<TagRef>(
+    `/~api/repositories/${projectId}/tags/${encodeURIComponent(tag)}`,
+  );
+}
+
 export type CommitPerson = {
   name: string;
   emailAddress?: string;

@@ -119,6 +119,43 @@ func (h *RepositoryHandler) GetBranch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, detail)
 }
 
+func (h *RepositoryHandler) ListTags(w http.ResponseWriter, r *http.Request) {
+	repo, ok := h.openRepo(w, r)
+	if !ok {
+		return
+	}
+
+	names, err := repo.ListTagNames()
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if names == nil {
+		names = []string{}
+	}
+	writeJSON(w, http.StatusOK, names)
+}
+
+func (h *RepositoryHandler) GetTag(w http.ResponseWriter, r *http.Request) {
+	repo, ok := h.openRepo(w, r)
+	if !ok {
+		return
+	}
+
+	tagName := strings.TrimPrefix(chi.URLParam(r, "*"), "/")
+	if tagName == "" {
+		http.Error(w, "tag name required", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := repo.TagDetail(tagName)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, detail)
+}
+
 func (h *RepositoryHandler) openRepo(w http.ResponseWriter, r *http.Request) (*git.Repository, bool) {
 	user, err := h.authenticate(r)
 	if err != nil {

@@ -101,6 +101,14 @@ type BranchDetail struct {
 	Updated    string `json:"updated,omitempty"`
 }
 
+// TagDetail is the REST shape for a single tag ref.
+type TagDetail struct {
+	RefName    string `json:"refName"`
+	CommitHash string `json:"commitHash"`
+	Updated    string `json:"updated,omitempty"`
+	Message    string `json:"message,omitempty"`
+}
+
 // ListBranchNames returns sorted branch names that point at commits.
 func (r *Repository) ListBranchNames() ([]string, error) {
 	refs, err := r.inner.References()
@@ -141,6 +149,74 @@ func (r *Repository) BranchDetail(branchName string) (*BranchDetail, error) {
 		RefName:    ref.Name().String(),
 		CommitHash: commit.Hash.String(),
 		Updated:    humanizeTime(commit.Committer.When),
+	}, nil
+}
+
+// ListTagNames returns sorted tag names that point at commits.
+func (r *Repository) ListTagNames() ([]string, error) {
+	refs, err := r.inner.References()
+	if err != nil {
+		return nil, err
+	}
+	defer refs.Close()
+
+	var names []string
+	for {
+		ref, err := refs.Next()
+		if err != nil {
+			break
+		}
+		if !ref.Name().IsTag() {
+			continue
+		}
+		if _, err := r.inner.TagObject(ref.Hash()); err == nil {
+			// Annotated tag — tag object exists.
+			names = append(names, ref.Name().Short())
+			continue
+		}
+		if _, err := r.inner.CommitObject(ref.Hash()); err == nil {
+			// Lightweight tag — points directly to a commit.
+			names = append(names, ref.Name().Short())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+// TagDetail looks up a tag by short name, returning ref details and message.
+func (r *Repository) TagDetail(tagName string) (*TagDetail, error) {
+	ref, err := r.inner.Reference(plumbing.NewTagReferenceName(tagName), true)
+	if err != nil {
+		return nil, err
+	}
+
+	var commitHash string
+	var message string
+	var when time.Time
+
+	tagObj, err := r.inner.TagObject(ref.Hash())
+	if err == nil {
+		// Annotated tag — embed the annotation message.
+		message = tagObj.Message
+		commitHash = tagObj.Target.String()
+		when = tagObj.Tagger.When
+	} else {
+		// Lightweight tag — use the commit subject as message.
+		commit, err := r.inner.CommitObject(ref.Hash())
+		if err != nil {
+			return nil, err
+		}
+		commitHash = commit.Hash.String()
+		when = commit.Committer.When
+		subject, _ := splitCommitMessage(commit.Message)
+		message = subject
+	}
+
+	return &TagDetail{
+		RefName:    ref.Name().String(),
+		CommitHash: commitHash,
+		Updated:    humanizeTime(when),
+		Message:    firstLine(message),
 	}, nil
 }
 
