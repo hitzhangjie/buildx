@@ -11,6 +11,8 @@ export type SavedQuery = {
 type SavedQueriesPanelProps = {
   personalQueries?: SavedQuery[];
   commonQueries?: SavedQuery[];
+  /** The currently active query string, used to highlight the selected saved query. */
+  currentQuery?: string;
 };
 
 /**
@@ -20,6 +22,7 @@ type SavedQueriesPanelProps = {
 export function SavedQueriesPanel({
   personalQueries = [],
   commonQueries = [],
+  currentQuery,
 }: SavedQueriesPanelProps) {
   const [visible, setVisible] = useState(true);
 
@@ -66,7 +69,10 @@ export function SavedQueriesPanel({
           {personalQueries.map((q) => (
             <div key={`p-${q.name}`} className="mb-4">
               <span className="btn-group">
-                <Link to={q.href} className="btn btn-sm btn-outline-secondary text-left">
+                <Link
+                  to={q.href}
+                  className={`btn btn-sm btn-outline-secondary text-left${q.query === currentQuery ? " active" : ""}`}
+                >
                   <span>{q.name}</span>
                 </Link>
               </span>
@@ -75,7 +81,10 @@ export function SavedQueriesPanel({
           {commonQueries.map((q) => (
             <div key={`c-${q.name}`} className="mb-4">
               <span className="btn-group">
-                <Link to={q.href} className="btn btn-sm btn-outline-secondary text-left">
+                <Link
+                  to={q.href}
+                  className={`btn btn-sm btn-outline-secondary text-left${q.query === currentQuery ? " active" : ""}`}
+                >
                   <span>{q.name}</span>
                 </Link>
               </span>

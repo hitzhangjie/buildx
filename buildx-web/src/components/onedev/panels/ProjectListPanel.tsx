@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Project } from "../../../api/projects";
 import { FormFeedbackPanel } from "../FormFeedbackPanel";
@@ -24,6 +24,11 @@ export function ProjectListPanel({
   onQueryChange,
 }: ProjectListPanelProps) {
   const [inputQuery, setInputQuery] = useState(query);
+
+  // Sync inputQuery when the query prop changes externally (e.g. saved query clicked in sidebar)
+  useEffect(() => {
+    setInputQuery(query);
+  }, [query]);
 
   function handleQuerySubmit(e: FormEvent) {
     e.preventDefault();

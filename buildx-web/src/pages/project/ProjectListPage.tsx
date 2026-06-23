@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { fetchProjects, type Project } from "../../api/projects";
 import { ProjectListPanel } from "../../components/onedev/panels/ProjectListPanel";
 import { SavedQueriesPanel } from "../../components/onedev/panels/SavedQueriesPanel";
@@ -14,10 +15,28 @@ const DEFAULT_COMMON_QUERIES = [
  * Reference: references/onedev/.../web/page/project/ProjectListPage.html
  */
 export function ProjectsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+
+  // Read query from URL search params; mirrors OneDev PageParameters.get(PARAM_QUERY)
+  const query = useMemo(() => searchParams.get("query") ?? "", [searchParams]);
+
+  const handleQueryChange = useCallback(
+    (newQuery: string) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (newQuery) {
+          next.set("query", newQuery);
+        } else {
+          next.delete("query");
+        }
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -48,14 +67,14 @@ export function ProjectsPage() {
   return (
     <Layout title="Projects" topbarTitle="Projects">
       <div className="side-main side-main-wrap p-2 p-sm-5">
-        <SavedQueriesPanel commonQueries={DEFAULT_COMMON_QUERIES} />
+        <SavedQueriesPanel commonQueries={DEFAULT_COMMON_QUERIES} currentQuery={query} />
         <div className="main">
           <ProjectListPanel
             projects={projects}
             loading={loading}
             errors={error ? [error] : []}
             query={query}
-            onQueryChange={setQuery}
+            onQueryChange={handleQueryChange}
           />
         </div>
       </div>
