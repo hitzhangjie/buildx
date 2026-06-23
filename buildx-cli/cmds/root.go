@@ -13,7 +13,7 @@ var root = &cobra.Command{
 	Use:   "buildx-cli",
 	Short: "BuildX command-line interface",
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-		if cmd.Name() == "version" || cmd.Name() == "config" {
+		if skipsConfigValidation(cmd) {
 			return nil
 		}
 		cfg, err := config.LoadConfig()
@@ -36,6 +36,19 @@ var root = &cobra.Command{
 
 func NewRootCommand() *cobra.Command {
 	return root
+}
+
+// skipsConfigValidation returns true when cmd or an ancestor is a command that
+// manages or reports CLI config (e.g. "config set") and must not require a
+// valid config file before running.
+func skipsConfigValidation(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "version", "config":
+			return true
+		}
+	}
+	return false
 }
 
 func init() {
