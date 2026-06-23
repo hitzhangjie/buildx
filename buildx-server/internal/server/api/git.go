@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,6 +19,8 @@ import (
 //
 // URL pattern: /{projectPath}.git/{git-suffix}
 // git-suffix is one of: info/refs, git-upload-pack, git-receive-pack.
+//
+// All git operations use go-git (pure Go) — no system git CLI required.
 //
 // Maps to OneDev: io.onedev.server.git.GitFilter
 type GitHandler struct {
@@ -45,12 +48,8 @@ func isGitRequest(path string) bool {
 		return false
 	}
 	suffix := path[idx+len(".git/"):]
-	switch {
-	case suffix == "info/refs":
-		return true
-	case suffix == "git-upload-pack":
-		return true
-	case suffix == "git-receive-pack":
+	switch suffix {
+	case "info/refs", "git-upload-pack", "git-receive-pack":
 		return true
 	default:
 		return false
@@ -94,21 +93,28 @@ func (h *GitHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	gitDir := h.Projects.GitDir(proj.ID)
 
-	// Ensure the bare git repository exists. This handles edge cases
-	// where the project was created but git init failed or was skipped.
+	// Ensure the bare git repository exists.
 	if err := h.ensureGitRepo(gitDir); err != nil {
 		slog.Error("failed to ensure git repository", "gitDir", gitDir, "error", err)
 		http.Error(w, "repository unavailable", http.StatusInternalServerError)
 		return
 	}
 
+	// Open the repository with go-git.
+	repo, err := git.Open(gitDir)
+	if err != nil {
+		slog.Error("failed to open git repository", "gitDir", gitDir, "error", err)
+		http.Error(w, "repository unavailable", http.StatusInternalServerError)
+		return
+	}
+
 	switch gitSuffix {
 	case "info/refs":
-		h.handleInfoRefs(w, r, gitDir, user, proj)
+		h.handleInfoRefs(w, r, repo, user, proj)
 	case "git-upload-pack":
-		h.handleUploadPack(w, r, gitDir)
+		h.handleUploadPack(w, r, repo)
 	case "git-receive-pack":
-		h.handleReceivePack(w, r, gitDir)
+		h.handleReceivePack(w, r, repo)
 	default:
 		http.Error(w, "unknown git service", http.StatusBadRequest)
 	}
@@ -130,20 +136,18 @@ func parseGitURL(path string) (projectPath, gitSuffix string, err error) {
 
 // ---------- info/refs (reference advertisement) ----------
 
-func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, gitDir string, user *security.User, proj *project.Project) {
+func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, repo *git.Repository, user *security.User, proj *project.Project) {
 	service := r.URL.Query().Get("service")
 	if service == "" {
-		// Dumb HTTP — not supported; return 403 to force smart HTTP.
+		// Dumb HTTP — not supported.
 		http.Error(w, "dumb HTTP protocol not supported", http.StatusForbidden)
 		return
 	}
 
-	var gitCmd string
 	switch service {
 	case "git-upload-pack":
-		gitCmd = "git-upload-pack"
+		// Fetch/clone — any reader can access.
 	case "git-receive-pack":
-		gitCmd = "git-receive-pack"
 		// Push requires owner permission.
 		if ok, err := h.Security.IsProjectOwner(r.Context(), user.ID, proj.ID); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -157,44 +161,23 @@ func (h *GitHandler) handleInfoRefs(w http.ResponseWriter, r *http.Request, gitD
 		return
 	}
 
-	// Validate git directory exists before advertising refs.
-	if _, err := os.Stat(gitDir); err != nil {
-		slog.Error("git directory not found", "gitDir", gitDir, "error", err)
-		http.Error(w, "repository not found", http.StatusNotFound)
-		return
-	}
-
 	doNotCache(w)
 	w.Header().Set("Content-Type", "application/x-"+service+"-advertisement")
 
-	// Write pkt-line header.
+	// Write the smart-HTTP service header.
 	writePktLine(w, "# service="+service+"\n")
 	writeFlushPkt(w)
 
-	// Advertise refs. Capture stderr separately — merging it into stdout
-	// would corrupt the pkt-line stream when git errors.
-	// Use "." as the repo path since cmd.Dir is already set to gitDir.
-	// Passing a relative gitDir would double-resolve against CWD and fail.
-	var stderr bytes.Buffer
-	cmd := git.Cmd(gitDir, gitCmd[4:], "--advertise-refs", "--stateless-rpc", ".")
-	cmd.Stdout = w
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		slog.Error("git advertise-refs failed",
-			"gitDir", gitDir,
-			"service", gitCmd,
-			"error", err,
-			"stderr", stderr.String(),
-		)
-		// Client will see truncated pkt-line output, but at least we log the
-		// real cause server-side instead of corrupting the protocol stream.
+	// Advertise refs using go-git.
+	if err := repo.AdvertiseRefs(w, service); err != nil {
+		slog.Error("advertise refs failed", "service", service, "error", err)
 		return
 	}
 }
 
 // ---------- git-upload-pack (fetch / clone) ----------
 
-func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, gitDir string) {
+func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, repo *git.Repository) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -203,24 +186,15 @@ func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, gi
 	doNotCache(w)
 	w.Header().Set("Content-Type", "application/x-git-upload-pack-result")
 
-	var stderr bytes.Buffer
-	cmd := git.Cmd(gitDir, "upload-pack", "--stateless-rpc", ".")
-	cmd.Stdin = r.Body
-	cmd.Stdout = w
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		slog.Error("git upload-pack failed",
-			"gitDir", gitDir,
-			"error", err,
-			"stderr", stderr.String(),
-		)
+	if err := repo.UploadPack(w, r.Body); err != nil {
+		slog.Error("upload-pack failed", "error", err)
 		return
 	}
 }
 
 // ---------- git-receive-pack (push) ----------
 
-func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, gitDir string) {
+func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, repo *git.Repository) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -229,17 +203,16 @@ func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, g
 	doNotCache(w)
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 
-	var stderr bytes.Buffer
-	cmd := git.Cmd(gitDir, "receive-pack", "--stateless-rpc", ".")
-	cmd.Stdin = r.Body
-	cmd.Stdout = w
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		slog.Error("git receive-pack failed",
-			"gitDir", gitDir,
-			"error", err,
-			"stderr", stderr.String(),
-		)
+	// Wrap body with a peek reader to capture the request preamble for
+	// diagnostic logging. If native git fails, the captured bytes help
+	// identify protocol-level issues (e.g. missing capabilities delimiter,
+	// empty body, or unexpected pkt-line format).
+	const peekN = 128
+	peekReader := &peekReadCloser{rc: r.Body, peekN: peekN}
+
+	if err := repo.ReceivePack(w, peekReader); err != nil {
+		peekReader.logPeek("receive-pack failed")
+		slog.Error("receive-pack failed", "error", err)
 		return
 	}
 }
@@ -247,13 +220,12 @@ func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, g
 // ---------- helpers ----------
 
 // ensureGitRepo checks that a bare git repository exists at gitDir,
-// creating it if necessary. This provides resilience against project
-// creation ordering bugs and manual filesystem changes.
+// creating it if necessary.
 func (h *GitHandler) ensureGitRepo(gitDir string) error {
 	// Check if HEAD exists — the minimal marker of a valid git repo.
 	headPath := gitDir + "/HEAD"
 	if _, err := os.Stat(headPath); err == nil {
-		return nil // already a valid repo
+		return nil
 	}
 
 	// Create directory and init bare repo.
@@ -261,11 +233,8 @@ func (h *GitHandler) ensureGitRepo(gitDir string) error {
 		return fmt.Errorf("mkdir git dir: %w", err)
 	}
 
-	cmd := git.Cmd(gitDir, "init", "--bare", gitDir)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("git init --bare: %w: %s", err, stderr.String())
+	if err := git.InitBare(gitDir); err != nil {
+		return fmt.Errorf("init bare repo: %w", err)
 	}
 
 	slog.Info("lazy-initialized bare git repository", "gitDir", gitDir)
@@ -273,12 +242,9 @@ func (h *GitHandler) ensureGitRepo(gitDir string) error {
 }
 
 func (h *GitHandler) authenticateGit(r *http.Request) (*security.User, error) {
-	// Git clients use HTTP Basic Auth.
 	if user, pass, ok := r.BasicAuth(); ok {
 		return h.Security.Authenticate(r.Context(), user, pass)
 	}
-	// Also support Bearer token (personal access token as password in Basic Auth
-	// is handled by Authenticate; standalone Bearer is used by some clients).
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(strings.ToLower(auth), "bearer ") {
 		token := strings.TrimSpace(auth[7:])
@@ -289,7 +255,6 @@ func (h *GitHandler) authenticateGit(r *http.Request) (*security.User, error) {
 
 func (h *GitHandler) writeGitError(w http.ResponseWriter, r *http.Request, err error) {
 	w.Header().Set("Content-Type", "text/plain")
-	// Git clients expect 401 with Basic realm for authentication prompt.
 	w.Header().Set("WWW-Authenticate", `Basic realm="BuildX"`)
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(err.Error()))
@@ -303,7 +268,7 @@ func doNotCache(w http.ResponseWriter) {
 
 // writePktLine writes a Git pkt-line: 4 hex length (including itself) + data.
 func writePktLine(w io.Writer, data string) {
-	length := 4 + len(data) // 4 hex chars + data
+	length := 4 + len(data)
 	fmt.Fprintf(w, "%04x%s", length, data)
 }
 
@@ -312,4 +277,67 @@ func writeFlushPkt(w io.Writer) {
 	_, _ = w.Write([]byte("0000"))
 }
 
+// peekReadCloser wraps an io.ReadCloser and captures the first peekN bytes
+// read from it. The captured bytes are available via logPeek for diagnostic
+// logging (e.g. inspecting git protocol handshake data on error).
+type peekReadCloser struct {
+	rc    io.ReadCloser
+	peekN int
+	buf   bytes.Buffer // stores up to peekN bytes read through this reader
+}
 
+func (p *peekReadCloser) Read(b []byte) (int, error) {
+	n, err := p.rc.Read(b)
+	if n > 0 && p.buf.Len() < p.peekN {
+		remaining := p.peekN - p.buf.Len()
+		if n > remaining {
+			p.buf.Write(b[:remaining])
+		} else {
+			p.buf.Write(b[:n])
+		}
+	}
+	return n, err
+}
+
+func (p *peekReadCloser) Close() error {
+	return p.rc.Close()
+}
+
+// logPeek logs the captured preamble bytes for debugging git protocol issues.
+func (p *peekReadCloser) logPeek(context string) {
+	raw := p.buf.Bytes()
+	if len(raw) == 0 {
+		slog.Warn("git protocol peek: empty body", "context", context)
+		return
+	}
+
+	// Try to decode the first 4 bytes as a pkt-line length header.
+	var preamble string
+	if len(raw) >= 4 {
+		pktLen64, err := hex.DecodeString(string(raw[:4]))
+		if err != nil {
+			preamble = fmt.Sprintf("(invalid pkt-len hex: %q)", string(raw[:4]))
+		} else {
+			pktLen := int(pktLen64[0])
+			if pktLen == 0 {
+				preamble = "flush-pkt (0000) → no ref-update commands"
+			} else {
+				preamble = fmt.Sprintf("pkt-len=%d", pktLen)
+			}
+		}
+	} else {
+		preamble = fmt.Sprintf("(< 4 bytes: %d)", len(raw))
+	}
+
+	// Truncate raw hex dump to 128 bytes for readability.
+	hexDump := fmt.Sprintf("%x", raw)
+	if len(hexDump) > 256 {
+		hexDump = hexDump[:256] + "..."
+	}
+
+	slog.Warn("git receive-pack preamble",
+		"context", context,
+		"preamble", preamble,
+		"bodyHex", hexDump,
+	)
+}

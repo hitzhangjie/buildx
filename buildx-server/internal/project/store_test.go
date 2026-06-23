@@ -9,9 +9,9 @@ import (
 
 	"github.com/hitzhangjie/buildx/buildx-server/internal/data"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/persistence/sqlite"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/security"
-	"github.com/hitzhangjie/buildx/buildx-server/internal/persistence/sqlite"
 )
 
 func TestProjectCreateAndAuth(t *testing.T) {

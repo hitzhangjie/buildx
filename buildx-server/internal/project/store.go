@@ -237,11 +237,8 @@ func (s *DBStore) initGitRepo(projectID int64) error {
 		return nil
 	}
 
-	// TODO(buildx-server): use go-git for bare init (OneDev: JGit Git.init().setBare(true)).
-	// MVP shells out to git; fails if git is not on PATH. See docs/ARCHITECTURE.md § Git engine.
-	cmd := git.Cmd(gitDir, "init", "--bare")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	if err := git.InitBare(gitDir); err != nil {
+		return fmt.Errorf("init bare repo: %w", err)
 	}
 	return nil
 }
@@ -267,7 +264,7 @@ func deriveKey(name string) string {
 		}
 	}
 	key := b.String()
-	if key == "" || !((key[0] >= 'A' && key[0] <= 'Z')) {
+	if key == "" || !(key[0] >= 'A' && key[0] <= 'Z') {
 		key = "P" + key
 	}
 	return key

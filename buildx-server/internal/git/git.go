@@ -1,19 +1,76 @@
-// Package git provides Git protocol services: smart HTTP, SSH, LFS, and hooks.
+// Package git provides Git repository operations using go-git (pure Go).
 //
-// Maps to OneDev: io.onedev.server.git.*
+// All git operations — blob browsing, smart HTTP protocol, repository
+// initialization — are handled through go-git. No system git CLI is required.
+//
+// Maps to OneDev: io.onedev.server.git.* (Go-git replaces JGit)
 package git
 
-import "context"
+import (
+	gogit "github.com/go-git/go-git/v5"
+)
 
-// Repository represents a bare Git repository on disk.
-type Repository struct {
-	ProjectID int64
-	Path      string
+// ---------------------------------------------------------------------------
+// Domain types — shared between blob browsing and protocol handlers
+// ---------------------------------------------------------------------------
+
+// BlobEntry describes a single tree entry (file or directory).
+type BlobEntry struct {
+	Name       string      `json:"name"`
+	Path       string      `json:"path"`
+	Type       string      `json:"type"` // "file" or "directory"
+	LastCommit *CommitInfo `json:"lastCommit,omitempty"`
 }
 
-// Service handles Git operations and reference management.
-type Service interface {
-	Open(ctx context.Context, projectID int64) (*Repository, error)
-	ReceivePack(ctx context.Context, repo *Repository) error
-	UploadPack(ctx context.Context, repo *Repository) error
+// CommitInfo carries abbreviated commit metadata for a blob listing.
+type CommitInfo struct {
+	Author  string `json:"author"`
+	Message string `json:"message"`
+	When    string `json:"when"`
+}
+
+// BlobContent is the result for a blob request — either a directory listing
+// or file content, matching the frontend's BlobContent shape.
+type BlobContent struct {
+	Revision string      `json:"revision"`
+	Path     string      `json:"path"`
+	Type     string      `json:"type"` // "directory" or "file"
+	Entries  []BlobEntry `json:"entries,omitempty"`
+	Content  string      `json:"content,omitempty"`
+	Size     int64       `json:"size,omitempty"`
+}
+
+// ---------------------------------------------------------------------------
+// Repository — wraps *gogit.Repository with higher-level operations
+// ---------------------------------------------------------------------------
+
+// Repository wraps a go-git Repository providing buildx-specific helpers
+// (blob browsing, smart HTTP protocol).
+type Repository struct {
+	inner *gogit.Repository
+	path  string // filesystem path to the git directory
+}
+
+// Open opens an existing git repository at the given path (bare or non-bare).
+func Open(path string) (*Repository, error) {
+	r, err := gogit.PlainOpen(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Repository{inner: r, path: path}, nil
+}
+
+// InitBare creates a new bare git repository at the given path.
+// The directory must already exist.
+func InitBare(path string) error {
+	_, err := gogit.PlainInit(path, true)
+	if err == gogit.ErrRepositoryAlreadyExists {
+		return nil // idempotent
+	}
+	return err
+}
+
+// Inner returns the underlying go-git repository for advanced operations.
+func (r *Repository) Inner() *gogit.Repository {
+	return r.inner
 }

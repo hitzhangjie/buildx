@@ -3,136 +3,71 @@ package git
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
-	"os"
-	"os/exec"
 	"strings"
+	"time"
+
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 )
 
-// BlobEntry describes a single tree entry (file or directory).
-type BlobEntry struct {
-	Name       string      `json:"name"`
-	Path       string      `json:"path"`
-	Type       string      `json:"type"` // "file" or "directory"
-	LastCommit *CommitInfo `json:"lastCommit,omitempty"`
-}
+// ---------------------------------------------------------------------------
+// Ref introspection
+// ---------------------------------------------------------------------------
 
-// CommitInfo carries abbreviated commit metadata for a blob listing.
-type CommitInfo struct {
-	Author  string `json:"author"`
-	Message string `json:"message"`
-	When    string `json:"when"`
-}
-
-// BlobContent is the result for a blob request — either a directory listing
-// or file content, matching the frontend's BlobContent shape.
-type BlobContent struct {
-	Revision string      `json:"revision"`
-	Path     string      `json:"path"`
-	Type     string      `json:"type"` // "directory" or "file"
-	Entries  []BlobEntry `json:"entries,omitempty"`
-	Content  string      `json:"content,omitempty"`
-	Size     int64       `json:"size,omitempty"`
-}
-
-// CommandService runs git commands against a bare repo on disk.
-type CommandService struct {
-	gitDir string // path to the bare git directory
-}
-
-// NewCommandService creates a CommandService for the given project's bare git directory.
-func NewCommandService(gitDir string) *CommandService {
-	return &CommandService{gitDir: gitDir}
-}
-
-// cmd creates an exec.Cmd for git operations with GIT_DIR set explicitly.
-// This bypasses the safe.bareRepository=explicit safety check in Git ≥2.35.2
-// that otherwise blocks commands running inside bare repositories.
-func (s *CommandService) cmd(args ...string) *exec.Cmd {
-	c := exec.Command("git", args...)
-	c.Dir = s.gitDir
-	c.Env = append(os.Environ(), "GIT_DIR="+s.gitDir)
-	return c
-}
-
-// cmdContext is like cmd but includes a context for cancellation.
-func (s *CommandService) cmdContext(ctx context.Context, args ...string) *exec.Cmd {
-	c := exec.CommandContext(ctx, "git", args...)
-	c.Dir = s.gitDir
-	c.Env = append(os.Environ(), "GIT_DIR="+s.gitDir)
-	return c
-}
-
-// Cmd creates an exec.Cmd for git operations on a bare repo with GIT_DIR set.
-// Exported for use by other packages (e.g. the git HTTP handler).
-func Cmd(gitDir string, args ...string) *exec.Cmd {
-	c := exec.Command("git", args...)
-	c.Dir = gitDir
-	c.Env = append(os.Environ(), "GIT_DIR="+gitDir)
-	return c
-}
-
-// CmdContext is like Cmd but includes a context.
-func CmdContext(ctx context.Context, gitDir string, args ...string) *exec.Cmd {
-	c := exec.CommandContext(ctx, "git", args...)
-	c.Dir = gitDir
-	c.Env = append(os.Environ(), "GIT_DIR="+gitDir)
-	return c
-}
-
-// HasRefs returns true if the repository has at least one ref (commit).
-func (s *CommandService) HasRefs() bool {
-	cmd := s.cmd("for-each-ref", "--count=1", "--format=%(refname)", "refs/")
-	out, err := cmd.Output()
+// HasRefs returns true if the repository has at least one reference.
+func (r *Repository) HasRefs() bool {
+	refs, err := r.inner.References()
 	if err != nil {
-		slog.Error("git for-each-ref failed", "gitDir", s.gitDir, "error", err)
+		slog.Error("go-git References failed", "error", err)
 		return false
 	}
-	return strings.TrimSpace(string(out)) != ""
+	defer refs.Close()
+	_, err = refs.Next()
+	return err == nil
 }
 
 // DefaultRevision returns the default branch name, or "main" if none exists.
-func (s *CommandService) DefaultRevision() string {
-	// Try to resolve HEAD
-	cmd := s.cmd("symbolic-ref", "--short", "HEAD")
-	out, err := cmd.Output()
+func (r *Repository) DefaultRevision() string {
+	head, err := r.inner.Head()
 	if err == nil {
-		ref := strings.TrimSpace(string(out))
-		if ref != "" {
-			return ref
+		ref := head.Name()
+		if ref.IsBranch() {
+			return ref.Short()
 		}
 	}
-	// Fallback to checking common branch names
 	for _, name := range []string{"main", "master"} {
-		if s.revisionExists(name) {
+		if r.revisionExists(name) {
 			return name
 		}
 	}
 	return "main"
 }
 
-func (s *CommandService) revisionExists(revision string) bool {
-	return s.cmd("rev-parse", "--verify", revision).Run() == nil
+func (r *Repository) revisionExists(revision string) bool {
+	_, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	return err == nil
 }
 
+// ---------------------------------------------------------------------------
+// Blob — directory listing or file content at revision:path
+// ---------------------------------------------------------------------------
+
 // Blob returns the content at revision:path. If the repo has no commits
-// yet it returns an empty directory. If path is a file it returns file
-// content; otherwise it lists directory entries.
-func (s *CommandService) Blob(ctx context.Context, revision, path string) (*BlobContent, error) {
-	// When the repository has no commits yet (no refs), return nil so the
-	// API returns 404. The frontend interprets a null response as "no commits"
-	// and shows the NoCommitsPanel, matching OneDev behavior.
-	if !s.HasRefs() {
+// yet it returns nil (the API layer sends 404, frontend shows NoCommitsPanel).
+// If path is a file it returns file content; otherwise it lists directory entries.
+func (r *Repository) Blob(ctx context.Context, revision, path string) (*BlobContent, error) {
+	if !r.HasRefs() {
 		return nil, nil
 	}
 
 	if revision == "" {
-		revision = s.DefaultRevision()
+		revision = r.DefaultRevision()
 	}
 
-	if !s.revisionExists(revision) {
-		// Revision doesn't exist — return empty directory for root paths,
-		// or nil for sub-paths (path not found).
+	if !r.revisionExists(revision) {
 		if path == "" {
 			return &BlobContent{
 				Revision: revision,
@@ -144,10 +79,7 @@ func (s *CommandService) Blob(ctx context.Context, revision, path string) (*Blob
 		return nil, nil
 	}
 
-	// Try to determine the type by attempting ls-tree on the ref.
-	// If it's a directory, ls-tree succeeds. If it's a file, ls-tree fails
-	// with a "not a tree object" message.
-	entries, err := s.listTree(ctx, revision, path)
+	entries, err := r.listTree(revision, path)
 	if err == nil {
 		return &BlobContent{
 			Revision: revision,
@@ -157,10 +89,8 @@ func (s *CommandService) Blob(ctx context.Context, revision, path string) (*Blob
 		}, nil
 	}
 
-	// It might be a file — try to read it.
-	content, size, err := s.readFile(ctx, revision, path)
+	content, size, err := r.readFile(revision, path)
 	if err != nil {
-		// Neither directory nor file — path not found.
 		return nil, nil
 	}
 
@@ -173,116 +103,189 @@ func (s *CommandService) Blob(ctx context.Context, revision, path string) (*Blob
 	}, nil
 }
 
-func (s *CommandService) listTree(ctx context.Context, revision, path string) ([]BlobEntry, error) {
-	treeRef := revision
-	if path != "" {
-		treeRef = revision + ":" + path
-	}
+// ---------------------------------------------------------------------------
+// Directory listing via go-git tree walk
+// ---------------------------------------------------------------------------
 
-	// git ls-tree -l --full-tree <tree-ish>
-	// Output format: <mode> <type> <object> <size>\t<name>
-	cmd := s.cmdContext(ctx, "ls-tree", "-l", "--full-tree", treeRef)
-	out, err := cmd.Output()
+func (r *Repository) listTree(revision, path string) ([]BlobEntry, error) {
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
 	if err != nil {
 		return nil, err
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	entries := make([]BlobEntry, 0, len(lines))
+	commit, err := r.inner.CommitObject(*hash)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, line := range lines {
-		if line == "" {
-			continue
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, err
+	}
+
+	// If path is set, navigate into the subtree.
+	if path != "" {
+		tree, err = tree.Tree(path)
+		if err != nil {
+			return nil, err
 		}
-		entry := parseLsTreeLine(line)
-		if entry == nil {
-			continue
+	}
+
+	var entries []BlobEntry
+
+	// Add files (blobs) from the tree.
+	iter := tree.Files()
+	defer iter.Close()
+	for {
+		file, err := iter.Next()
+		if err != nil {
+			break
 		}
-		// Build the full path for this entry
+		entryPath := file.Name
 		if path != "" {
-			entry.Path = path + "/" + entry.Name
-		} else {
-			entry.Path = entry.Name
+			entryPath = path + "/" + file.Name
 		}
+		entries = append(entries, BlobEntry{
+			Name: file.Name,
+			Path: entryPath,
+			Type: "file",
+		})
+	}
 
-		// Get last commit for this entry
-		entry.LastCommit = s.lastCommit(revision, entry.Path)
+	// Add subdirectory entries.
+	for _, te := range tree.Entries {
+		if te.Mode == filemode.Dir {
+			entryPath := te.Name
+			if path != "" {
+				entryPath = path + "/" + te.Name
+			}
+			entries = append(entries, BlobEntry{
+				Name: te.Name,
+				Path: entryPath,
+				Type: "directory",
+			})
+		}
+	}
 
-		entries = append(entries, *entry)
+	// Populate last-commit info for each entry.
+	for i := range entries {
+		entries[i].LastCommit = r.lastCommit(revision, entries[i].Path)
 	}
 
 	return entries, nil
 }
 
-// parseLsTreeLine parses a line from `git ls-tree -l`.
-// Format: <mode> SP <type> SP <object> SP <size> TAB <name>
-func parseLsTreeLine(line string) *BlobEntry {
-	// Split on tab first to get metadata and name
-	parts := strings.SplitN(line, "\t", 2)
-	if len(parts) != 2 {
-		return nil
-	}
-	meta := strings.Fields(parts[0])
-	name := parts[1]
-	if len(meta) < 3 {
-		return nil
-	}
+// ---------------------------------------------------------------------------
+// File content via go-git blob read
+// ---------------------------------------------------------------------------
 
-	entryType := "file"
-	if meta[1] == "tree" {
-		entryType = "directory"
-	} else if meta[1] == "commit" {
-		entryType = "directory" // submodule, treat as directory
-	}
-
-	return &BlobEntry{
-		Name: name,
-		Type: entryType,
-	}
-}
-
-func (s *CommandService) lastCommit(revision, path string) *CommitInfo {
-	// git log -1 --format="%an|%s|%ar" <revision> -- <path>
-	cmd := s.cmd("log", "-1", "--format=%an|%s|%ar", revision, "--", path)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil
-	}
-
-	line := strings.TrimSpace(string(out))
-	if line == "" {
-		return nil
-	}
-
-	parts := strings.SplitN(line, "|", 3)
-	info := &CommitInfo{}
-	if len(parts) > 0 {
-		info.Author = parts[0]
-	}
-	if len(parts) > 1 {
-		info.Message = parts[1]
-	}
-	if len(parts) > 2 {
-		info.When = parts[2]
-	}
-	return info
-}
-
-func (s *CommandService) readFile(ctx context.Context, revision, path string) (string, int64, error) {
-	ref := revision + ":" + path
-
-	// Get content
-	out, err := s.cmdContext(ctx, "show", ref).Output()
+func (r *Repository) readFile(revision, path string) (string, int64, error) {
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
 	if err != nil {
 		return "", 0, err
 	}
 
-	// Get size in bytes
-	sizeOut, err := s.cmdContext(ctx, "cat-file", "-s", ref).Output()
-	size := int64(0)
-	if err == nil {
-		fmt.Sscanf(strings.TrimSpace(string(sizeOut)), "%d", &size)
+	commit, err := r.inner.CommitObject(*hash)
+	if err != nil {
+		return "", 0, err
 	}
 
-	return string(out), size, nil
+	tree, err := commit.Tree()
+	if err != nil {
+		return "", 0, err
+	}
+
+	file, err := tree.File(path)
+	if err != nil {
+		return "", 0, err
+	}
+
+	reader, err := file.Blob.Reader()
+	if err != nil {
+		return "", 0, err
+	}
+	defer reader.Close()
+
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return string(content), file.Blob.Size, nil
+}
+
+// ---------------------------------------------------------------------------
+// Last-commit info for a path
+// ---------------------------------------------------------------------------
+
+func (r *Repository) lastCommit(revision, path string) *CommitInfo {
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	if err != nil {
+		return nil
+	}
+
+	logOpts := &gogit.LogOptions{
+		From:  *hash,
+		Order: gogit.LogOrderCommitterTime,
+		PathFilter: func(p string) bool {
+			return p == path
+		},
+	}
+	iter, err := r.inner.Log(logOpts)
+	if err != nil {
+		return nil
+	}
+	defer iter.Close()
+
+	commit, err := iter.Next()
+	if err != nil {
+		return nil
+	}
+
+	return &CommitInfo{
+		Author:  commit.Author.Name,
+		Message: firstLine(commit.Message),
+		When:    humanizeTime(commit.Author.When),
+	}
+}
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+func firstLine(s string) string {
+	if idx := strings.Index(s, "\n"); idx >= 0 {
+		return s[:idx]
+	}
+	return s
+}
+
+func humanizeTime(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%d seconds ago", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%d minutes ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%d hours ago", int(d.Hours()))
+	case d < 30*24*time.Hour:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	case d < 365*24*time.Hour:
+		months := int(d.Hours() / 24 / 30)
+		if months == 1 {
+			return "1 month ago"
+		}
+		return fmt.Sprintf("%d months ago", months)
+	default:
+		years := int(d.Hours() / 24 / 365)
+		if years == 1 {
+			return "1 year ago"
+		}
+		return fmt.Sprintf("%d years ago", years)
+	}
 }

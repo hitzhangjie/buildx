@@ -85,3 +85,6 @@ format-server:
 lint:
 	$(MAKE) -C buildx-cli lint
 	$(MAKE) -C buildx-server lint
+
+cloc:
+	cloc . --exclude-dir=references,.claude,.cursor,node_modules,dist,bin,webdist

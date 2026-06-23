@@ -72,9 +72,13 @@ func (h *BlobHandler) Blob(w http.ResponseWriter, r *http.Request, projectPath, 
 	}
 
 	gitDir := h.Projects.GitDir(proj.ID)
-	gitSvc := git.NewCommandService(gitDir)
+	repo, err := git.Open(gitDir)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
 
-	content, err := gitSvc.Blob(r.Context(), revision, path)
+	content, err := repo.Blob(r.Context(), revision, path)
 	if err != nil {
 		writeInternalError(w, err)
 		return
@@ -86,4 +90,3 @@ func (h *BlobHandler) Blob(w http.ResponseWriter, r *http.Request, projectPath, 
 
 	writeJSON(w, http.StatusOK, content)
 }
-

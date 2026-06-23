@@ -7,13 +7,13 @@ import "context"
 
 // PullRequest represents a proposed merge between branches.
 type PullRequest struct {
-	ID          int64
-	ProjectID   int64
-	Number      int
-	Title       string
+	ID           int64
+	ProjectID    int64
+	Number       int
+	Title        string
 	SourceBranch string
 	TargetBranch string
-	Status      string
+	Status       string
 }
 
 // Service manages pull request lifecycle and reviews.
