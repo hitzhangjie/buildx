@@ -1,11 +1,15 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { consumeFlashMessage } from "../util/flash";
 import "./layout-shell.css";
 
 type LayoutProps = {
   title?: string;
   children: ReactNode;
+  mode?: "global" | "project";
+  topbarTitle?: ReactNode;
+  projectSidebar?: ReactNode;
 };
 
 const GLOBAL_NAV = [
@@ -17,9 +21,15 @@ const GLOBAL_NAV = [
   { href: "/~workspaces", label: "Workspaces", icon: "workspace" },
 ] as const;
 
-export function Layout({ title = "BuildX", children }: LayoutProps) {
+export function Layout({
+  title = "BuildX",
+  children,
+  mode = "global",
+  topbarTitle,
+  projectSidebar,
+}: LayoutProps) {
   const { pathname } = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [dark, setDark] = useState(false);
   const [sidebarDocked, setSidebarDocked] = useState(true);
 
@@ -29,6 +39,29 @@ export function Layout({ title = "BuildX", children }: LayoutProps) {
     setDark(enabled);
     document.documentElement.classList.toggle("dark-mode", enabled);
   }, []);
+
+  useEffect(() => {
+    const flash = consumeFlashMessage();
+    if (!flash) {
+      return;
+    }
+    const el = document.getElementById("session-feedback");
+    if (!el) {
+      return;
+    }
+    el.textContent = flash;
+    el.classList.add("warning");
+    el.style.display = "block";
+    const width = el.offsetWidth;
+    el.style.left = `${Math.max(0, (window.innerWidth - width) / 2)}px`;
+    const timer = window.setTimeout(() => {
+      el.classList.remove("warning");
+      el.textContent = "";
+      el.style.display = "";
+      el.style.left = "";
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [pathname]);
 
   function toggleDark() {
     setDark((prev) => {
@@ -80,22 +113,24 @@ export function Layout({ title = "BuildX", children }: LayoutProps) {
         <div className="sidebar-body">
           <div className="sidebar-menu">
             <div className="menu-body">
-              {GLOBAL_NAV.map((item) => (
-                <Link
-                  key={item.href}
-                  className={`menu-item${isActive(item.href) ? " active" : ""}`}
-                  to={item.href}
-                >
-                  <img
-                    src={`/~icon/${item.icon}.svg`}
-                    alt=""
-                    className="icon mr-3"
-                    width={16}
-                    height={16}
-                  />
-                  {item.label}
-                </Link>
-              ))}
+              {mode === "project" && projectSidebar}
+              {mode === "global" &&
+                GLOBAL_NAV.map((item) => (
+                  <Link
+                    key={item.href}
+                    className={`menu-item${isActive(item.href) ? " active" : ""}`}
+                    to={item.href}
+                  >
+                    <img
+                      src={`/~icon/${item.icon}.svg`}
+                      alt=""
+                      className="icon mr-3"
+                      width={16}
+                      height={16}
+                    />
+                    {item.label}
+                  </Link>
+                ))}
             </div>
           </div>
         </div>
@@ -111,7 +146,9 @@ export function Layout({ title = "BuildX", children }: LayoutProps) {
           <Link className="topbar-brand d-lg-none" to="/~projects">
             <img src="/~icon/logo.svg" alt="" width={30} height={30} />
           </Link>
-          <div className="topbar-title">{title}</div>
+          <div className="topbar-title">
+            {topbarTitle ?? title}
+          </div>
         </div>
         <div className="topbar-right text-nowrap">
           <a
@@ -142,17 +179,10 @@ export function Layout({ title = "BuildX", children }: LayoutProps) {
                   <img src="/~icon/profile.svg" alt="" className="icon mr-2" width={16} height={16} />
                   Profile
                 </Link>
-                <a
-                  href="#"
-                  className="dropdown-item"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    logout();
-                  }}
-                >
+                <Link to="/~logout" className="dropdown-item">
                   <img src="/~icon/logout.svg" alt="" className="icon mr-2" width={16} height={16} />
                   Sign Out
-                </a>
+                </Link>
               </div>
             </div>
           ) : (

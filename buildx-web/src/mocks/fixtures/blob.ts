@@ -1,0 +1,153 @@
+export type BlobCommitInfo = {
+  author: string;
+  message: string;
+  when: string;
+};
+
+export type BlobEntry = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  lastCommit?: BlobCommitInfo;
+};
+
+export type BlobContent = {
+  revision: string;
+  path: string;
+  type: "directory" | "file";
+  entries?: BlobEntry[];
+  content?: string;
+  size?: number;
+};
+
+type MockNode = {
+  type: "file" | "directory";
+  content?: string;
+  children?: Record<string, MockNode>;
+  lastCommit?: BlobCommitInfo;
+};
+
+const DEFAULT_COMMIT: BlobCommitInfo = {
+  author: "admin",
+  message: "Initial commit",
+  when: "2 days ago",
+};
+
+const mockTree: MockNode = {
+  type: "directory",
+  children: {
+    "README.md": {
+      type: "file",
+      content: "# Demo Project\n\nWelcome to BuildX.\n",
+      lastCommit: DEFAULT_COMMIT,
+    },
+    ".onedev-buildspec.yml": {
+      type: "file",
+      content: "version: 1\njobs:\n  - name: CI\n    steps:\n      - !CommandStep\n        name: build\n        runInContainer: true\n        image: golang:1.22\n        commands:\n          - go build ./...\n",
+      lastCommit: { author: "admin", message: "Add CI buildspec", when: "1 day ago" },
+    },
+    src: {
+      type: "directory",
+      lastCommit: DEFAULT_COMMIT,
+      children: {
+        "main.go": {
+          type: "file",
+          content: "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello buildx\")\n}\n",
+          lastCommit: DEFAULT_COMMIT,
+        },
+        lib: {
+          type: "directory",
+          lastCommit: DEFAULT_COMMIT,
+          children: {
+            "util.go": {
+              type: "file",
+              content: "package lib\n\nfunc Greet(name string) string {\n\treturn \"hello \" + name\n}\n",
+              lastCommit: DEFAULT_COMMIT,
+            },
+          },
+        },
+      },
+    },
+    docs: {
+      type: "directory",
+      lastCommit: DEFAULT_COMMIT,
+      children: {
+        "index.md": {
+          type: "file",
+          content: "# Documentation\n",
+          lastCommit: DEFAULT_COMMIT,
+        },
+      },
+    },
+  },
+};
+
+function resolveNode(path: string): MockNode | null {
+  if (!path) {
+    return mockTree;
+  }
+  const parts = path.split("/").filter(Boolean);
+  let node: MockNode | undefined = mockTree;
+  for (const part of parts) {
+    if (!node?.children?.[part]) {
+      return null;
+    }
+    node = node.children[part];
+  }
+  return node ?? null;
+}
+
+function listEntries(path: string, node: MockNode): BlobEntry[] {
+  if (!node.children) {
+    return [];
+  }
+  return Object.entries(node.children)
+    .map(([name, child]) => ({
+      name,
+      path: path ? `${path}/${name}` : name,
+      type: child.type,
+      lastCommit: child.lastCommit ?? DEFAULT_COMMIT,
+    }))
+    .sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === "directory" ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+}
+
+export function getMockBlob(revision: string, path: string): BlobContent | null {
+  if (revision !== "main") {
+    return null;
+  }
+  const node = resolveNode(path);
+  if (!node) {
+    return null;
+  }
+  if (node.type === "directory") {
+    return {
+      revision,
+      path,
+      type: "directory",
+      entries: listEntries(path, node),
+    };
+  }
+  return {
+    revision,
+    path,
+    type: "file",
+    content: node.content ?? "",
+    size: new Blob([node.content ?? ""]).size,
+  };
+}
+
+export function getMockReadme(path: string): { title: string; content: string } | null {
+  if (path !== "") {
+    return null;
+  }
+  const readme = mockTree.children?.["README.md"];
+  if (!readme?.content) {
+    return null;
+  }
+  return { title: "README.md", content: readme.content };
+}

@@ -2,10 +2,10 @@ import type { RouteDefinition } from "./types";
 
 /** OneDev BaseUrlMapper global routes (paths starting with /~). */
 export const GLOBAL_ROUTES: RouteDefinition[] = [
-  { path: "/~init", page: "ServerInitPage", title: "Server Initialization", ref: "web/page/serverinit/ServerInitPage", layout: "simple" },
+  { path: "/~init", page: "ServerInitPage", title: "Server Initialization", ref: "web/page/serverinit/ServerInitPage", layout: "simple", known: "serverInit" },
   { path: "/~login", page: "LoginPage", title: "Sign In", ref: "web/page/security/LoginPage", layout: "simple", known: "login" },
-  { path: "/~logout", page: "LogoutPage", title: "Sign Out", ref: "web/page/security/LogoutPage", layout: "simple" },
-  { path: "/~signup", page: "SignUpPage", title: "Sign Up", ref: "web/page/security/SignUpPage", layout: "simple" },
+  { path: "/~logout", page: "LogoutPage", title: "Sign Out", ref: "web/page/security/LogoutPage", layout: "simple", known: "logout" },
+  { path: "/~signup", page: "SignUpPage", title: "Sign Up", ref: "web/page/security/SignUpPage", layout: "simple", known: "signup" },
   { path: "/~reset-password/:passwordResetCode", page: "PasswordResetPage", title: "Reset Password", ref: "web/page/security/PasswordResetPage", layout: "simple" },
   { path: "/~verify-email-address/:emailAddress/:verificationCode", page: "EmailAddressVerificationPage", title: "Verify Email", ref: "web/page/security/EmailAddressVerificationPage", layout: "simple" },
   { path: "/~create-user-from-invitation/:emailAddress/:invitationCode", page: "CreateUserFromInvitationPage", title: "Create Account", ref: "web/page/security/CreateUserFromInvitationPage", layout: "simple" },
@@ -13,14 +13,14 @@ export const GLOBAL_ROUTES: RouteDefinition[] = [
   { path: "/~oauth/callback", page: "OAuthCallbackPage", title: "OAuth", ref: "web/page/security/OAuthCallbackPage", layout: "simple" },
 
   { path: "/~projects", page: "ProjectListPage", title: "Projects", ref: "web/page/project/ProjectListPage", layout: "main", known: "projects" },
-  { path: "/~projects/new", page: "NewProjectPage", title: "New Project", ref: "web/page/project/NewProjectPage", layout: "main" },
+  { path: "/~projects/new", page: "NewProjectPage", title: "New Project", ref: "web/page/project/NewProjectPage", layout: "main", known: "newProject" },
   { path: "/~projects/import/:importer", page: "ProjectImportPage", title: "Import Project", ref: "web/page/project/imports/ProjectImportPage", layout: "main" },
 
-  { path: "/~issues", page: "IssueListPage", title: "Issues", ref: "web/page/issues/IssueListPage", layout: "main" },
-  { path: "/~pulls", page: "PullRequestListPage", title: "Pull Requests", ref: "web/page/pullrequests/PullRequestListPage", layout: "main" },
-  { path: "/~builds", page: "BuildListPage", title: "Builds", ref: "web/page/builds/BuildListPage", layout: "main" },
-  { path: "/~packages", page: "PackListPage", title: "Packages", ref: "web/page/packs/PackListPage", layout: "main" },
-  { path: "/~workspaces", page: "WorkspaceListPage", title: "Workspaces", ref: "web/page/workspaces/WorkspaceListPage", layout: "main" },
+  { path: "/~issues", page: "IssueListPage", title: "Issues", ref: "web/page/issues/IssueListPage", layout: "main", known: "issues" },
+  { path: "/~pulls", page: "PullRequestListPage", title: "Pull Requests", ref: "web/page/pullrequests/PullRequestListPage", layout: "main", known: "pulls" },
+  { path: "/~builds", page: "BuildListPage", title: "Builds", ref: "web/page/builds/BuildListPage", layout: "main", known: "builds" },
+  { path: "/~packages", page: "PackListPage", title: "Packages", ref: "web/page/packs/PackListPage", layout: "main", known: "packages" },
+  { path: "/~workspaces", page: "WorkspaceListPage", title: "Workspaces", ref: "web/page/workspaces/WorkspaceListPage", layout: "main", known: "workspaces" },
 
   { path: "/~my", page: "MyProfilePage", title: "My Profile", ref: "web/page/my/profile/MyProfilePage", layout: "main" },
   { path: "/~my/basic-setting", page: "MyBasicSettingPage", title: "Basic Settings", ref: "web/page/my/basicsetting/MyBasicSettingPage", layout: "main" },

@@ -6,12 +6,14 @@ type ProjectContextValue = {
   projectPath: string | null;
   page: string | null;
   params: Record<string, string>;
+  blobSegments: string[];
 };
 
 const ProjectContext = createContext<ProjectContextValue>({
   projectPath: null,
   page: null,
   params: {},
+  blobSegments: [],
 });
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
@@ -23,8 +25,9 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         projectPath: matched.projectPath,
         page: matched.def.page,
         params: matched.params,
+        blobSegments: matched.blobSegments ?? [],
       }
-    : { projectPath: null, page: null, params: {} };
+    : { projectPath: null, page: null, params: {}, blobSegments: [] };
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 }

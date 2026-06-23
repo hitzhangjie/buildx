@@ -1,38 +1,56 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, matchPath, useLocation } from "react-router-dom";
 import { ProjectProvider } from "../context/ProjectContext";
 import { GLOBAL_ROUTES } from "./globalRoutes";
 import { matchProjectRoute } from "./matchProjectRoute";
+import { BuildsPage } from "../pages/BuildsPage";
+import { IssuesPage } from "../pages/IssuesPage";
 import { LoginPage } from "../pages/LoginPage";
+import { LogoutPage } from "../pages/LogoutPage";
+import { NewProjectPage } from "../pages/NewProjectPage";
+import { PackagesPage } from "../pages/PackagesPage";
 import { PageNotFoundPage } from "../pages/PageNotFoundPage";
-import { PageShell } from "../pages/PageShell";
+import { ProjectBlobPage } from "../pages/ProjectBlobPage";
+import { ProjectDashboardPage } from "../pages/ProjectDashboardPage";
+import { PageRenderer } from "../pages/render/PageRenderer";
 import { ProjectsPage } from "../pages/ProjectsPage";
+import { PullRequestsPage } from "../pages/PullRequestsPage";
+import { ServerInitPage } from "../pages/ServerInitPage";
+import { SignUpPage } from "../pages/SignUpPage";
+import { WorkspacesPage } from "../pages/WorkspacesPage";
 import type { RouteDefinition } from "./types";
 
-function renderKnownPage(def: RouteDefinition) {
-  switch (def.known) {
-    case "projects":
-      return <ProjectsPage />;
-    case "login":
-      return <LoginPage />;
-    case "notFound":
-      return <PageNotFoundPage />;
-    default:
-      return (
-        <PageShell
-          title={def.title}
-          page={def.page}
-          refPath={def.ref}
-          layout={def.layout}
-        />
-      );
-  }
-}
+const GLOBAL_KNOWN: Partial<Record<NonNullable<RouteDefinition["known"]>, () => React.ReactNode>> = {
+  projects: () => <ProjectsPage />,
+  login: () => <LoginPage />,
+  logout: () => <LogoutPage />,
+  signup: () => <SignUpPage />,
+  serverInit: () => <ServerInitPage />,
+  newProject: () => <NewProjectPage />,
+  issues: () => <IssuesPage />,
+  pulls: () => <PullRequestsPage />,
+  builds: () => <BuildsPage />,
+  packages: () => <PackagesPage />,
+  workspaces: () => <WorkspacesPage />,
+  notFound: () => <PageNotFoundPage />,
+};
 
 function GlobalRouteElement({ def }: { def: RouteDefinition }) {
-  if (def.layout === "simple") {
-    return renderKnownPage(def);
+  const { pathname } = useLocation();
+  const matched = matchPath(def.path, pathname);
+  const params = (matched?.params ?? {}) as Record<string, string>;
+
+  if (def.known && GLOBAL_KNOWN[def.known]) {
+    return GLOBAL_KNOWN[def.known]!();
   }
-  return renderKnownPage(def);
+  return (
+    <PageRenderer
+      title={def.title}
+      page={def.page}
+      refPath={def.ref}
+      layout={def.layout}
+      params={params}
+    />
+  );
 }
 
 function ProjectRouteElement() {
@@ -43,12 +61,22 @@ function ProjectRouteElement() {
     return <PageNotFoundPage />;
   }
 
+  if (matched.def.known === "dashboard") {
+    return <ProjectDashboardPage />;
+  }
+
+  if (matched.def.known === "blob") {
+    return <ProjectBlobPage />;
+  }
+
   return (
-    <PageShell
+    <PageRenderer
       title={matched.def.title}
       page={matched.def.page}
       refPath={matched.def.ref}
+      layout="main"
       projectPath={matched.projectPath}
+      params={matched.params}
     />
   );
 }
@@ -65,11 +93,7 @@ export function AppRouter() {
       <Routes>
         <Route path="/" element={<Navigate to="/~projects" replace />} />
         {GLOBAL_ROUTES.map((def) => (
-          <Route
-            key={def.path}
-            path={def.path}
-            element={<GlobalRouteElement def={def} />}
-          />
+          <Route key={def.path} path={def.path} element={<GlobalRouteElement def={def} />} />
         ))}
         <Route path="/projects/*" element={<LegacyProjectRedirect />} />
         <Route path="/*" element={<ProjectRouteElement />} />

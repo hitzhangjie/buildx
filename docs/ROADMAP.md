@@ -73,9 +73,10 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 - [x] Embed UI into `buildx-server` binary via `go:embed` (single-process deploy)
 - [x] OneDev visual asset sync (`sync-onedev-assets`)
 - [x] Full page migration task list — [buildx-web-migration.md](buildx-web-migration.md) (**223 pages, UI-first**)
-- [x] Wave 0 infrastructure (router, mocks, shared components) — **partial**: router registry, API/mock layer, auth/project context, 404/login
-- [ ] Wave 0 remainder (shared onedev components, WebSocket skeleton, Playwright)
-- [ ] All pages visually aligned with OneDev (parallel waves W1–W12) — **started** W1 login + project list
+- [x] Wave 0 infrastructure — router, layouts, mocks, PageRenderer, Playwright smoke
+- [x] All 223 pages routable (UI-first): specialized pages + template renderer
+- [ ] Per-page visual parity polish with OneDev screenshots (post UI-first)
+- [ ] Live API wiring (see buildx-server-api-migration.md)
 - [ ] buildx-server `/~api` backfill — [buildx-server-api-migration.md](buildx-server-api-migration.md)
 
 ---

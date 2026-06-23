@@ -37,6 +37,17 @@ export function matchProjectRoute(pathname: string): MatchedProjectRoute | null 
     return null;
   }
 
+  if (suffix === "/~files" || suffix.startsWith("/~files/")) {
+    const blobDef = compiled.find((entry) => entry.def.suffix === "/~files")?.def;
+    if (blobDef) {
+      const blobSegments =
+        suffix === "/~files"
+          ? []
+          : suffix.slice("/~files/".length).split("/").filter(Boolean);
+      return { projectPath, def: blobDef, params: {}, blobSegments };
+    }
+  }
+
   for (const { def, regex } of compiled) {
     if (def.suffix !== suffix) {
       if (regex && regex.test(suffix)) {

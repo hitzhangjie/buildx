@@ -38,3 +38,20 @@ export async function login(username: string, password: string): Promise<User> {
 export function logout(): void {
   clearStoredAuth();
 }
+
+export type SignUpRequest = {
+  name: string;
+  fullName: string;
+  email: string;
+  password: string;
+};
+
+export async function signUp(req: SignUpRequest): Promise<void> {
+  if (USE_MOCK) {
+    return;
+  }
+  await apiFetch("/~api/users", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}

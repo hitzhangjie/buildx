@@ -3,7 +3,18 @@ export type LayoutKind = "main" | "simple";
 export type KnownPage =
   | "projects"
   | "login"
+  | "logout"
+  | "signup"
+  | "serverInit"
+  | "newProject"
+  | "issues"
+  | "pulls"
+  | "builds"
+  | "packages"
+  | "workspaces"
   | "notFound";
+
+export type KnownProjectPage = "dashboard" | "blob";
 
 export type RouteDefinition = {
   path: string;
@@ -19,10 +30,12 @@ export type ProjectRouteDefinition = {
   page: string;
   title: string;
   ref: string;
+  known?: KnownProjectPage;
 };
 
 export type MatchedProjectRoute = {
   projectPath: string;
   def: ProjectRouteDefinition;
   params: Record<string, string>;
+  blobSegments?: string[];
 };

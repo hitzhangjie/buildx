@@ -8,6 +8,30 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **buildx-web UI-first migration complete** — all 223 OneDev routes render without white screen:
+  - `PageRenderer` + `resolvePageTemplate`: list/form/detail/setting/log/board/stats templates
+  - Global + project routes wired through unified renderer (specialized pages for login, blob, global lists)
+  - `api/stub.ts`, `useChangeObserver` skeleton, `loadingIndicator` util
+  - Playwright smoke tests (`e2e/smoke.spec.ts`)
+  - `components/onedev/` basic Button/Card
+
+- **buildx-web Wave 2 (batch 1)** — project layout and file browser:
+  - `ProjectLayout` with project sidebar menu and breadcrumb topbar
+  - `ProjectBlobPage` (`/{project}/~files/...`) — folder table, file view, mock repo tree
+  - Blob route matching for nested paths; `src/api/blob.ts` stub endpoint
+
+- **buildx-web Wave 1 (batch 3) + Wave 2 start** — signup, new project, server init, project dashboard:
+  - `SignUpPage` (`/~signup`) with POST `/~api/users` (bootstrap when no users)
+  - `NewProjectPage` (`/~projects/new`) with POST `/~api/projects` and feature toggles
+  - `ServerInitPage` (`/~init`) administrator setup wizard stub
+  - `ProjectDashboardPage` (`/{project}`) redirects to `~files` like OneDev
+
+- **buildx-web Wave 1 (batch 2)** — global resource list pages and logout:
+  - Shared `SideMainPage`, `ResourceListPanel`, `SavedQueriesSide` components
+  - `IssuesPage`, `PullRequestsPage`, `BuildsPage`, `PackagesPage`, `WorkspacesPage` with mock fixtures (`VITE_USE_MOCK`) and stub API modules
+  - `LogoutPage` (`/~logout`) with session flash feedback
+  - `ProjectsPage` refactored to shared side-main layout
+
 - **buildx-web Wave 0 + Wave 1 (batch 1)** — UI migration infrastructure and first pages:
   - React Router registry for all global routes + project route suffix matching (`src/routes/`)
   - `PageShell` placeholder for unimplemented pages; `ProjectContext` for `/{project}` paths

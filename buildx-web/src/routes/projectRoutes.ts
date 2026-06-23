@@ -2,9 +2,9 @@ import type { ProjectRouteDefinition } from "./types";
 
 /** Suffix after project path (`/{project}` or `/{project}/~...`). Longest match wins. */
 export const PROJECT_ROUTE_SUFFIXES: ProjectRouteDefinition[] = [
-  { suffix: "", page: "ProjectDashboardPage", title: "Dashboard", ref: "web/page/project/dashboard/ProjectDashboardPage" },
+  { suffix: "", page: "ProjectDashboardPage", title: "Dashboard", ref: "web/page/project/dashboard/ProjectDashboardPage", known: "dashboard" },
 
-  { suffix: "/~files", page: "ProjectBlobPage", title: "Files", ref: "web/page/project/blob/ProjectBlobPage" },
+  { suffix: "/~files", page: "ProjectBlobPage", title: "Files", ref: "web/page/project/blob/ProjectBlobPage", known: "blob" },
   { suffix: "/~commits", page: "ProjectCommitsPage", title: "Commits", ref: "web/page/project/commits/ProjectCommitsPage" },
   { suffix: "/~commits/:commit", page: "CommitDetailPage", title: "Commit", ref: "web/page/project/commits/CommitDetailPage" },
   { suffix: "/~compare", page: "RevisionComparePage", title: "Compare", ref: "web/page/project/compare/RevisionComparePage" },
