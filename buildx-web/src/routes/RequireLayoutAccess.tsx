@@ -26,5 +26,5 @@ export function RequireLayoutAccess({ children }: RequireLayoutAccessProps) {
     return <Navigate to="/~login" state={{ from }} replace />;
   }
 
-  return children;
+  return <>{children}</>;
 }

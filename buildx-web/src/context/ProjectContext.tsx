@@ -35,3 +35,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
 export function useProjectContext(): ProjectContextValue {
   return useContext(ProjectContext);
 }
+
+/** Convenience hook for project pages — asserts projectPath is defined. */
+export function useProject() {
+  const ctx = useProjectContext();
+  return {
+    projectPath: ctx.projectPath ?? "",
+    page: ctx.page,
+    params: ctx.params,
+    blobSegments: ctx.blobSegments,
+  };
+}

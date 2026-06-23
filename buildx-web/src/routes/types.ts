@@ -1,6 +1,7 @@
 export type LayoutKind = "main" | "simple";
 
 export type KnownPage =
+  // Wave 0/1 core
   | "projects"
   | "login"
   | "logout"
@@ -12,9 +13,68 @@ export type KnownPage =
   | "builds"
   | "packages"
   | "workspaces"
-  | "notFound";
+  | "notFound"
+  // Wave 1 security
+  | "passwordReset"
+  | "emailVerification"
+  | "createUserFromInvitation"
+  | "ssoProcess"
+  | "oauthCallback"
+  // Wave 8 my account
+  | "myProfile"
+  | "myBasicSetting"
+  | "myPassword"
+  | "myAccessTokens"
+  | "mySshKeys"
+  | "myAvatar"
+  // Wave 10 admin
+  | "userList"
+  | "newUser"
+  | "roleList"
+  | "groupList"
+  | "systemSetting"
+  | "securitySetting"
+  | "mailService"
+  | "branding"
+  | "agentList"
+  | "issueFieldList"
+  | "issueStateList"
+  // Wave 11 help
+  | "incompatibilities"
+  | "resourceList"
+  | "resourceDetail";
 
-export type KnownProjectPage = "dashboard" | "blob";
+export type KnownProjectPage =
+  // Wave 0
+  | "dashboard"
+  | "blob"
+  // Wave 2 code
+  | "commits"
+  | "commitDetail"
+  | "compare"
+  | "branches"
+  | "tags"
+  | "codeComments"
+  | "children"
+  // Wave 3 issues
+  | "issueList"
+  | "newIssue"
+  | "issueDetail"
+  | "boards"
+  | "iterationList"
+  | "newIteration"
+  // Wave 4 PRs
+  | "prList"
+  | "newPullRequest"
+  | "prActivities"
+  | "prChanges"
+  | "prCodeComments"
+  // Wave 5 builds
+  | "buildList"
+  | "buildDashboard"
+  | "buildPipeline"
+  | "buildLog"
+  | "buildChanges";
 
 export type RouteDefinition = {
   path: string;
