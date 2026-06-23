@@ -8,6 +8,14 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **buildx-web Wave 0 + Wave 1 (batch 1)** — UI migration infrastructure and first pages:
+  - React Router registry for all global routes + project route suffix matching (`src/routes/`)
+  - `PageShell` placeholder for unimplemented pages; `ProjectContext` for `/{project}` paths
+  - API client (`src/api/`) with Basic auth; mock fixtures via `VITE_USE_MOCK`
+  - `LoginPage` (`/~login`), `PageNotFoundPage`, improved `ProjectListPage` (`/~projects`)
+  - Layout shell: global sidebar nav, auth state, session-feedback placeholders
+  - Sync OneDev `simple.css` for SimplePage layout
+
 - **buildx-server Phase 1 (batch 1)** — core platform logic ported from OneDev:
   - SQLite persistence with embedded migrations (`o_User`, `o_Project`, `o_Role`, `o_AccessToken`, …)
   - Bootstrap/seed data (system users, Project Owner role, env-based admin via `BUILDX_INITIAL_*`)

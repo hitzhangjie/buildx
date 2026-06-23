@@ -1,5 +1,7 @@
 .PHONY: install build clean dev sync-onedev-assets
 
+BUILD_MODE ?= DEBUG
+
 install:
 	npm ci
 
@@ -7,7 +9,7 @@ sync-onedev-assets:
 	bash scripts/sync-onedev-assets.sh
 
 build: sync-onedev-assets install
-	npm run build
+	BUILD_MODE=$(BUILD_MODE) npm run build
 
 dev: sync-onedev-assets
 	npm run dev

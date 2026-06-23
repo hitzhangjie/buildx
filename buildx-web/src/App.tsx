@@ -1,5 +1,13 @@
-import { ProjectsPage } from "./pages/ProjectsPage";
+import { BrowserRouter } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import { AppRouter } from "./routes/AppRouter";
 
 export default function App() {
-  return <ProjectsPage />;
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRouter />
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }

@@ -44,18 +44,18 @@ OneDev 页面总数：**223** 个 `*Page.java`（含抽象模板基类若干）
 
 | ID | 任务 | 状态 |
 |----|------|------|
-| W0-1 | React Router：注册全部 URL（可先渲染 `PageShell` 占位） | [ ] |
-| W0-2 | `LayoutPage` 壳：sidebar / topbar / dark-mode / 响应式 | [~] 进行中 |
+| W0-1 | React Router：注册全部 URL（可先渲染 `PageShell` 占位） | [x] |
+| W0-2 | `LayoutPage` 壳：sidebar / topbar / dark-mode / 响应式 | [~] 侧边栏全局导航 + 登录态 |
 | W0-3 | `sync-onedev-assets`：CSS + 图标 + logo | [x] |
 | W0-4 | 共享组件库：`src/components/onedev/`（Button, Card, Table, Alert, Dropdown, …） | [ ] |
-| W0-5 | API 层：`src/api/client.ts` + 按 Resource 分模块 | [ ] |
-| W0-6 | Mock 层：`src/mocks/fixtures/` + `USE_MOCK` 开关 | [ ] |
-| W0-7 | 项目上下文：`ProjectContext`（解析 `/{project}` 路径） | [ ] |
-| W0-8 | 认证上下文：session / Basic / Bearer（登录前 stub） | [ ] |
-| W0-9 | 全局反馈：`session-feedback`、`ajax-loading-indicator` | [ ] |
+| W0-5 | API 层：`src/api/client.ts` + 按 Resource 分模块 | [~] client + info/projects/users |
+| W0-6 | Mock 层：`src/mocks/fixtures/` + `USE_MOCK` 开关 | [x] `VITE_USE_MOCK` |
+| W0-7 | 项目上下文：`ProjectContext`（解析 `/{project}` 路径） | [x] |
+| W0-8 | 认证上下文：session / Basic / Bearer（登录前 stub） | [x] Basic auth + `/~api/users/me` |
+| W0-9 | 全局反馈：`session-feedback`、`ajax-loading-indicator` | [~] DOM 占位 |
 | W0-10 | 复杂控件适配：CodeMirror、xterm、Mermaid、Pickr 等（从 OneDev asset 引入） | [ ] |
 | W0-11 | WebSocket 客户端骨架（ChangeObserver 等价，先 no-op） | [ ] |
-| W0-12 | 404/错误页：`PageNotFoundErrorPage` | [ ] |
+| W0-12 | 404/错误页：`PageNotFoundErrorPage` | [x] |
 | W0-13 | 视觉回归：Playwright 截图对比脚手架 | [ ] |
 
 ---
@@ -66,7 +66,7 @@ OneDev 页面总数：**223** 个 `*Page.java`（含抽象模板基类若干）
 
 | 路由 | OneDev 页面 | 参考路径 | API | 状态 |
 |------|-------------|----------|-----|------|
-| `/~login` | LoginPage | `web/page/security/LoginPage` | stub | [ ] |
+| `/~login` | LoginPage | `web/page/security/LoginPage` | partial | [x] Basic auth |
 | `/~logout` | LogoutPage | `web/page/security/LogoutPage` | stub | [ ] |
 | `/~signup` | SignUpPage | `web/page/security/SignUpPage` | stub | [ ] |
 | `/~reset-password/:code` | PasswordResetPage | `web/page/security/PasswordResetPage` | stub | [ ] |
@@ -85,7 +85,7 @@ OneDev 页面总数：**223** 个 `*Page.java`（含抽象模板基类若干）
 
 | 路由 | OneDev 页面 | 参考路径 | API | 状态 |
 |------|-------------|----------|-----|------|
-| `/~projects` | ProjectListPage | `web/page/project/ProjectListPage` | partial | [~] |
+| `/~projects` | ProjectListPage | `web/page/project/ProjectListPage` | partial | [~] 列表 + side-main 布局 |
 | `/~projects/new` | NewProjectPage | `web/page/project/NewProjectPage` | stub | [ ] |
 | `/~projects/import/:importer` | ProjectImportPage | `web/page/project/imports/ProjectImportPage` | stub | [ ] |
 | `/~issues` | IssueListPage | `web/page/issues/IssueListPage` | stub | [ ] |
@@ -353,7 +353,7 @@ OneDev 页面总数：**223** 个 `*Page.java`（含抽象模板基类若干）
 | `/~help/api` | ResourceListPage | [ ] |
 | `/~help/api/:resource` | ResourceDetailPage | [ ] |
 | `/~help/api/:resource/:method` | MethodDetailPage | [ ] |
-| `/~errors/404` | PageNotFoundErrorPage | [ ] |
+| `/~errors/404` | PageNotFoundErrorPage | [x] |
 | `/~test` | TestPage | [ ] 可选，开发用 |
 
 ---

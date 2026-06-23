@@ -1,6 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const isRelease = process.env.BUILD_MODE === "RELEASE";
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -15,5 +17,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    sourcemap: !isRelease,
+    minify: isRelease,
   },
 });

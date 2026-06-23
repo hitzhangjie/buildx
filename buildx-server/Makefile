@@ -3,13 +3,20 @@
 BINARY := buildx-server
 MODULE := github.com/hitzhangjie/buildx/buildx-server
 VERSION ?= dev
+BUILD_MODE ?= DEBUG
 SKIP_WEB ?=
-LDFLAGS := -s -w -X $(MODULE)/internal/version.Version=$(VERSION)
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@latest
 WEB_EMBED := internal/server/webdist
 
+VERSION_LDFLAGS := -X $(MODULE)/internal/version.Version=$(VERSION)
+ifeq ($(BUILD_MODE),RELEASE)
+LDFLAGS := -s -w $(VERSION_LDFLAGS)
+else
+LDFLAGS := $(VERSION_LDFLAGS)
+endif
+
 web:
-	$(MAKE) -C ../buildx-web build
+	$(MAKE) -C ../buildx-web build BUILD_MODE=$(BUILD_MODE)
 	bash ../buildx-web/scripts/sync-embed.sh
 
 sync-web:

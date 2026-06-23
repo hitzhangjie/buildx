@@ -3,7 +3,17 @@
 .PHONY: install-cli install-server test-cli test-server format-cli format-server
 
 VERSION ?= dev
+BUILD_MODE ?= DEBUG
 SKIP_WEB ?=
+
+# DEBUG: keep symbols, web source maps. RELEASE: stripped Go binaries, minified web.
+ifeq ($(filter $(BUILD_MODE),DEBUG RELEASE),)
+$(error BUILD_MODE must be DEBUG or RELEASE, got '$(BUILD_MODE)')
+endif
+
+export VERSION
+export BUILD_MODE
+export SKIP_WEB
 
 GOBIN := $(shell go env GOBIN)
 ifeq ($(GOBIN),)
@@ -19,17 +29,17 @@ all: build
 build: build-cli build-server
 
 build-web:
-	$(MAKE) -C buildx-web build
+	$(MAKE) -C buildx-web build BUILD_MODE=$(BUILD_MODE)
 	bash buildx-web/scripts/sync-embed.sh
 
 build-cli:
-	$(MAKE) -C buildx-cli build VERSION=$(VERSION)
+	$(MAKE) -C buildx-cli build VERSION=$(VERSION) BUILD_MODE=$(BUILD_MODE)
 
 build-server:
 ifneq ($(SKIP_WEB),1)
 	$(MAKE) build-web
 endif
-	$(MAKE) -C buildx-server build VERSION=$(VERSION) SKIP_WEB=1
+	$(MAKE) -C buildx-server build VERSION=$(VERSION) BUILD_MODE=$(BUILD_MODE) SKIP_WEB=1
 
 clean: clean-cli clean-server clean-web
 
@@ -45,13 +55,13 @@ clean-web:
 install: install-cli install-server
 
 install-cli:
-	$(MAKE) -C buildx-cli install VERSION=$(VERSION)
+	$(MAKE) -C buildx-cli install VERSION=$(VERSION) BUILD_MODE=$(BUILD_MODE)
 
 install-server:
 ifneq ($(SKIP_WEB),1)
 	$(MAKE) build-web
 endif
-	$(MAKE) -C buildx-server install VERSION=$(VERSION) SKIP_WEB=1
+	$(MAKE) -C buildx-server install VERSION=$(VERSION) BUILD_MODE=$(BUILD_MODE) SKIP_WEB=1
 
 uninstall:
 	rm -f $(addprefix $(GOBIN)/,$(INSTALL_BINARIES))

@@ -3,8 +3,15 @@
 BINARY := buildx-cli
 MODULE := github.com/hitzhangjie/buildx/buildx-cli
 VERSION ?= dev
-LDFLAGS := -s -w -X $(MODULE)/version.Version=$(VERSION)
+BUILD_MODE ?= DEBUG
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@latest
+
+VERSION_LDFLAGS := -X $(MODULE)/version.Version=$(VERSION)
+ifeq ($(BUILD_MODE),RELEASE)
+LDFLAGS := -s -w $(VERSION_LDFLAGS)
+else
+LDFLAGS := $(VERSION_LDFLAGS)
+endif
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/buildx-cli

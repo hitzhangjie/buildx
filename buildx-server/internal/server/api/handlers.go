@@ -29,6 +29,9 @@ func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, err)
 		return
 	}
+	if projects == nil {
+		projects = []*project.Project{}
+	}
 	writeJSON(w, http.StatusOK, projects)
 }
 
@@ -149,6 +152,9 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	views := make([]userView, 0, len(users))
 	for _, u := range users {
 		views = append(views, userView{ID: u.ID, Name: u.Name, FullName: u.FullName})
+	}
+	if views == nil {
+		views = []userView{}
 	}
 	writeJSON(w, http.StatusOK, views)
 }

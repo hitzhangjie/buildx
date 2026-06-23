@@ -16,6 +16,7 @@ cp "$ONEDEV_WEB/asset/bootstrap/css/bootstrap.min.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/asset/bootstrap/css/bootstrap-custom.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/base/base.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/layout/layout.css" "$PUBLIC/onedev/css/"
+cp "$ONEDEV_WEB/page/simple/simple.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/asset/icon/"*.svg "$PUBLIC/~icon/"
 
 if [[ -f "$ROOT/references/onedev/server-product/system/site/assets/logo.png" ]]; then
