@@ -129,6 +129,128 @@ Cobra commands organized by group: `project` (project/get/issue/pr/build/cr), `m
 - **API layer**: `src/api/` modules per resource domain; `VITE_USE_MOCK` for development without running server
 - **URL scheme**: Clean OneDev-style paths (`/~projects`, `/~login`, `/{project}/~files`)
 
+## Testing (buildx-server)
+
+**Coverage target: 85%+ across all packages.** Testing is not optional — it is part of the port. Every feature ported from OneDev must include tests that verify correctness in Go, not just functional equivalence by manual inspection.
+
+### Motivation
+
+The OneDev→Go port replicates complex URL routing, git protocol handling, and REST API contracts. Subtle bugs (e.g., unescaped `:` in URLs causing chi route mismatch, incorrect ref resolution in git operations) are hard to spot by code review alone but trivial to catch with tests. The cost of debugging these in production or during integration testing far exceeds the cost of writing tests alongside the code.
+
+### Testing layers
+
+| Layer | Scope | Tool | Speed | Examples |
+|-------|-------|------|-------|----------|
+| **Unit** | Single function/method | `go test` | <1ms | `normalizeListenAddr`, path parsing, config loading |
+| **Handler** | HTTP handler with mocked dependencies | `httptest` | <10ms | `ProjectsHandler.Get` with in-memory SQLite, `BlobHandler` URL decoding |
+| **Integration** | Full server via `servertest` | `servertest.Start` + `net/http` | ~100ms | git push round-trip, project CRUD + auth |
+| **E2E** | Server + browser | Playwright | seconds | `buildx-web` page tests |
+
+### When to write tests
+
+- **During porting**: Every new public function, handler, or package must have tests **before** it is considered done. Do not port a batch of functions and test later — interleave implementation and testing.
+- **Bug fix**: Reproduce the bug with a failing test first, then fix. The test stays as a regression guard.
+- **Existing untested code**: Add tests incrementally. Prioritize: API handlers > git operations > security/auth > persistence > config.
+
+### Test patterns by package type
+
+#### Config / pure functions (unit tests)
+```go
+func TestNormalizeListenAddr(t *testing.T) {
+    tests := []struct {
+        in, want string
+    }{
+        {":9910", ":9910"},
+        {"9910", ":9910"},
+    }
+    for _, tc := range tests {
+        got, err := normalizeListenAddr(tc.in)
+        if err != nil { t.Fatal(err) }
+        if got != tc.want { t.Fatalf("%q: got %q, want %q", tc.in, got, tc.want) }
+    }
+}
+```
+
+#### API handlers (httptest with real SQLite)
+```go
+func TestGetCommit_UrlEncodedHash(t *testing.T) {
+    fixture := servertest.Start(t, servertest.Options{
+        InitialUser: "admin", InitialPassword: "pass", InitialEmail: "a@b.com",
+    })
+    // push a commit via git, then GET /~api/repositories/1/commits/{hash}
+    // verify chi route matches even with :// or other URL-sensitive chars
+}
+```
+
+**Critical**: Always test handlers through `chi` routing, not by calling handler methods directly. URL escaping bugs (`:`, `/`, `%`) only surface when chi parses the URL. Use `httptest.NewServer(srv.Handler())` or `servertest.Start`.
+
+#### Git operations (integration with real git repos)
+```go
+func TestBlobListingSpecialChars(t *testing.T) {
+    dir := t.TempDir()
+    gitDir := filepath.Join(dir, "git")
+    git.InitBare(gitDir)
+    // create commits with paths containing spaces, unicode, etc.
+    repo, _ := git.Open(gitDir)
+    blob, err := repo.Blob(context.Background(), "main", "path/with:colons/file.txt")
+    // assert no error
+}
+```
+
+#### Security / auth (unit with real SQLite)
+```go
+func TestAuthenticate_InvalidPassword(t *testing.T) {
+    sec := security.NewDBStore(setupDB(t))
+    sec.CreateUser(ctx, "alice", "Alice", "a@b.com", "correct")
+    _, err := sec.Authenticate(ctx, "alice", "wrong")
+    if !errors.Is(err, security.ErrInvalidCredentials) { t.Fatal(...) }
+}
+```
+
+### Areas requiring extra attention
+
+These are the categories of bugs most likely to slip through manual testing:
+
+1. **URL routing edge cases** — chi wildcard matching, URL-encoded characters in path segments (`:`, `/`, `%`, `+`, spaces). Always test with `servertest.Start` + real HTTP requests, never bypass the router.
+2. **Git ref resolution** — branch names with slashes (`feature/foo`), tag vs. branch disambiguation, empty repos, repos with no default branch.
+3. **Auth edge cases** — expired tokens, disabled users, root user bypass, project access for nested projects.
+4. **JSON serialization** — nil slices must serialize as `[]` not `null`, int64 IDs must not lose precision.
+5. **Error paths** — not just the happy path. Test: missing resources, invalid input, database failures, git repo corruption.
+
+### Running tests with coverage
+
+```bash
+cd buildx-server
+
+# All tests with coverage overview
+go test ./... -cover -count=1
+
+# Detailed coverage per package (HTML)
+go test ./internal/server/api/ -coverprofile=cover.out -count=1
+go tool cover -html=cover.out
+
+# Check coverage threshold (add to CI/lint)
+go test ./... -cover -count=1 2>&1 | grep -E 'coverage:|no test'
+
+# Race detector
+go test ./... -race -count=1
+```
+
+### Test file conventions
+
+- Test files live alongside source: `foo.go` → `foo_test.go`
+- Package naming: `package foo` for white-box tests, `package foo_test` for black-box tests (prefer black-box for public API)
+- Use `testing.T.TempDir()` — never hardcode `/tmp` paths
+- Use `testing.T.Setenv()` — never modify `os.Environ` directly
+- Helper functions must call `t.Helper()`
+- No shared mutable state between tests; each test creates its own SQLite or git directory
+
+### Coverage tools
+
+- **`go test -cover`** — built-in, always available
+- **`go test -coverprofile` + `go tool cover -html`** — per-file visual coverage
+- **`staticcheck`** — already available (`/home/zhangjie/go/bin/staticcheck`), catches unused code and common mistakes that testing would also expose
+
 ## Package naming discipline
 
 When implementing Go packages that correspond to OneDev Java packages:

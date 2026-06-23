@@ -41,7 +41,18 @@ dev:
 	go run . serve --dev
 
 test:
-	go test ./...
+	go test ./... -count=1
+
+cover:
+	go test ./... -cover -coverprofile=cover.out -count=1
+	go tool cover -func=cover.out | tail -1
+
+cover-html:
+	go test ./... -cover -coverprofile=cover.out -count=1
+	go tool cover -html=cover.out
+
+race:
+	go test ./... -race -count=1
 
 format:
 	$(GOIMPORTS) -local $(MODULE) -w .
