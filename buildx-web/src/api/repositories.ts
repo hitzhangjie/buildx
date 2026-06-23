@@ -36,3 +36,43 @@ export async function fetchBranch(projectId: number, branch: string): Promise<Br
     `/~api/repositories/${projectId}/branches/${encodeURIComponent(branch)}`,
   );
 }
+
+export type CommitPerson = {
+  name: string;
+  emailAddress?: string;
+  when: number;
+  tzOffset?: number;
+};
+
+export type RepositoryCommit = {
+  hash: string;
+  subject?: string;
+  body?: string;
+  author?: CommitPerson;
+  committer?: CommitPerson;
+  parentHashes?: string[];
+};
+
+export async function fetchCommits(
+  projectId: number,
+  params?: { count?: number; revision?: string },
+): Promise<RepositoryCommit[]> {
+  const query = new URLSearchParams();
+  query.set("count", String(params?.count ?? 100));
+  if (params?.revision) {
+    query.set("revision", params.revision);
+  }
+  const data = await apiFetch<RepositoryCommit[] | null>(
+    `/~api/repositories/${projectId}/commits?${query}`,
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchCommit(
+  projectId: number,
+  commitHash: string,
+): Promise<RepositoryCommit> {
+  return apiFetch<RepositoryCommit>(
+    `/~api/repositories/${projectId}/commits/${encodeURIComponent(commitHash)}`,
+  );
+}

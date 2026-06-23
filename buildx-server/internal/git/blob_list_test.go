@@ -135,3 +135,54 @@ func TestListBranchNamesAfterPush(t *testing.T) {
 		t.Fatalf("detail=%+v", detail)
 	}
 }
+
+func TestListCommitsAfterPush(t *testing.T) {
+	dir := t.TempDir()
+	work := filepath.Join(dir, "work")
+	gitDir := filepath.Join(dir, "git")
+	if err := os.MkdirAll(work, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(gitDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitBare(gitDir); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	run("git", "-C", work, "init")
+	run("git", "-C", work, "config", "user.email", "t@t.com")
+	run("git", "-C", work, "config", "user.name", "t")
+	if err := os.WriteFile(filepath.Join(work, "README.md"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("git", "-C", work, "add", ".")
+	run("git", "-C", work, "commit", "-m", "init")
+	run("git", "-C", work, "branch", "-M", "main")
+	run("git", "-C", work, "remote", "add", "origin", gitDir)
+	run("git", "-C", work, "push", "-u", "origin", "main")
+
+	repo, err := Open(gitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commits, err := repo.ListCommits("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("commits=%d want 1", len(commits))
+	}
+	if commits[0].Subject != "init" {
+		t.Fatalf("subject=%q want init", commits[0].Subject)
+	}
+	if commits[0].Author == nil || commits[0].Author.Name != "t" {
+		t.Fatalf("author=%+v", commits[0].Author)
+	}
+}

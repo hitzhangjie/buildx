@@ -12,6 +12,7 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 // ---------------------------------------------------------------------------
@@ -141,6 +142,99 @@ func (r *Repository) BranchDetail(branchName string) (*BranchDetail, error) {
 		CommitHash: commit.Hash.String(),
 		Updated:    humanizeTime(commit.Committer.When),
 	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Commits — log walk for REST commits list
+// ---------------------------------------------------------------------------
+
+// ListCommits returns up to count commits reachable from revision (default branch when empty).
+func (r *Repository) ListCommits(revision string, count int) ([]Commit, error) {
+	if !r.HasRefs() {
+		return []Commit{}, nil
+	}
+	if revision == "" {
+		revision = r.DefaultRevision()
+	}
+	if count <= 0 {
+		count = 100
+	}
+
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	if err != nil {
+		return nil, err
+	}
+
+	iter, err := r.inner.Log(&gogit.LogOptions{From: *hash})
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
+
+	commits := make([]Commit, 0, count)
+	for len(commits) < count {
+		obj, err := iter.Next()
+		if err != nil {
+			break
+		}
+		commits = append(commits, commitFromObject(obj))
+	}
+	return commits, nil
+}
+
+// GetCommit looks up a single commit by full or abbreviated hash.
+func (r *Repository) GetCommit(commitHash string) (*Commit, error) {
+	if !r.HasRefs() {
+		return nil, nil
+	}
+	hash := plumbing.NewHash(commitHash)
+	obj, err := r.inner.CommitObject(hash)
+	if err != nil {
+		// Try resolving abbreviated hash via rev-parse semantics.
+		resolved, resolveErr := r.inner.ResolveRevision(plumbing.Revision(commitHash))
+		if resolveErr != nil {
+			return nil, err
+		}
+		obj, err = r.inner.CommitObject(*resolved)
+		if err != nil {
+			return nil, err
+		}
+	}
+	c := commitFromObject(obj)
+	return &c, nil
+}
+
+func commitFromObject(obj *object.Commit) Commit {
+	subject, body := splitCommitMessage(obj.Message)
+	parents := make([]string, 0, len(obj.ParentHashes))
+	for _, p := range obj.ParentHashes {
+		parents = append(parents, p.String())
+	}
+	return Commit{
+		Hash:         obj.Hash.String(),
+		Subject:      subject,
+		Body:         body,
+		Author:       personFromSignature(obj.Author),
+		Committer:    personFromSignature(obj.Committer),
+		ParentHashes: parents,
+	}
+}
+
+func splitCommitMessage(message string) (subject, body string) {
+	if idx := strings.Index(message, "\n"); idx >= 0 {
+		return message[:idx], strings.TrimPrefix(message[idx+1:], "\n")
+	}
+	return message, ""
+}
+
+func personFromSignature(sig object.Signature) *Person {
+	_, offsetSec := sig.When.Zone()
+	return &Person{
+		Name:         sig.Name,
+		EmailAddress: sig.Email,
+		When:         sig.When.UnixMilli(),
+		TzOffset:     offsetSec / 60,
+	}
 }
 
 // ---------------------------------------------------------------------------

@@ -47,6 +47,58 @@ func (h *RepositoryHandler) GetDefaultBranch(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, repo.DefaultRevision())
 }
 
+func (h *RepositoryHandler) ListCommits(w http.ResponseWriter, r *http.Request) {
+	repo, ok := h.openRepo(w, r)
+	if !ok {
+		return
+	}
+
+	count := 100
+	if countStr := r.URL.Query().Get("count"); countStr != "" {
+		parsed, err := strconv.Atoi(countStr)
+		if err != nil || parsed <= 0 {
+			http.Error(w, "invalid count", http.StatusBadRequest)
+			return
+		}
+		count = parsed
+	}
+
+	revision := r.URL.Query().Get("revision")
+	commits, err := repo.ListCommits(revision, count)
+	if err != nil {
+		writeInternalError(w, err)
+		return
+	}
+	if commits == nil {
+		commits = []git.Commit{}
+	}
+	writeJSON(w, http.StatusOK, commits)
+}
+
+func (h *RepositoryHandler) GetCommit(w http.ResponseWriter, r *http.Request) {
+	repo, ok := h.openRepo(w, r)
+	if !ok {
+		return
+	}
+
+	commitHash := chi.URLParam(r, "commitHash")
+	if commitHash == "" {
+		http.Error(w, "commit hash required", http.StatusBadRequest)
+		return
+	}
+
+	commit, err := repo.GetCommit(commitHash)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if commit == nil {
+		http.NotFound(w, r)
+		return
+	}
+	writeJSON(w, http.StatusOK, commit)
+}
+
 func (h *RepositoryHandler) GetBranch(w http.ResponseWriter, r *http.Request) {
 	repo, ok := h.openRepo(w, r)
 	if !ok {

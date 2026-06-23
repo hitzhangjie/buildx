@@ -29,6 +29,24 @@ type CommitInfo struct {
 	When    string `json:"when"`
 }
 
+// Person matches OneDev REST commit author/committer shape.
+type Person struct {
+	Name         string `json:"name"`
+	EmailAddress string `json:"emailAddress"`
+	When         int64  `json:"when"`
+	TzOffset     int    `json:"tzOffset"`
+}
+
+// Commit matches OneDev REST commit object (subset used by commits list/detail).
+type Commit struct {
+	Hash         string   `json:"hash"`
+	Subject      string   `json:"subject,omitempty"`
+	Body         string   `json:"body,omitempty"`
+	Author       *Person  `json:"author,omitempty"`
+	Committer    *Person  `json:"committer,omitempty"`
+	ParentHashes []string `json:"parentHashes,omitempty"`
+}
+
 // BlobContent is the result for a blob request — either a directory listing
 // or file content, matching the frontend's BlobContent shape.
 type BlobContent struct {

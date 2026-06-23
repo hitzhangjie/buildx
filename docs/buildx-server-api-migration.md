@@ -31,7 +31,7 @@
 | JobRunResource | `/job-runs` | — | |
 | TriggerJobResource | `/trigger-job` | — | |
 | CodeCommentResource | `/code-comments` | — | |
-| RepositoryResource | `/repositories` | partial | branches list/detail, default-branch |
+| RepositoryResource | `/repositories` | partial | branches list/detail, default-branch, commits list/detail |
 | PackResource | `/packs` | — | |
 | PackBlobResource | `/pack-blobs` | — | |
 | ArtifactResource | `/artifacts` | — | |

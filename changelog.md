@@ -8,6 +8,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **Project Commits API and page** — `GET /~api/repositories/{projectId}/commits` and `commits/{commitHash}` (OneDev `RepositoryResource` parity); `ProjectCommitsPage` loads live commit list with subject, author, and relative time
 - **Project Branches API and page** — `GET /~api/repositories/{projectId}/branches`, `default-branch`, and `branches/{branch}` (OneDev `RepositoryResource` parity); `ProjectBranchesPage` loads live branch list with commit hash and updated time
 
 ### Fixed
