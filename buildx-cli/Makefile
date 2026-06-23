@@ -14,7 +14,7 @@ LDFLAGS := $(VERSION_LDFLAGS)
 endif
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/buildx-cli
+	go build -mod=vendor -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/buildx-cli
 
 install:
 	go install -ldflags "$(LDFLAGS)" ./cmd/buildx-cli

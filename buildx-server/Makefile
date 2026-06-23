@@ -26,7 +26,7 @@ build:
 ifneq ($(SKIP_WEB),1)
 	$(MAKE) web
 endif
-	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) .
+	go build -mod=vendor -ldflags "$(LDFLAGS)" -o bin/$(BINARY) .
 
 install:
 ifneq ($(SKIP_WEB),1)
