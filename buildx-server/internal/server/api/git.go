@@ -22,8 +22,8 @@ import (
 //
 // Maps to OneDev: io.onedev.server.git.GitFilter
 type GitHandler struct {
-	Projects *project.DBStore
-	Security *security.DBStore
+	Projects projectService
+	Security securityService
 }
 
 // Middleware intercepts git requests and delegates others to next.

@@ -13,8 +13,8 @@ import (
 
 // RepositoryHandler serves OneDev-compatible /~api/repositories endpoints.
 type RepositoryHandler struct {
-	Projects *project.DBStore
-	Security *security.DBStore
+	Projects projectService
+	Security securityService
 }
 
 func (h *RepositoryHandler) ListBranches(w http.ResponseWriter, r *http.Request) {

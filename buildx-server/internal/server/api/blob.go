@@ -7,12 +7,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
-	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
 )
 
 // BlobHandler serves file and directory browsing from project git repos.
 type BlobHandler struct {
-	Projects *project.DBStore
+	Projects projectService
 }
 
 // ServeHTTP handles wildcard requests under /~api/projects/* and dispatches

@@ -11,8 +11,8 @@ import (
 
 // ProjectsHandler serves OneDev-compatible /~api/projects endpoints.
 type ProjectsHandler struct {
-	Projects *project.DBStore
-	Security *security.DBStore
+	Projects projectService
+	Security securityService
 }
 
 func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +154,7 @@ func (h *ProjectsHandler) authenticate(r *http.Request) (*security.User, error) 
 
 // UsersHandler serves /~api/users endpoints.
 type UsersHandler struct {
-	Security *security.DBStore
+	Security securityService
 }
 
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
