@@ -1,0 +1,270 @@
+/* ── Commit history graph + list (inspired by git-vis & OneDev) ── */
+
+.historyGraph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── View toggle bar ── */
+
+.viewBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0 0.75rem;
+  gap: 0.75rem;
+}
+
+.viewToggle {
+  display: inline-flex;
+  border: 1px solid var(--light-gray, #d0d7de);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+:global(.dark-mode) .viewToggle {
+  border-color: var(--dark-mode-lighter-dark, #444);
+  background: var(--dark-mode-dark, #1e1e1e);
+}
+
+.viewToggleBtn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  border: none;
+  background: transparent;
+  color: var(--gray, #57606a);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.viewToggleBtn:hover {
+  background: var(--light, #f3f4f6);
+  color: var(--dark, #24292e);
+}
+
+:global(.dark-mode) .viewToggleBtn:hover {
+  background: var(--dark-mode-light-dark, #333);
+  color: var(--dark-mode-color, #ddd);
+}
+
+.viewToggleBtnActive {
+  background: var(--primary, #0969da);
+  color: #fff;
+}
+
+.viewToggleBtnActive:hover {
+  background: var(--primary, #0969da);
+  color: #fff;
+}
+
+.viewToggleBtn + .viewToggleBtn {
+  border-left: 1px solid var(--light-gray, #d0d7de);
+}
+
+.viewToggleBtnActive + .viewToggleBtn,
+.viewToggleBtn + .viewToggleBtnActive {
+  border-left-color: var(--primary, #0969da);
+}
+
+/* ── Graph + rows container ── */
+
+.graphBody {
+  position: relative;
+}
+
+/* ── SVG graph lane (absolutely positioned like OneDev) ── */
+
+.graphLane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.graphSvg {
+  display: block;
+}
+
+.graphSvg line,
+.graphSvg path {
+  pointer-events: stroke;
+}
+
+.graphSvg circle {
+  pointer-events: all;
+}
+
+/* ── Commit rows list ── */
+
+.commitList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+/* ── Date separator ── */
+
+.dateRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--light-gray, #e1e4e8);
+  padding: 0 0 0.5rem 0;
+  margin: 1.8rem 0 0.5rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--dark, #24292e);
+}
+
+:global(.dark-mode) .dateRow {
+  border-bottom-color: var(--dark-mode-lighter-dark, #444);
+  color: var(--dark-mode-color, #ddd);
+}
+
+.dateRow:first-child {
+  margin-top: 0;
+}
+
+.dateIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+/* ── Single commit row ── */
+
+.commitRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.42rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.commitRow:hover,
+.commitRowHover {
+  background: var(--light, #f6f8fa);
+}
+
+:global(.dark-mode) .commitRow:hover,
+:global(.dark-mode) .commitRowHover {
+  background: var(--dark-mode-light-dark, #333);
+}
+
+/* ── Commit info ── */
+
+.commitInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.commitPrimary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.commitSubject {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--dark, #24292e);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:global(.dark-mode) .commitSubject {
+  color: var(--dark-mode-color, #ddd);
+}
+
+.commitHash {
+  flex-shrink: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--orange, #e36209);
+  background: var(--light, #f6f8fa);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+:global(.dark-mode) .commitHash {
+  background: var(--dark-mode-light-dark, #333);
+  color: #f0883e;
+}
+
+.commitMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--gray, #586069);
+}
+
+:global(.dark-mode) .commitMeta {
+  color: var(--dark-mode-gray, #999);
+}
+
+.commitAuthor {
+  flex-shrink: 0;
+}
+
+.commitWhen {
+  flex-shrink: 0;
+}
+
+/* ── Branch labels ── */
+
+.branchLabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+}
+
+.branchTag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  background: #ddf4ff;
+  color: #0969da;
+  border: 1px solid #54aeff66;
+  white-space: nowrap;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:global(.dark-mode) .branchTag {
+  background: #0c2d6b;
+  color: #58a6ff;
+  border-color: #1f509e;
+}
+
+/* ── Compact list view (no graph) ── */
+
+.listView .commitRow {
+  /* no extra indent needed */
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 991px) {
+  .graphLane {
+    display: none !important;
+  }
+}
