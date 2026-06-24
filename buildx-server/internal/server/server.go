@@ -52,7 +52,7 @@ func (s *Server) routes() chi.Router {
 	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec}
 	userHandler := &api.UsersHandler{Security: sec}
 	settingsHandler := &api.SettingsHandler{}
-	blobHandler := &api.BlobHandler{Projects: projects}
+	blobHandler := &api.BlobHandler{Projects: projects, Security: sec}
 	repoHandler := &api.RepositoryHandler{Projects: projects, Security: sec}
 	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
 
@@ -87,6 +87,14 @@ func (s *Server) routes() chi.Router {
 			}
 			projectHandler.Get(w, r, id)
 		})
+		r.Delete("/projects/{projectId}", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			projectHandler.Delete(w, r, id)
+		})
 
 		r.Get("/repositories/{projectId}/branches", repoHandler.ListBranches)
 		r.Get("/repositories/{projectId}/default-branch", repoHandler.GetDefaultBranch)
@@ -98,6 +106,9 @@ func (s *Server) routes() chi.Router {
 
 		// Blob: wildcard catches project paths with optional slashes (nested projects).
 		r.Get("/projects/*", blobHandler.ServeHTTP)
+
+		// File create/update: POST with commit message and base64 content.
+		r.Post("/projects/*", blobHandler.FilesPost)
 	})
 
 	// Static web UI — embedded placeholder, or BUILDX_WEB_DIR when OneDev assets are deployed.

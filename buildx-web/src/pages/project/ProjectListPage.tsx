@@ -19,6 +19,7 @@ export function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Read query from URL search params; mirrors OneDev PageParameters.get(PARAM_QUERY)
   const query = useMemo(() => searchParams.get("query") ?? "", [searchParams]);
@@ -37,6 +38,10 @@ export function ProjectsPage() {
     },
     [setSearchParams],
   );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +67,7 @@ export function ProjectsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   return (
     <Layout title="Projects" topbarTitle="Projects">
@@ -75,6 +80,7 @@ export function ProjectsPage() {
             errors={error ? [error] : []}
             query={query}
             onQueryChange={handleQueryChange}
+            onRefresh={handleRefresh}
           />
         </div>
       </div>

@@ -1,0 +1,24 @@
+/*
+ * Shared dropdown panel styles — matches OneDev FloatingPanel / dropdown-menu.
+ * Extracted from NoCommitsPanel.css so both NoCommitsPanel and ProjectBlobPage
+ * (and any future consumers) share the same base.
+ */
+
+/* Floating dropdown panel */
+.floating.dropdown-menu.show {
+  display: block;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 0.35rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  background: var(--card-bg, #fff);
+  min-width: 160px;
+}
+
+.floating.dropdown-menu.show .dropdown-menu-content {
+  padding: 0;
+}
+
+/* Trigger link */
+.dropdown-link {
+  cursor: pointer;
+}

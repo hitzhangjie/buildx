@@ -146,3 +146,188 @@ func containsStr(s, substr string) bool {
 
 // Ensure go-git import is used (for commitFromObject test scaffolding).
 var _ = gogit.Clone
+
+func TestCommitFile_NewFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitBare(dir); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	author := object.Signature{
+		Name:  "Test User",
+		Email: "test@example.com",
+		When:  time.Now(),
+	}
+
+	// First commit creates the branch as a root commit.
+	hash1, err := repo.CommitFile(t.Context(), "main", "README.md", "# Hello\n", author, "add readme")
+	if err != nil {
+		t.Fatalf("first CommitFile failed: %v", err)
+	}
+	if hash1 == "" {
+		t.Fatal("expected non-empty commit hash")
+	}
+
+	// Verify the branch now exists and points to our commit.
+	ref, err := repo.Inner().Reference(plumbing.NewBranchReferenceName("main"), true)
+	if err != nil {
+		t.Fatalf("branch lookup: %v", err)
+	}
+	if ref.Hash().String() != hash1 {
+		t.Fatalf("branch ref %s != commit %s", ref.Hash().String(), hash1)
+	}
+
+	// Read back the file content.
+	blob, err := repo.Blob(t.Context(), "main", "README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob == nil || blob.Type != "file" {
+		t.Fatal("expected file blob")
+	}
+	if blob.Content != "# Hello\n" {
+		t.Fatalf("content = %q, want %q", blob.Content, "# Hello\n")
+	}
+}
+
+func TestCommitFile_UpdateExisting(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitBare(dir); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	author := object.Signature{
+		Name:  "Test User",
+		Email: "test@example.com",
+		When:  time.Now(),
+	}
+
+	_, err = repo.CommitFile(t.Context(), "main", "a.txt", "v1\n", author, "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Update the same file.
+	hash2, err := repo.CommitFile(t.Context(), "main", "a.txt", "v2\n", author, "second")
+	if err != nil {
+		t.Fatalf("second CommitFile failed: %v", err)
+	}
+	if hash2 == "" {
+		t.Fatal("expected non-empty commit hash")
+	}
+
+	blob, err := repo.Blob(t.Context(), "main", "a.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob.Content != "v2\n" {
+		t.Fatalf("content = %q, want %q", blob.Content, "v2\n")
+	}
+}
+
+func TestCommitFile_NestedDirectories(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitBare(dir); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	author := object.Signature{
+		Name:  "Test User",
+		Email: "test@examle.com",
+		When:  time.Now(),
+	}
+
+	_, err = repo.CommitFile(t.Context(), "main", "src/lib/util.go", "package lib\n", author, "add util")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify intermediate directories exist.
+	blob, err := repo.Blob(t.Context(), "main", "src")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob == nil || blob.Type != "directory" {
+		t.Fatal("expected directory at src/")
+	}
+
+	blob, err = repo.Blob(t.Context(), "main", "src/lib")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob == nil || blob.Type != "directory" {
+		t.Fatal("expected directory at src/lib/")
+	}
+
+	// Verify file content.
+	blob, err = repo.Blob(t.Context(), "main", "src/lib/util.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob.Content != "package lib\n" {
+		t.Fatalf("content = %q", blob.Content)
+	}
+}
+
+func TestCommitFile_MultipleFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitBare(dir); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	author := object.Signature{
+		Name:  "Test User",
+		Email: "test@example.com",
+		When:  time.Now(),
+	}
+
+	_, err = repo.CommitFile(t.Context(), "main", "a.txt", "a\n", author, "add a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.CommitFile(t.Context(), "main", "b.txt", "b\n", author, "add b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Both files should exist in the latest tree.
+	blob, err := repo.Blob(t.Context(), "main", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob == nil || blob.Type != "directory" {
+		t.Fatal("expected directory listing")
+	}
+
+	foundA, foundB := false, false
+	for _, e := range blob.Entries {
+		if e.Name == "a.txt" {
+			foundA = true
+		}
+		if e.Name == "b.txt" {
+			foundB = true
+		}
+	}
+	if !foundA {
+		t.Error("a.txt missing from tree")
+	}
+	if !foundB {
+		t.Error("b.txt missing from tree")
+	}
+}

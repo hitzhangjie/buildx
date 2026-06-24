@@ -586,6 +586,202 @@ func (p singleFilePatch) FilePatches() []fdiff.FilePatch { return []fdiff.FilePa
 func (p singleFilePatch) Message() string                { return "" }
 
 // ---------------------------------------------------------------------------
+// CommitFile — create or update a file and return the new commit hash
+// ---------------------------------------------------------------------------
+
+// CommitFile creates or updates a file on a branch, creates a commit, and
+// returns the new commit hash. If the branch does not exist yet, a root
+// commit is created.
+func (r *Repository) CommitFile(ctx context.Context, branch, filePath, content string, author object.Signature, commitMessage string) (string, error) {
+	refName := plumbing.NewBranchReferenceName(branch)
+	ref, err := r.inner.Reference(refName, true)
+
+	var oldCommitHash plumbing.Hash
+	if err == plumbing.ErrReferenceNotFound {
+		oldCommitHash = plumbing.ZeroHash
+	} else if err != nil {
+		return "", fmt.Errorf("lookup branch %q: %w", branch, err)
+	} else {
+		oldCommitHash = ref.Hash()
+	}
+
+	// Store the new blob.
+	blobHash, err := r.storeBlob([]byte(content))
+	if err != nil {
+		return "", fmt.Errorf("store blob: %w", err)
+	}
+
+	// Build the new tree — either from scratch (root) or by modifying the
+	// current tree.
+	var newTreeHash plumbing.Hash
+	if oldCommitHash == plumbing.ZeroHash {
+		newTreeHash, err = r.buildTree(strings.Split(filePath, "/"), blobHash)
+	} else {
+		oldCommit, commitErr := r.inner.CommitObject(oldCommitHash)
+		if commitErr != nil {
+			return "", fmt.Errorf("load commit: %w", commitErr)
+		}
+		oldTree, treeErr := oldCommit.Tree()
+		if treeErr != nil {
+			return "", fmt.Errorf("load tree: %w", treeErr)
+		}
+		newTreeHash, err = r.setTreeEntry(oldTree, strings.Split(filePath, "/"), blobHash)
+	}
+	if err != nil {
+		return "", fmt.Errorf("build tree: %w", err)
+	}
+
+	// Create the commit object.
+	var parentHashes []plumbing.Hash
+	if oldCommitHash != plumbing.ZeroHash {
+		parentHashes = []plumbing.Hash{oldCommitHash}
+	}
+	newCommit := &object.Commit{
+		Author:       author,
+		Committer:    author,
+		Message:      commitMessage,
+		TreeHash:     newTreeHash,
+		ParentHashes: parentHashes,
+	}
+
+	commitHash, err := r.storeCommit(newCommit)
+	if err != nil {
+		return "", fmt.Errorf("store commit: %w", err)
+	}
+
+	// Update the branch reference.
+	newRef := plumbing.NewHashReference(refName, commitHash)
+	if err := r.inner.Storer.SetReference(newRef); err != nil {
+		return "", fmt.Errorf("update ref: %w", err)
+	}
+
+	return commitHash.String(), nil
+}
+
+// storeBlob writes content as a blob object and returns its hash.
+func (r *Repository) storeBlob(data []byte) (plumbing.Hash, error) {
+	obj := r.inner.Storer.NewEncodedObject()
+	obj.SetType(plumbing.BlobObject)
+	obj.SetSize(int64(len(data)))
+	w, err := obj.Writer()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	defer func() {
+		if closeErr := w.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+	if _, err := w.Write(data); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return r.inner.Storer.SetEncodedObject(obj)
+}
+
+// storeCommit writes a commit object and returns its hash.
+func (r *Repository) storeCommit(c *object.Commit) (plumbing.Hash, error) {
+	obj := r.inner.Storer.NewEncodedObject()
+	if err := c.Encode(obj); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return r.inner.Storer.SetEncodedObject(obj)
+}
+
+// storeTree writes a tree object and returns its hash.
+func (r *Repository) storeTree(entries []object.TreeEntry) (plumbing.Hash, error) {
+	t := &object.Tree{Entries: entries}
+	obj := r.inner.Storer.NewEncodedObject()
+	if err := t.Encode(obj); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return r.inner.Storer.SetEncodedObject(obj)
+}
+
+// buildTree creates a tree from scratch for the given path parts and blob hash.
+func (r *Repository) buildTree(parts []string, blobHash plumbing.Hash) (plumbing.Hash, error) {
+	if len(parts) == 1 {
+		entries := []object.TreeEntry{
+			{Name: parts[0], Mode: filemode.Regular, Hash: blobHash},
+		}
+		return r.storeTree(entries)
+	}
+	subHash, err := r.buildTree(parts[1:], blobHash)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	entries := []object.TreeEntry{
+		{Name: parts[0], Mode: filemode.Dir, Hash: subHash},
+	}
+	return r.storeTree(entries)
+}
+
+// setTreeEntry returns a new tree hash with the entry at pathParts set to
+// blobHash.  Intermediate directories are created when they do not exist.
+func (r *Repository) setTreeEntry(tree *object.Tree, pathParts []string, blobHash plumbing.Hash) (plumbing.Hash, error) {
+	name := pathParts[0]
+
+	var entryMode filemode.FileMode
+	var entryHash plumbing.Hash
+
+	if len(pathParts) == 1 {
+		entryMode = filemode.Regular
+		entryHash = blobHash
+	} else {
+		// Navigate into or create the subtree.
+		var subTree *object.Tree
+		for _, e := range tree.Entries {
+			if e.Name == name && e.Mode == filemode.Dir {
+				subObj, objErr := r.inner.Storer.EncodedObject(plumbing.TreeObject, e.Hash)
+				if objErr == nil {
+					subTree = &object.Tree{}
+					if decErr := subTree.Decode(subObj); decErr != nil {
+						return plumbing.ZeroHash, decErr
+					}
+				}
+				break
+			}
+		}
+		if subTree == nil {
+			subTree = &object.Tree{}
+		}
+
+		subHash, subErr := r.setTreeEntry(subTree, pathParts[1:], blobHash)
+		if subErr != nil {
+			return plumbing.ZeroHash, subErr
+		}
+		entryMode = filemode.Dir
+		entryHash = subHash
+	}
+
+	// Build new entries list: copy all except the one being replaced, then
+	// insert the new one.
+	entries := make([]object.TreeEntry, 0, len(tree.Entries)+1)
+	replaced := false
+	for _, e := range tree.Entries {
+		if e.Name == name {
+			entries = append(entries, object.TreeEntry{Name: name, Mode: entryMode, Hash: entryHash})
+			replaced = true
+		} else {
+			entries = append(entries, e)
+		}
+	}
+	if !replaced {
+		entries = append(entries, object.TreeEntry{Name: name, Mode: entryMode, Hash: entryHash})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Mode == filemode.Dir && entries[j].Mode != filemode.Dir {
+			return entries[i].Name+"/" < entries[j].Name
+		}
+		if entries[i].Mode != filemode.Dir && entries[j].Mode == filemode.Dir {
+			return entries[i].Name < entries[j].Name+"/"
+		}
+		return entries[i].Name < entries[j].Name
+	})
+
+	return r.storeTree(entries)
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 

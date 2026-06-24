@@ -17,6 +17,7 @@ type ProjectService struct {
 	ListFunc       func(ctx context.Context) ([]*model.Project, error)
 	CreateFunc     func(ctx context.Context, userID int64, p *model.Project) (*model.Project, error)
 	SetupFunc      func(ctx context.Context, userID int64, path string) (*model.Project, error)
+	DeleteFunc     func(ctx context.Context, id int64) error
 	ProjectDirFunc func(projectID int64) string
 	GitDirFunc     func(projectID int64) string
 }
@@ -54,6 +55,13 @@ func (m *ProjectService) Setup(ctx context.Context, userID int64, path string) (
 		panic("mock.ProjectService.SetupFunc not set")
 	}
 	return m.SetupFunc(ctx, userID, path)
+}
+
+func (m *ProjectService) Delete(ctx context.Context, id int64) error {
+	if m.DeleteFunc == nil {
+		panic("mock.ProjectService.DeleteFunc not set")
+	}
+	return m.DeleteFunc(ctx, id)
 }
 
 func (m *ProjectService) ProjectDir(projectID int64) string {

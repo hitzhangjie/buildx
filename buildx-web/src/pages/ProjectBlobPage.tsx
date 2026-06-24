@@ -16,6 +16,7 @@ import {
 import { RevisionPicker } from "../components/onedev/panels/RevisionPicker";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
+import { DropdownMenu } from "../components/onedev/DropdownMenu";
 
 // ---------------------------------------------------------------------------
 // BlobNavigator – breadcrumb with optional inline file-name input
@@ -44,40 +45,57 @@ function BlobNavigator({
       <Link to={blobUrl(projectPath, revision, "")} className="mr-1">
         {projectPath.split("/").pop()}
       </Link>
-      {parts.map((part, index) => {
-        const subPath = parts.slice(0, index + 1).join("/");
-        return (
-          <span key={subPath} className="d-inline-flex align-items-center">
-            <span className="text-muted mx-1">/</span>
-            <Link to={blobUrl(projectPath, revision, subPath)}>{part}</Link>
-          </span>
-        );
-      })}
       {isEditing ? (
-        <span className="d-inline-flex align-items-center">
-          <span className="text-muted mx-1">/</span>
-          <span className="last-segment">
-            <form
-              className="leave-confirm name"
-              onSubmit={(e) => e.preventDefault()}
-            >
-              <input
-                type="text"
-                className="form-control form-control-sm form-control-solid"
-                placeholder="Name your file"
-                value={newFileName ?? ""}
-                onChange={(e) => onNewFileNameChange?.(e.target.value)}
-                autoFocus={mode === "add"}
-              />
-            </form>
+        <>
+          {/* Show all directory parts as clickable links, then the input. */}
+          {parts.map((part, index) => {
+            const subPath = parts.slice(0, index + 1).join("/");
+            return (
+              <span key={subPath} className="d-inline-flex align-items-center">
+                <span className="text-muted mx-1">/</span>
+                <Link to={blobUrl(projectPath, revision, subPath)}>{part}</Link>
+              </span>
+            );
+          })}
+          <span className="d-inline-flex align-items-center">
+            <span className="text-muted mx-1">/</span>
+            <span className="last-segment">
+              <form
+                className="leave-confirm name"
+                onSubmit={(e) => e.preventDefault()}
+              >
+                <input
+                  type="text"
+                  className="form-control form-control-sm form-control-solid"
+                  placeholder="Name your file"
+                  value={newFileName ?? ""}
+                  onChange={(e) => onNewFileNameChange?.(e.target.value)}
+                  autoFocus={mode === "add"}
+                />
+              </form>
+            </span>
           </span>
-        </span>
-      ) : path ? (
-        <span className="d-inline-flex align-items-center">
-          <span className="text-muted mx-1">/</span>
-          <span>{parts[parts.length - 1]}</span>
-        </span>
-      ) : null}
+        </>
+      ) : (
+        <>
+          {/* View mode: all except last as links, last as plain text. */}
+          {parts.slice(0, -1).map((part, index) => {
+            const subPath = parts.slice(0, index + 1).join("/");
+            return (
+              <span key={subPath} className="d-inline-flex align-items-center">
+                <span className="text-muted mx-1">/</span>
+                <Link to={blobUrl(projectPath, revision, subPath)}>{part}</Link>
+              </span>
+            );
+          })}
+          {parts.length > 0 && (
+            <span className="d-inline-flex align-items-center">
+              <span className="text-muted mx-1">/</span>
+              <span>{parts[parts.length - 1]}</span>
+            </span>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -204,44 +222,6 @@ function FileView({ blob }: { blob: BlobContent }) {
 }
 
 // ---------------------------------------------------------------------------
-// InlineDropdown — used for the "Add" button dropdown
-// ---------------------------------------------------------------------------
-
-function InlineDropdown({
-  isOpen,
-  onClose,
-  triggerRef,
-  children,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  triggerRef: React.RefObject<HTMLElement | null>;
-  children: React.ReactNode;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (menuRef.current?.contains(target)) return;
-      if (triggerRef.current?.contains(target)) return;
-      onClose();
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isOpen, onClose, triggerRef]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div ref={menuRef} className="floating dropdown-menu show" style={{ position: "absolute", zIndex: 1050 }}>
-      <div className="dropdown-menu-content">{children}</div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // ProjectBlobPage
 // ---------------------------------------------------------------------------
 
@@ -269,8 +249,6 @@ export function ProjectBlobPage() {
   // Support ?empty=1 to preview the empty-project guidance
   const forceEmpty = searchParams.get("empty") === "1";
 
-  // Compute effective new path (directory + file name)
-  const newFilePath = newFileName ? (path ? `${path}/${newFileName}` : newFileName) : "";
 
   useEffect(() => {
     if (!projectPath || forceEmpty) {
@@ -308,6 +286,19 @@ export function ProjectBlobPage() {
       setNewFileName("");
     }
   }, [mode]);
+
+  // When viewing a file and entering add/edit mode, the new file should be
+  // created in the file's parent directory, not "inside" the file.
+  const editMode = mode === "add" || mode === "edit";
+  const directoryPath =
+    editMode && blob?.type === "file"
+      ? path.split("/").slice(0, -1).join("/")
+      : path;
+
+  // Compute effective new file path (directory + new file name).
+  const newFilePath = newFileName
+    ? (directoryPath ? `${directoryPath}/${newFileName}` : newFileName)
+    : "";
 
   // Enter ADD mode in the given directory
   const enterAddMode = useCallback((newFilePath?: string) => {
@@ -414,7 +405,7 @@ export function ProjectBlobPage() {
             <BlobNavigator
               projectPath={projectPath}
               revision={displayRevision || revision}
-              path={path}
+              path={isEditMode ? directoryPath : path}
               mode={isEditMode ? mode : undefined}
               newFileName={newFileName}
               onNewFileNameChange={setNewFileName}
@@ -444,7 +435,7 @@ export function ProjectBlobPage() {
                 >
                   Add
                 </a>
-                <InlineDropdown
+                <DropdownMenu
                   isOpen={addDropdownOpen}
                   onClose={() => setAddDropdownOpen(false)}
                   triggerRef={addTriggerRef}
@@ -476,7 +467,7 @@ export function ProjectBlobPage() {
                       Upload Files
                     </a>
                   </div>
-                </InlineDropdown>
+                </DropdownMenu>
               </span>
             )}
 

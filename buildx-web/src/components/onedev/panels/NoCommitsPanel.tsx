@@ -1,82 +1,10 @@
-import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { InlineDropdown } from "../DropdownMenu";
 import "./NoCommitsPanel.css";
 
 type NoCommitsPanelProps = {
   projectPath: string;
 };
-
-/**
- * Dropdown menu rendered as a floating panel, matching OneDev's FloatingPanel/DropdownLink behavior.
- * Anchors to the trigger element and closes on outside click.
- */
-function DropdownMenu({
-  isOpen,
-  onClose,
-  triggerRef,
-  children,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  triggerRef: React.RefObject<HTMLElement | null>;
-  children: React.ReactNode;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (menuRef.current?.contains(target)) return;
-      if (triggerRef.current?.contains(target)) return;
-      onClose();
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isOpen, onClose, triggerRef]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div ref={menuRef} className="floating dropdown-menu show" style={{ position: "absolute", zIndex: 1050 }}>
-      <div className="dropdown-menu-content">{children}</div>
-    </div>
-  );
-}
-
-/**
- * Inline dropdown trigger + floating menu, matching OneDev's DropdownLink component.
- */
-function InlineDropdown({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLAnchorElement>(null);
-
-  return (
-    <span className="dropdown-aware d-inline-block position-relative">
-      <a
-        ref={triggerRef}
-        className={`link-primary dropdown-link${open ? " dropdown-open" : ""}`}
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
-          setOpen(!open);
-        }}
-        role="button"
-      >
-        {label}
-      </a>
-      <DropdownMenu isOpen={open} onClose={() => setOpen(false)} triggerRef={triggerRef}>
-        {children}
-      </DropdownMenu>
-    </span>
-  );
-}
 
 /**
  * NoCommitsPanel — shown when a project has no commits yet.
@@ -108,7 +36,7 @@ export function NoCommitsPanel({ projectPath }: NoCommitsPanelProps) {
       <h3 className="alert-heading mb-3">Project does not have any code yet</h3>
       <div className="mb-4">
         You may initialize the project by{" "}
-        <InlineDropdown label="adding files">
+        <InlineDropdown label="adding files" className="link-primary dropdown-link">
           <div className="list-group list-group-flush">
             <a
               className="list-group-item list-group-item-action"
@@ -135,7 +63,7 @@ export function NoCommitsPanel({ projectPath }: NoCommitsPanelProps) {
           setting up CI/CD
         </a>
         {", or "}
-        <InlineDropdown label="pushing an existing repository">
+        <InlineDropdown label="pushing an existing repository" className="link-primary dropdown-link">
           <div className="p-3" style={{ maxWidth: 480 }}>
             <div className="font-weight-bolder mb-3">
               Run below commands from within your git repository:

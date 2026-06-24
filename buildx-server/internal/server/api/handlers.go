@@ -112,6 +112,50 @@ type setupProjectRequest struct {
 	Path string `json:"path"`
 }
 
+func (h *ProjectsHandler) Delete(w http.ResponseWriter, r *http.Request, id int64) {
+	op := StartOp(r, "ProjectsHandler.Delete", "project_id", id)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	op.With("user_id", user.ID)
+
+	p, err := h.Projects.Get(r.Context(), id)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if p == nil {
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_id", id)
+		return
+	}
+
+	// Only root or project owners can delete.
+	ok, err := h.Security.IsProjectOwner(r.Context(), user.ID, id)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if !ok {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if err := h.Projects.Delete(r.Context(), id); err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	op.OK(http.StatusNoContent, "project_id", id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *ProjectsHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	op := StartOp(r, "ProjectsHandler.Setup")
 	user, err := h.authenticate(r)

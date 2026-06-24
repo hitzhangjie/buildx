@@ -14,6 +14,7 @@ type projectService interface {
 	List(ctx context.Context) ([]*model.Project, error)
 	Create(ctx context.Context, userID int64, p *model.Project) (*model.Project, error)
 	Setup(ctx context.Context, userID int64, path string) (*model.Project, error)
+	Delete(ctx context.Context, id int64) error
 	ProjectDir(projectID int64) string
 	GitDir(projectID int64) string
 }

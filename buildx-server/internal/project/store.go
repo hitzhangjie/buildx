@@ -165,6 +165,47 @@ func (s *DBStore) deleteByID(ctx context.Context, id int64) error {
 	return err
 }
 
+// Delete removes a project, its git repository on disk, and associated
+// database records (authorizations, last activity date). It does NOT
+// recursively delete child projects.
+func (s *DBStore) Delete(ctx context.Context, id int64) error {
+	p, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if p == nil {
+		return ErrNotFound
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Remove all user authorizations for this project.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM o_UserAuthorization WHERE o_project_id = ?`, id); err != nil {
+		return err
+	}
+
+	// Delete the project row.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM o_Project WHERE o_id = ?`, id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Remove project directory from disk (contains git repo).
+	projectDir := s.ProjectDir(id)
+	if err := os.RemoveAll(projectDir); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove project dir %s: %w", projectDir, err)
+	}
+
+	return nil
+}
+
 func (s *DBStore) Setup(ctx context.Context, userID int64, path string) (*Project, error) {
 	path = strings.Trim(path, "/")
 	if path == "" {

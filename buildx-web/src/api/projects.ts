@@ -38,13 +38,15 @@ export async function createProject(req: CreateProjectRequest): Promise<Project>
     const path = req.parentPath ? `${req.parentPath}/${req.name}` : req.name;
     const derivedKey =
       req.name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 10) || "PROJ";
-    return {
+    const project: Project = {
       id: Date.now(),
       name: req.name,
       path,
       key: req.key ?? derivedKey,
       description: req.description,
     };
+    mockProjects.push(project);
+    return project;
   }
 
   let parentId: number | undefined;
@@ -66,4 +68,41 @@ export async function createProject(req: CreateProjectRequest): Promise<Project>
       parentId,
     }),
   });
+}
+
+/**
+ * Move a project under a new parent. Pass targetParentId=null to make it a root project.
+ * Matches OneDev's projectService.move().
+ */
+export async function moveProject(projectId: number, targetParentId: number | null): Promise<void> {
+  if (USE_MOCK) {
+    const project = mockProjects.find((p) => p.id === projectId);
+    if (!project) throw { status: 404, message: "Project not found" };
+    if (targetParentId === null) {
+      // Make root project: strip any parent prefix from path
+      project.path = project.name;
+    } else {
+      const parent = mockProjects.find((p) => p.id === targetParentId);
+      if (!parent) throw { status: 404, message: "Target parent project not found" };
+      project.path = `${parent.path}/${project.name}`;
+    }
+    return;
+  }
+  await apiFetch<void>(`/~api/projects/${projectId}/move`, {
+    method: "POST",
+    body: JSON.stringify({ parentId: targetParentId }),
+  });
+}
+
+/**
+ * Delete a single project. Matches OneDev's projectService.delete().
+ */
+export async function deleteProject(projectId: number): Promise<void> {
+  if (USE_MOCK) {
+    const idx = mockProjects.findIndex((p) => p.id === projectId);
+    if (idx === -1) throw { status: 404, message: "Project not found" };
+    mockProjects.splice(idx, 1);
+    return;
+  }
+  await apiFetch<void>(`/~api/projects/${projectId}`, { method: "DELETE" });
 }

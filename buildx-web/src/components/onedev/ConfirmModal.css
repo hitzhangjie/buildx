@@ -1,0 +1,28 @@
+/*
+ * ConfirmModal styles — matches OneDev modal/confirm pattern.
+ * Base modal styles (.modal-backdrop, .modal) are in synced base.css.
+ */
+
+.modal-backdrop.show {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1050;
+}
+
+.modal-backdrop.show > .modal {
+  position: relative;
+  max-width: 540px;
+  width: 100%;
+  margin: 1.75rem;
+}
+
+.confirm .modal-body .form-control.confirm {
+  margin-top: 1rem;
+}
