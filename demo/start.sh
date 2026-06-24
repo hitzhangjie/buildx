@@ -3,10 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-DATA_DIR="$REPO_ROOT/data"
+DATA_DIR="$SCRIPT_DIR/data"
 
 # Clean previous data and ensure a clean slate for bootstrap.
-rm -rf "$DATA_DIR"
+#rm -rf "$DATA_DIR"
 
 export BUILDX_DATA_DIR="$DATA_DIR"
 export BUILDX_HTTP_ADDR=0.0.0.0:9910

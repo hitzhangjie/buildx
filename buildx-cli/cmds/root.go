@@ -44,7 +44,7 @@ func NewRootCommand() *cobra.Command {
 func skipsConfigValidation(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "version", "config":
+		case "version", "config", "completion", "help", cobra.ShellCompRequestCmd:
 			return true
 		}
 	}
