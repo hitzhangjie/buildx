@@ -64,8 +64,6 @@ export function buildCommitQueryString(f: CommitFilterState): string {
 // ── Props ──
 
 export interface CommitFilterPanelProps {
-  /** Current filter state. */
-  value: CommitFilterState;
   /** Called with updated filter state on any change. */
   onChange: (state: CommitFilterState) => void;
   /** Project ID for fetching branch/tag lists. */
@@ -74,11 +72,15 @@ export interface CommitFilterPanelProps {
 
 // ── Component ──
 
+/**
+ * Commit filter panel — manages its own state internally so that parent
+ * re-renders (e.g. from query-string updates) don't reset the inputs.
+ */
 export function CommitFilterPanel({
-  value,
   onChange,
   projectId,
 }: CommitFilterPanelProps) {
+  const [state, setState] = useState<CommitFilterState>(EMPTY_FILTER);
   const [branches, setBranches] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
 
@@ -105,9 +107,13 @@ export function CommitFilterPanel({
 
   const update = useCallback(
     (patch: Partial<CommitFilterState>) => {
-      onChange({ ...value, ...patch });
+      setState((prev) => {
+        const next = { ...prev, ...patch };
+        onChange(next);
+        return next;
+      });
     },
-    [value, onChange],
+    [onChange],
   );
 
   return (
@@ -122,7 +128,7 @@ export function CommitFilterPanel({
       <div className="form-group">
         <label className="control-label">Branch</label>
         <Select2SingleChoice
-          value={value.branch}
+          value={state.branch}
           onChange={(v) => update({ branch: v })}
           choices={branches}
           placeholder="Any branch"
@@ -133,7 +139,7 @@ export function CommitFilterPanel({
       <div className="form-group">
         <label className="control-label">Tag</label>
         <Select2SingleChoice
-          value={value.tag}
+          value={state.tag}
           onChange={(v) => update({ tag: v })}
           choices={tags}
           placeholder="Any tag"
@@ -148,7 +154,7 @@ export function CommitFilterPanel({
             type="text"
             className="form-control"
             placeholder="e.g. src/main/*.go"
-            value={value.touchedFile}
+            value={state.touchedFile}
             onChange={(e) => update({ touchedFile: e.target.value })}
           />
         </div>
@@ -158,7 +164,7 @@ export function CommitFilterPanel({
       <div className="form-group">
         <label className="control-label">Authored By</label>
         <Select2MultiChoice
-          values={value.authoredBy}
+          values={state.authoredBy}
           onChange={(v) => update({ authoredBy: v })}
           choices={[]}
           placeholder="Any author"
@@ -169,7 +175,7 @@ export function CommitFilterPanel({
       <div className="form-group">
         <label className="control-label">Committed By</label>
         <Select2MultiChoice
-          values={value.committedBy}
+          values={state.committedBy}
           onChange={(v) => update({ committedBy: v })}
           choices={[]}
           placeholder="Any committer"
@@ -184,7 +190,7 @@ export function CommitFilterPanel({
             type="text"
             className="form-control"
             placeholder="e.g. 3 days ago"
-            value={value.committedAfter}
+            value={state.committedAfter}
             onChange={(e) => update({ committedAfter: e.target.value })}
           />
         </div>
@@ -198,7 +204,7 @@ export function CommitFilterPanel({
             type="text"
             className="form-control"
             placeholder="e.g. yesterday"
-            value={value.committedBefore}
+            value={state.committedBefore}
             onChange={(e) => update({ committedBefore: e.target.value })}
           />
         </div>

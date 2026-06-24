@@ -15,7 +15,6 @@ import { CommitHistoryGraph } from "../../components/onedev/CommitHistoryGraph";
 import {
   CommitFilterPanel,
   buildCommitQueryString,
-  EMPTY_FILTER,
   type CommitFilterState,
 } from "../../components/onedev/CommitFilterPanel";
 
@@ -177,7 +176,6 @@ export function ProjectCommitsPage() {
                     {() => (
                       <div className="card" style={{ padding: 0 }}>
                         <CommitFilterPanel
-                          value={EMPTY_FILTER}
                           onChange={handleFilterChange}
                           projectId={projectId ?? 0}
                         />
