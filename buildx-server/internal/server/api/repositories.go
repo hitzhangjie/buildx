@@ -77,9 +77,30 @@ func (h *RepositoryHandler) ListCommits(w http.ResponseWriter, r *http.Request) 
 	}
 
 	revision := r.URL.Query().Get("revision")
-	op.With("revision", revision, "count", count)
+	queryStr := r.URL.Query().Get("query")
+	op.With("revision", revision, "query", queryStr, "count", count)
 
-	commits, err := repo.ListCommits(revision, count)
+	// Parse query if provided; otherwise use existing behavior.
+	var query *git.CommitQuery
+	if queryStr != "" {
+		parsed, err := git.ParseCommitQuery(queryStr)
+		if err != nil {
+			op.Fail(err, http.StatusBadRequest, "query", queryStr)
+			writeBadRequest(w, r, "invalid query", err)
+			return
+		}
+		query = parsed
+	}
+
+	// Extract current user info for "by-me" criteria.
+	// During bootstrap (first-run setup), there may be no authenticated user.
+	userName := ""
+	userEmail := ""
+	if user, err := h.authenticate(r); err == nil && user != nil {
+		userName = user.Name
+	}
+
+	commits, err := repo.ListCommitsQuery(revision, query, count, userName, userEmail)
 	if err != nil {
 		op.Fail(err, http.StatusInternalServerError)
 		writeInternalError(w, r, err)

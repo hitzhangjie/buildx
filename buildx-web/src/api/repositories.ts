@@ -73,15 +73,18 @@ export type RepositoryCommit = {
 
 export async function fetchCommits(
   projectId: number,
-  params?: { count?: number; revision?: string },
+  params?: { count?: number; revision?: string; query?: string },
 ): Promise<RepositoryCommit[]> {
-  const query = new URLSearchParams();
-  query.set("count", String(params?.count ?? 100));
+  const searchParams = new URLSearchParams();
+  searchParams.set("count", String(params?.count ?? 100));
   if (params?.revision) {
-    query.set("revision", params.revision);
+    searchParams.set("revision", params.revision);
+  }
+  if (params?.query) {
+    searchParams.set("query", params.query);
   }
   const data = await apiFetch<RepositoryCommit[] | null>(
-    `/~api/repositories/${projectId}/commits?${query}`,
+    `/~api/repositories/${projectId}/commits?${searchParams}`,
   );
   return Array.isArray(data) ? data : [];
 }

@@ -12,6 +12,13 @@ export const BUILD_COMMON_QUERIES: SavedQuery[] = [
   { name: "Build recently", query: 'order by "Finish Date" desc' },
 ];
 
+export const COMMIT_COMMON_QUERIES: SavedQuery[] = [
+  { name: "All commits", query: "" },
+  { name: "My commits", query: "authored-by-me" },
+  { name: "Default branch", query: "default-branch" },
+  { name: "Recent (date order)", query: "order-by-date" },
+];
+
 export const PROJECT_COMMON_QUERIES: SavedQuery[] = [
   { name: "All", query: "", href: "/~projects" },
   { name: "Roots", query: "roots", href: "/~projects?query=roots" },

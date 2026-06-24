@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
 import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
 import { ProjectLayout } from "../../layout/ProjectLayout";
@@ -18,10 +18,26 @@ interface Branch {
 
 export function ProjectBranchesPage() {
   const { projectPath } = useProject();
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("query") ?? "";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const handleQueryChange = useCallback(
+    (nextQuery: string) => {
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev);
+        if (nextQuery.trim()) {
+          params.set("query", nextQuery.trim());
+        } else {
+          params.delete("query");
+        }
+        return params;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   useEffect(() => {
     if (!projectPath) {
@@ -88,7 +104,7 @@ export function ProjectBranchesPage() {
           className="side-main side-main-wrap"
           storageKey={`branches:project:${projectPath}`}
           currentQuery={query}
-          onSelectQuery={setQuery}
+          onSelectQuery={handleQueryChange}
           buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~branches`, q)}
         >
           {(savedQueries) => (
@@ -102,7 +118,7 @@ export function ProjectBranchesPage() {
                         className="form-control"
                         placeholder="Query/order branches"
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => handleQueryChange(e.target.value)}
                       />
                       <span className="input-group-append">
                         <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">

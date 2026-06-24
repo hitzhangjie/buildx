@@ -1,0 +1,35 @@
+/* ── CommitFilterPanel — matches OneDev's commit-filter-edit ── */
+
+.filterPanel {
+  padding: 0.75rem 1rem;
+  min-width: 280px;
+}
+
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--gray, #586069);
+  line-height: 1.4;
+}
+
+:global(.dark-mode) .hint {
+  color: var(--dark-mode-gray, #999);
+}
+
+.hintIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  opacity: 0.7;
+}
+
+/* Force the select2 dropdowns inside the filter panel to use the full width
+   of their parent form-group. */
+.filterPanel :global(.select2-choice-editor),
+.filterPanel :global(.select2-multi-choice-editor) {
+  width: 100%;
+}
