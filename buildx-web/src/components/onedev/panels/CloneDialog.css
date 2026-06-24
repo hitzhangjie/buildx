@@ -1,0 +1,18 @@
+/*
+ * Clone dropdown panel — fixed width so long clone URLs do not stretch the panel.
+ * Simplified from OneDev's full get-code panel (480px) to fit URL + copy only.
+ */
+
+.floating.clone-dialog-panel {
+  width: 400px !important;
+  max-width: calc(100vw - 2rem);
+}
+
+.floating.clone-dialog-panel .clone-dialog .input-group .form-control {
+  min-width: 0;
+}
+
+.floating.clone-dialog-panel .clone-dialog code {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}

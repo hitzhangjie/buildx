@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { searchFilesQuick, type SearchFileHit } from "../../api/search";
 import { fileIcon } from "../../util/blobPath";
 import { Icon } from "../onedev/Icon";
+import { SearchModal } from "./SearchModal";
 import "./quick-search.css";
 
 export type QuickSearchPanelProps = {
@@ -33,10 +33,8 @@ export function QuickSearchPanel({
   const listRef = useRef<HTMLUListElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Focus input on open.
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      // Small delay to allow the modal animation to complete.
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
@@ -44,7 +42,6 @@ export function QuickSearchPanel({
     }
   }, [isOpen]);
 
-  // Reset state when opened/closed.
   useEffect(() => {
     if (isOpen) {
       setQuery("");
@@ -55,7 +52,6 @@ export function QuickSearchPanel({
     }
   }, [isOpen]);
 
-  // Debounced search.
   const doSearch = useCallback(
     (q: string) => {
       if (!q.trim()) {
@@ -86,7 +82,6 @@ export function QuickSearchPanel({
     debounceRef.current = setTimeout(() => doSearch(value), 100);
   };
 
-  // Keyboard navigation.
   useEffect(() => {
     if (!isOpen) return;
 
@@ -126,7 +121,6 @@ export function QuickSearchPanel({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, hits, hasMore, activeIndex, onClose, onSelectFile, onOpenAdvanced]);
 
-  // Scroll active item into view.
   useEffect(() => {
     if (listRef.current && activeIndex >= 0) {
       const items = listRef.current.querySelectorAll("li.hit");
@@ -138,93 +132,86 @@ export function QuickSearchPanel({
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
   const handleSelect = (filePath: string) => {
     onSelectFile(filePath);
     onClose();
   };
 
-  return createPortal(
-    <div className="modal-backdrop show" style={{ background: "rgba(0,0,0,0.85)" }} onClick={handleBackdropClick}>
-      <div className="modal show d-block" tabIndex={-1} role="dialog">
-        <div className="quick-search">
-          <div className="modal-header">
-            <h5 className="modal-title">
-              File and Symbol Search{" "}
-              <span className="text-muted font-size-sm">in current commit</span>
-            </h5>
-            <button type="button" className="close" onClick={onClose} aria-label="Close">
-              <Icon name="times" />
-            </button>
-          </div>
-          <div className="modal-body">
-            <input
-              ref={inputRef}
-              className="form-control"
-              placeholder="Search files..."
-              value={query}
-              onChange={(e) => handleInputChange(e.target.value)}
-            />
-            <div className="result mt-3 overflow-auto">
-              {loading && (
-                <div className="text-center text-muted py-2">Searching…</div>
-              )}
-              {!loading && hits.length === 0 && query.trim() && (
-                <div className="no-matches alert alert-notice alert-light-warning">
-                  No any matches
-                </div>
-              )}
-              {hits.length > 0 && (
-                <ul ref={listRef} className="list-unstyled mb-0">
-                  {hits.map((hit, idx) => (
-                    <li
-                      key={hit.filePath}
-                      className={`hit selectable${idx === activeIndex ? " active" : ""}`}
+  return (
+    <SearchModal onClose={onClose}>
+      <div className="quick-search">
+        <div className="modal-header">
+          <h5 className="modal-title">
+            File and Symbol Search{" "}
+            <span className="text-muted font-size-sm">in current commit</span>
+          </h5>
+          <button type="button" className="close" onClick={onClose} aria-label="Close">
+            <Icon name="times" />
+          </button>
+        </div>
+        <div className="modal-body">
+          <input
+            ref={inputRef}
+            className="form-control"
+            placeholder="Search files..."
+            value={query}
+            onChange={(e) => handleInputChange(e.target.value)}
+          />
+          <div className="result mt-3 overflow-auto">
+            {loading && (
+              <div className="text-center text-muted py-2">Searching…</div>
+            )}
+            {!loading && hits.length === 0 && query.trim() && (
+              <div className="no-matches alert alert-notice alert-light-warning">
+                No any matches
+              </div>
+            )}
+            {hits.length > 0 && (
+              <ul ref={listRef} className="list-unstyled mb-0">
+                {hits.map((hit, idx) => (
+                  <li
+                    key={hit.filePath}
+                    className={`hit selectable${idx === activeIndex ? " active" : ""}`}
+                  >
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSelect(hit.filePath);
+                      }}
                     >
-                      <a
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handleSelect(hit.filePath);
-                        }}
-                      >
-                        <span className="icon">
-                          <img
-                            src={`/~icon/${fileIcon(hit.fileName, "file")}.svg`}
-                            alt=""
-                            width={16}
-                            height={16}
-                          />
-                        </span>
-                        <span className="text">{hit.filePath}</span>
-                      </a>
-                    </li>
-                  ))}
-                  {hasMore && (
-                    <li
-                      className={`hit selectable more-matches${activeIndex === hits.length ? " active" : ""}`}
+                      <span className="icon">
+                        <img
+                          src={`/~icon/${fileIcon(hit.fileName, "file")}.svg`}
+                          alt=""
+                          width={16}
+                          height={16}
+                        />
+                      </span>
+                      <span className="text">{hit.filePath}</span>
+                    </a>
+                  </li>
+                ))}
+                {hasMore && (
+                  <li
+                    className={`hit selectable more-matches${activeIndex === hits.length ? " active" : ""}`}
+                  >
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        onOpenAdvanced();
+                      }}
                     >
-                      <a
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          onOpenAdvanced();
-                        }}
-                      >
-                        <Icon name="hand" /> Show more
-                      </a>
-                    </li>
-                  )}
-                </ul>
-              )}
-            </div>
+                      <Icon name="hand" /> Show more
+                    </a>
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
         </div>
       </div>
-    </div>,
-    document.body,
+    </SearchModal>
   );
 }

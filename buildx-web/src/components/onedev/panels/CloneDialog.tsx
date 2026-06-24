@@ -1,5 +1,6 @@
 import { useState, useCallback, type RefObject } from "react";
 import { DropdownMenu } from "../DropdownMenu";
+import "./CloneDialog.css";
 
 type CloneDialogProps = {
   isOpen: boolean;
@@ -34,8 +35,14 @@ export function CloneDialog({ isOpen, onClose, triggerRef, projectPath }: CloneD
   }, [cloneUrl]);
 
   return (
-    <DropdownMenu isOpen={isOpen} onClose={onClose} triggerRef={triggerRef} align="right">
-      <div className="clone-dialog p-3" style={{ width: 280 }}>
+    <DropdownMenu
+      isOpen={isOpen}
+      onClose={onClose}
+      triggerRef={triggerRef}
+      align="right"
+      panelClassName="clone-dialog-panel"
+    >
+      <div className="clone-dialog p-3">
         <div className="font-weight-bolder mb-2 font-size-sm">Clone Repository</div>
 
         <div className="input-group input-group-sm mb-2">

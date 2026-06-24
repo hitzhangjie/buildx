@@ -1,9 +1,8 @@
 /*
  * ConfirmModal styles — matches OneDev modal/confirm pattern.
- * Base modal styles (.modal-backdrop, .modal) are in synced base.css.
+ * Scoped to nested confirm layout only; do not affect search modals (sibling backdrop).
  */
-
-.modal-backdrop.show {
+.modal-backdrop.show:has(> .modal .confirm) {
   display: flex !important;
   align-items: center;
   justify-content: center;
@@ -13,14 +12,16 @@
   width: 100vw;
   height: 100vh;
   background-color: rgba(0, 0, 0, 0.5);
+  opacity: 1 !important;
   z-index: 1050;
 }
 
-.modal-backdrop.show > .modal {
+.modal-backdrop.show:has(> .modal .confirm) > .modal {
   position: relative;
   max-width: 540px;
   width: 100%;
   margin: 1.75rem;
+  opacity: 1 !important;
 }
 
 .confirm .modal-body .form-control.confirm {

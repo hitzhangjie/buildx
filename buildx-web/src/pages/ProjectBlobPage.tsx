@@ -17,7 +17,7 @@ import {
 import { RevisionPicker } from "../components/onedev/panels/RevisionPicker";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
-import { DropdownMenu } from "../components/onedev/DropdownMenu";
+import { InlineDropdown } from "../components/onedev/DropdownMenu";
 import { CloneDialog } from "../components/onedev/panels/CloneDialog";
 import { QuickSearchPanel } from "../components/search/QuickSearchPanel";
 import { AdvancedSearchPanel } from "../components/search/AdvancedSearchPanel";
@@ -248,8 +248,6 @@ export function ProjectBlobPage() {
 
   // ADD/EDIT mode state
   const [newFileName, setNewFileName] = useState(initialPath ?? "");
-  const [addDropdownOpen, setAddDropdownOpen] = useState(false);
-  const addTriggerRef = useRef<HTMLAnchorElement>(null);
 
   // Clone dialog state
   const [cloneDropdownOpen, setCloneDropdownOpen] = useState(false);
@@ -257,7 +255,6 @@ export function ProjectBlobPage() {
 
   // Search state
   const [searchOpen, setSearchOpen] = useState<"quick" | "advanced" | null>(null);
-  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<{
     textHits?: SearchTextHit[];
     fileHits?: SearchFileHit[];
@@ -265,7 +262,6 @@ export function ProjectBlobPage() {
     searchType: "text" | "file";
     query: string;
   } | null>(null);
-  const searchTriggerRef = useRef<HTMLAnchorElement>(null);
 
   // Support ?empty=1 to preview the empty-project guidance
   const forceEmpty = searchParams.get("empty") === "1";
@@ -469,32 +465,25 @@ export function ProjectBlobPage() {
               />
             </span>
 
-            {/* "Add" dropdown — matches OneDev's DropdownLink behavior */}
             {!isEditMode && (
-              <span className="dropdown-aware d-inline-block position-relative mr-3">
-                <a
-                  ref={addTriggerRef}
-                  className={`text-nowrap dropdown-toggle${addDropdownOpen ? " dropdown-open" : ""}`}
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setAddDropdownOpen(!addDropdownOpen);
-                  }}
-                >
-                  Add <span className="dropdown-caret" />
-                </a>
-                <DropdownMenu
-                  isOpen={addDropdownOpen}
-                  onClose={() => setAddDropdownOpen(false)}
-                  triggerRef={addTriggerRef}
-                >
+              <InlineDropdown
+                wrapperClassName="mr-3"
+                className="text-nowrap"
+                label={
+                  <>
+                    <img src="/~icon/plus.svg" alt="" className="icon mr-1" width={14} height={14} />
+                    Add
+                  </>
+                }
+              >
+                {({ close }) => (
                   <div className="list-group list-group-flush">
                     <a
                       className="list-group-item list-group-item-action"
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        setAddDropdownOpen(false);
+                        close();
                         enterAddMode();
                       }}
                     >
@@ -505,8 +494,7 @@ export function ProjectBlobPage() {
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        setAddDropdownOpen(false);
-                        // Upload mode — navigate to upload page
+                        close();
                         const params = new URLSearchParams(searchParams);
                         params.set("mode", "upload");
                         setSearchParams(params);
@@ -515,36 +503,28 @@ export function ProjectBlobPage() {
                       Upload Files
                     </a>
                   </div>
-                </DropdownMenu>
-              </span>
+                )}
+              </InlineDropdown>
             )}
 
-            {/* Search dropdown */}
-            <span className="dropdown-aware d-inline-block position-relative mr-3">
-              <a
-                ref={searchTriggerRef}
-                href="#"
-                className={`text-nowrap${searchDropdownOpen ? " dropdown-open" : ""}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setSearchDropdownOpen(!searchDropdownOpen);
-                }}
-              >
-                <img src="/~icon/magnify.svg" alt="" className="icon mr-1" width={14} height={14} />
-                Search
-              </a>
-              <DropdownMenu
-                isOpen={searchDropdownOpen}
-                onClose={() => setSearchDropdownOpen(false)}
-                triggerRef={searchTriggerRef}
-              >
+            <InlineDropdown
+              wrapperClassName="mr-3"
+              className="text-nowrap"
+              label={
+                <>
+                  <img src="/~icon/magnify.svg" alt="" className="icon mr-1" width={14} height={14} />
+                  Search
+                </>
+              }
+            >
+              {({ close }) => (
                 <div className="list-group list-group-flush">
                   <a
                     className="list-group-item list-group-item-action"
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      setSearchDropdownOpen(false);
+                      close();
                       setSearchOpen("quick");
                     }}
                   >
@@ -555,15 +535,15 @@ export function ProjectBlobPage() {
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      setSearchDropdownOpen(false);
+                      close();
                       setSearchOpen("advanced");
                     }}
                   >
                     Advanced Search
                   </a>
                 </div>
-              </DropdownMenu>
-            </span>
+              )}
+            </InlineDropdown>
             <Link
               to={`/${projectPath}/~commits`}
               className="text-nowrap"

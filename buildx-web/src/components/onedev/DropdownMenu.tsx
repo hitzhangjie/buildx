@@ -15,12 +15,15 @@ export function DropdownMenu({
   onClose,
   triggerRef,
   align = "left",
+  panelClassName,
   children,
 }: {
   isOpen: boolean;
   onClose: () => void;
   triggerRef: React.RefObject<HTMLElement | null>;
   align?: "left" | "right";
+  /** Extra class on the floating panel root (e.g. OneDev's `get-code`). */
+  panelClassName?: string;
   children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -71,15 +74,20 @@ export function DropdownMenu({
     position: "fixed",
     zIndex: 1050,
     top: position.top,
+    float: "none",
   };
   if (align === "right") {
     style.right = position.right;
+    style.left = "auto"; // override bootstrap .dropdown-menu { left: 0 }
   } else {
     style.left = position.left;
+    style.right = "auto";
   }
 
+  const panelClass = ["floating", "dropdown-menu", "show", panelClassName].filter(Boolean).join(" ");
+
   return createPortal(
-    <div ref={menuRef} className="floating dropdown-menu show" style={style}>
+    <div ref={menuRef} className={panelClass} style={style}>
       <div className="dropdown-menu-content">{children}</div>
     </div>,
     document.body,
@@ -93,23 +101,30 @@ export function DropdownMenu({
 export function InlineDropdown({
   label,
   className,
+  wrapperClassName,
   disabled = false,
   children,
 }: {
   label: ReactNode;
   className?: string;
+  wrapperClassName?: string;
   disabled?: boolean;
-  children: ReactNode;
+  children: ReactNode | ((ctx: { close: () => void }) => ReactNode);
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLAnchorElement>(null);
+  const close = useCallback(() => setOpen(false), []);
 
   const linkClass = className ?? "text-gray";
   const triggerClass = `${linkClass}${open ? " dropdown-open" : ""}`;
+  const menuContent = typeof children === "function" ? children({ close }) : children;
+  const wrapperClass = ["dropdown-aware", "d-inline-block", "position-relative", wrapperClassName]
+    .filter(Boolean)
+    .join(" ");
 
   if (disabled) {
     return (
-      <span className={`d-inline-block${className ? ` ${className}` : ""}`}>
+      <span className={wrapperClass}>
         <span className="text-gray opacity-50" style={{ cursor: "not-allowed" }}>
           {label}
         </span>
@@ -118,7 +133,7 @@ export function InlineDropdown({
   }
 
   return (
-    <span className="dropdown-aware d-inline-block position-relative">
+    <span className={wrapperClass}>
       <a
         ref={triggerRef}
         className={triggerClass}
@@ -131,8 +146,8 @@ export function InlineDropdown({
       >
         {label}
       </a>
-      <DropdownMenu isOpen={open} onClose={() => setOpen(false)} triggerRef={triggerRef}>
-        {children}
+      <DropdownMenu isOpen={open} onClose={close} triggerRef={triggerRef}>
+        {menuContent}
       </DropdownMenu>
     </span>
   );

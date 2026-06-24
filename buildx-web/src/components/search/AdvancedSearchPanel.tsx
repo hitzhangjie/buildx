@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { searchText, searchFileNames, type SearchFileHit, type SearchTextHit, type TextSearchParams } from "../../api/search";
 import { Icon } from "../onedev/Icon";
+import { SearchModal } from "./SearchModal";
 import "./advanced-search.css";
 
 export type AdvancedSearchPanelProps = {
@@ -14,6 +14,29 @@ export type AdvancedSearchPanelProps = {
 };
 
 type Tab = "text" | "files" | "symbols";
+
+function SearchCheckbox({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <label className="checkbox">
+      <input
+        type="checkbox"
+        className="form-check-input"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span />
+      {children}
+    </label>
+  );
+}
 
 export function AdvancedSearchPanel({
   isOpen,
@@ -112,174 +135,152 @@ export function AdvancedSearchPanel({
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
   if (!isOpen) return null;
 
-  return createPortal(
-    <div className="modal-backdrop show" style={{ background: "rgba(0,0,0,0.85)" }} onClick={handleBackdropClick}>
-      <div className="modal show d-block" tabIndex={-1} role="dialog">
-        <form
-          className="advanced-search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSearch();
-          }}
-        >
-          <div className="modal-header">
-            <h5 className="modal-title">
-              Advanced Search{" "}
-              <span className="text-muted font-size-sm">in current commit</span>
-            </h5>
-            <button type="button" className="close" onClick={onClose} aria-label="Close">
-              <Icon name="times" />
-            </button>
-          </div>
+  return (
+    <SearchModal onClose={onClose}>
+      <form
+        className="advanced-search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSearch();
+        }}
+      >
+        <div className="modal-header">
+          <h5 className="modal-title">
+            Advanced Search{" "}
+            <span className="text-muted font-size-sm">in current commit</span>
+          </h5>
+          <button type="button" className="close" onClick={onClose} aria-label="Close">
+            <Icon name="times" />
+          </button>
+        </div>
 
-          <div className="modal-body">
-            {/* Tabs */}
-            <ul className="nav nav-tabs nav-tabs-line nav-bold">
-              <li className="nav-item">
-                <a
-                  className={`nav-link${activeTab === "text" ? " active" : ""}`}
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); setActiveTab("text"); }}
-                >
-                  Text
-                </a>
-              </li>
-              <li className="nav-item">
-                <a
-                  className={`nav-link${activeTab === "files" ? " active" : ""}`}
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); setActiveTab("files"); }}
-                >
-                  Files
-                </a>
-              </li>
-              <li className="nav-item">
-                <a
-                  className="nav-link disabled"
-                  href="#"
-                  onClick={(e) => e.preventDefault()}
-                  title="Symbol search coming soon"
-                >
-                  Symbols
-                </a>
-              </li>
-            </ul>
+        <div className="modal-body">
+          <ul className="nav nav-tabs nav-tabs-line nav-bold">
+            <li className="nav-item">
+              <a
+                className={`nav-link${activeTab === "text" ? " active" : ""}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); setActiveTab("text"); }}
+              >
+                Text
+              </a>
+            </li>
+            <li className="nav-item">
+              <a
+                className={`nav-link${activeTab === "files" ? " active" : ""}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); setActiveTab("files"); }}
+              >
+                Files
+              </a>
+            </li>
+            <li className="nav-item">
+              <a
+                className="nav-link disabled"
+                href="#"
+                onClick={(e) => e.preventDefault()}
+                title="Symbol search coming soon"
+              >
+                Symbols
+              </a>
+            </li>
+          </ul>
 
-            {/* Error */}
-            {error && (
-              <div className="alert alert-light-danger py-2 px-3 mb-3">{error}</div>
-            )}
+          {error && (
+            <div className="alert alert-light-danger py-2 px-3 mb-3">{error}</div>
+          )}
 
-            {/* Text tab */}
-            {activeTab === "text" && (
-              <div className="option">
-                <div className="form-group">
-                  <label className="font-weight-bold">Search For</label>
-                  <input
-                    ref={searchForRef}
-                    type="text"
-                    className="form-control"
-                    value={searchFor}
-                    onChange={(e) => setSearchFor(e.target.value)}
-                    placeholder="Enter search term…"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="checkbox mr-3">
-                    <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />{" "}
-                    Regular Expression
-                  </label>
-                  <label className="checkbox mr-3">
-                    <input type="checkbox" checked={wholeWord} onChange={(e) => setWholeWord(e.target.checked)} />{" "}
-                    Whole Word
-                  </label>
-                  <label className="checkbox">
-                    <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} />{" "}
-                    Case Sensitive
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label>File Name Patterns (separated by comma)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={filePatterns}
-                    onChange={(e) => setFilePatterns(e.target.value)}
-                    placeholder="e.g. *.go, *.ts"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Files tab */}
-            {activeTab === "files" && (
-              <div className="option">
-                <div className="form-group">
-                  <label className="font-weight-bold">File Name</label>
-                  <input
-                    ref={fileNameRef}
-                    type="text"
-                    className="form-control"
-                    value={fileNameQuery}
-                    onChange={(e) => setFileNameQuery(e.target.value)}
-                    placeholder="Enter file name…"
-                  />
-                  <small className="form-text text-muted">* = any string, ? = any character</small>
-                </div>
-                <div className="form-group">
-                  <label className="checkbox">
-                    <input type="checkbox" checked={fileCaseSensitive} onChange={(e) => setFileCaseSensitive(e.target.checked)} />{" "}
-                    Case Sensitive
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Symbols tab — placeholder */}
-            {activeTab === "symbols" && (
-              <div className="option">
-                <div className="alert alert-light-warning">
-                  Symbol search requires code indexing infrastructure and will be available in a future update.
-                </div>
-              </div>
-            )}
-
-            {/* Search inside current tree */}
-            {currentPath && (
+          {activeTab === "text" && (
+            <div className="option">
               <div className="form-group">
-                <label className="checkbox">
-                  <input
-                    type="checkbox"
-                    checked={insideCurrentDir}
-                    onChange={(e) => setInsideCurrentDir(e.target.checked)}
-                  />{" "}
-                  Search inside current tree
+                <label className="control-label">
+                  Search For <span className="text-danger">*</span>
                 </label>
+                <input
+                  ref={searchForRef}
+                  type="text"
+                  className="form-control"
+                  value={searchFor}
+                  onChange={(e) => setSearchFor(e.target.value)}
+                  placeholder="Enter search term…"
+                />
               </div>
-            )}
-          </div>
+              <div className="form-group">
+                <div className="checkbox-inline">
+                  <SearchCheckbox checked={regex} onChange={setRegex}>
+                    Regular Expression
+                  </SearchCheckbox>
+                  <SearchCheckbox checked={wholeWord} onChange={setWholeWord}>
+                    Whole Word
+                  </SearchCheckbox>
+                  <SearchCheckbox checked={caseSensitive} onChange={setCaseSensitive}>
+                    Case Sensitive
+                  </SearchCheckbox>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="control-label">File Name Patterns (separated by comma)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={filePatterns}
+                  onChange={(e) => setFilePatterns(e.target.value)}
+                  placeholder="File name patterns such as *.java, *.c"
+                />
+              </div>
+            </div>
+          )}
 
-          <div className="modal-footer">
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? "Searching…" : "Search"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body,
+          {activeTab === "files" && (
+            <div className="option">
+              <div className="form-group">
+                <label className="font-weight-bold">File Name</label>
+                <input
+                  ref={fileNameRef}
+                  type="text"
+                  className="form-control"
+                  value={fileNameQuery}
+                  onChange={(e) => setFileNameQuery(e.target.value)}
+                  placeholder="Enter file name…"
+                />
+                <small className="form-text text-muted">* = any string, ? = any character</small>
+              </div>
+              <div className="form-group">
+                <SearchCheckbox checked={fileCaseSensitive} onChange={setFileCaseSensitive}>
+                  Case Sensitive
+                </SearchCheckbox>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "symbols" && (
+            <div className="option">
+              <div className="alert alert-light-warning">
+                Symbol search requires code indexing infrastructure and will be available in a future update.
+              </div>
+            </div>
+          )}
+
+          {currentPath && (
+            <div className="form-group">
+              <SearchCheckbox checked={insideCurrentDir} onChange={setInsideCurrentDir}>
+                Search inside current tree
+              </SearchCheckbox>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? "Searching…" : "Search"}
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </SearchModal>
   );
 }
