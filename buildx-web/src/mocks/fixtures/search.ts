@@ -22,6 +22,16 @@ export type SearchTextHit = {
   match?: { fromRow: number; fromCol: number; toRow: number; toCol: number };
 };
 
+export type SearchSymbolHit = {
+  filePath: string;
+  symbolName: string;
+  symbolType?: string;
+  namespace?: string;
+  lineNo: number;
+  lineContent: string;
+  match?: { from: number; to: number };
+};
+
 // ---------------------------------------------------------------------------
 // Mock tree types (keep in sync with blob.ts)
 // ---------------------------------------------------------------------------
@@ -307,4 +317,75 @@ export function mockFileSearch(
     }
   }
   return { hits, hasMore: hits.length >= MAX };
+}
+
+function extractMockSymbols(
+  content: string,
+): { name: string; type: string; lineNo: number; lineContent: string; namespace: string }[] {
+  const lines = content.split("\n");
+  let namespace = "";
+  const symbols: { name: string; type: string; lineNo: number; lineContent: string; namespace: string }[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed.startsWith("package ")) {
+      namespace = trimmed.split(/\s+/)[1] ?? "";
+    }
+    const funcMatch = /^\s*func\s+(?:\([^)]*\)\s+)?([A-Za-z_]\w*)\s*[\(<]/.exec(line);
+    if (funcMatch) {
+      symbols.push({ name: funcMatch[1], type: "func", lineNo: i + 1, lineContent: line, namespace });
+    }
+    const typeMatch = /^\s*type\s+([A-Za-z_]\w*)\s+(?:struct|interface)/.exec(line);
+    if (typeMatch) {
+      symbols.push({ name: typeMatch[1], type: "type", lineNo: i + 1, lineContent: line, namespace });
+    }
+  }
+  return symbols;
+}
+
+export function mockSymbolSearch(
+  _revision: string,
+  query: string,
+  caseSensitive?: boolean,
+  fileNames?: string,
+  directory?: string,
+): SearchResult<SearchSymbolHit> {
+  if (!query || /^[*?]+$/.test(query)) {
+    return { hits: [], hasMore: false };
+  }
+
+  const tree = getMockTree();
+  const allFiles = walkTree(tree, "", directory).filter((e) => e.node.type === "file");
+  const filePatterns = fileNames
+    ? fileNames.split(",").map((p) => p.trim()).filter(Boolean)
+    : [];
+  const MAX = 100;
+  const hits: SearchSymbolHit[] = [];
+
+  for (const f of allFiles) {
+    if (!f.node.content) continue;
+    if (filePatterns.length > 0) {
+      const matched = filePatterns.some((p) => wildcardMatch(f.name, p, caseSensitive ?? false));
+      if (!matched) continue;
+    }
+
+    for (const sym of extractMockSymbols(f.node.content)) {
+      if (wildcardMatch(query, sym.name, caseSensitive ?? false)) {
+        hits.push({
+          filePath: f.path,
+          symbolName: sym.name,
+          symbolType: sym.type,
+          namespace: sym.namespace || undefined,
+          lineNo: sym.lineNo,
+          lineContent: sym.lineContent,
+        });
+        if (hits.length >= MAX) {
+          return { hits, hasMore: true };
+        }
+      }
+    }
+  }
+
+  return { hits, hasMore: false };
 }

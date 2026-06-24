@@ -46,6 +46,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 	migrations := []string{
 		"migrations/001_initial.sql",
 		"migrations/002_session.sql",
+		"migrations/003_code_comment.sql",
 	}
 	for _, name := range migrations {
 		content, err := migrationFS.ReadFile(name)

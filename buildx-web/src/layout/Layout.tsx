@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Icon } from "../components/onedev/Icon";
 import { consumeFlashMessage } from "../util/flash";
+import { isAdministrator } from "../auth/permissions";
 import { getGlobalSidebarMenu } from "./globalSidebar";
 import { ProjectSidebarHeader } from "./ProjectSidebarHeader";
 import { SidebarMenuItems } from "./SidebarMenuItems";
@@ -104,7 +105,7 @@ export function Layout({
         <div className="sidebar-body">
           <div className="sidebar-menu">
             <div className="menu-body">
-              <SidebarMenuItems items={getGlobalSidebarMenu()} />
+              <SidebarMenuItems items={getGlobalSidebarMenu({ isAdministrator: isAdministrator(user) })} />
             </div>
           </div>
           {projectSidebar ? (

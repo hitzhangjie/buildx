@@ -13,6 +13,7 @@ export type BlobEntry = {
 
 export type BlobContent = {
   revision: string;
+  commitHash?: string;
   path: string;
   type: "directory" | "file";
   entries?: BlobEntry[];
@@ -139,6 +140,7 @@ export function getMockBlob(revision: string, path: string): BlobContent | null 
   if (node.type === "directory") {
     return {
       revision,
+      commitHash: "mock0000000000000000000000000000000001",
       path,
       type: "directory",
       entries: listEntries(path, node),
@@ -146,6 +148,7 @@ export function getMockBlob(revision: string, path: string): BlobContent | null 
   }
   return {
     revision,
+    commitHash: "mock0000000000000000000000000000000001",
     path,
     type: "file",
     content: node.content ?? "",

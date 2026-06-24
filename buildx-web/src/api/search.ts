@@ -4,11 +4,13 @@ import {
   mockQuickSearch,
   mockTextSearch,
   mockFileSearch,
+  mockSymbolSearch,
   type SearchFileHit,
   type SearchTextHit,
+  type SearchSymbolHit,
 } from "../mocks/fixtures/search";
 
-export type { SearchFileHit, SearchTextHit };
+export type { SearchFileHit, SearchTextHit, SearchSymbolHit };
 
 export type SearchResult<T> = {
   hits: T[];
@@ -106,6 +108,39 @@ export async function searchFileNames(
     params.set("maxResults", "100");
     return await apiFetch<SearchResult<SearchFileHit>>(
       `/~api/projects/${encodeURIComponent(projectPath)}/search/files?${params}`,
+    );
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (status === 404 || status === 501) {
+      return { hits: [], hasMore: false };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Advanced symbol search — used by Advanced Search "Symbols" tab.
+ * Supports wildcard patterns (* and ?) on symbol names.
+ */
+export async function searchSymbols(
+  projectPath: string,
+  revision: string,
+  query: string,
+  caseSensitive?: boolean,
+  fileNames?: string,
+  directory?: string,
+): Promise<SearchResult<SearchSymbolHit>> {
+  if (USE_MOCK) {
+    return mockSymbolSearch(revision, query, caseSensitive, fileNames, directory);
+  }
+  try {
+    const params = new URLSearchParams({ revision, query });
+    if (caseSensitive) params.set("caseSensitive", "true");
+    if (fileNames) params.set("fileNames", fileNames);
+    if (directory) params.set("directory", directory);
+    params.set("maxResults", "100");
+    return await apiFetch<SearchResult<SearchSymbolHit>>(
+      `/~api/projects/${encodeURIComponent(projectPath)}/search/symbols?${params}`,
     );
   } catch (err) {
     const status = (err as { status?: number }).status;

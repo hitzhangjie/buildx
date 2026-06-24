@@ -230,6 +230,80 @@ func (h *SearchHandler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, searchResult{Hits: hits, HasMore: hasMore})
 }
 
+// SearchSymbols handles GET /~api/projects/{projectPath}/search/symbols.
+// Query params: revision, query, caseSensitive (bool), fileNames (comma-separated globs),
+// directory, maxResults (default 100).
+func (h *SearchHandler) SearchSymbols(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "SearchHandler.SearchSymbols")
+
+	projectPath, ok := h.extractProjectPath(r, "/search/symbols")
+	if !ok {
+		op.Fail(nil, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid project path", nil)
+		return
+	}
+	op.With("project_path", projectPath)
+
+	revision := r.URL.Query().Get("revision")
+	query := r.URL.Query().Get("query")
+	op.With("revision", revision, "query", query)
+
+	if query == "" {
+		op.OK(http.StatusOK, "hits", 0)
+		writeJSON(w, r, http.StatusOK, searchResult{Hits: []git.SearchSymbolHit{}, HasMore: false})
+		return
+	}
+
+	repo, err := h.openProjectRepo(r, projectPath)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if repo == nil {
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_path", projectPath)
+		return
+	}
+
+	if revision == "" {
+		revision = repo.DefaultRevision()
+	}
+
+	maxResults := 100
+	if mr := r.URL.Query().Get("maxResults"); mr != "" {
+		if n, err := strconv.Atoi(mr); err == nil && n > 0 {
+			maxResults = n
+		}
+	}
+
+	opts := git.SymbolSearchOptions{
+		Revision:      revision,
+		Query:         query,
+		CaseSensitive: r.URL.Query().Get("caseSensitive") == "true",
+		FileNames:     r.URL.Query().Get("fileNames"),
+		Directory:     r.URL.Query().Get("directory"),
+		MaxResults:    maxResults,
+	}
+
+	hits, hasMore, err := repo.SearchSymbols(r.Context(), opts)
+	if err != nil {
+		if err == git.ErrQueryTooGeneral {
+			op.Fail(err, http.StatusBadRequest)
+			writeBadRequest(w, r, "query too general", err)
+			return
+		}
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if hits == nil {
+		hits = []git.SearchSymbolHit{}
+	}
+	op.OK(http.StatusOK, "hits", len(hits), "has_more", hasMore)
+	writeJSON(w, r, http.StatusOK, searchResult{Hits: hits, HasMore: hasMore})
+}
+
 // extractProjectPath extracts the project path from the chi wildcard param
 // by removing the given suffix.
 func (h *SearchHandler) extractProjectPath(r *http.Request, suffix string) (string, bool) {

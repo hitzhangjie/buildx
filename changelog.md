@@ -8,6 +8,8 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **File view text selection** — read-only CodeMirror source viewer with OneDev-style selection popover (permanent link, copy to clipboard, add code comment); `?position=source-…` deep links; code comment REST API (`POST/GET/DELETE /~api/code-comments`, `GET /~api/projects/{path}/code-comments`)
+- **Project Files symbol search** — Advanced Search "Symbols" tab: `GET /~api/projects/{projectPath}/search/symbols` with wildcard name matching, case sensitivity, and file-name filters; results panel groups hits by file with namespace scope (regex-based extraction for Go/Java/Python/JS/Rust; full Lucene indexing planned later)
 - **Server API observability** — structured `slog` logging for all `/~api` handlers: request entry (op, params), response outcome (status, counts/ids), and errors; HTTP access log middleware (`request_id`, method, path, status, duration)
 - **Project Commits API and page** — `GET /~api/repositories/{projectId}/commits` and `commits/{commitHash}` (OneDev `RepositoryResource` parity); `ProjectCommitsPage` loads live commit list with subject, author, and relative time
 - **Project Branches API and page** — `GET /~api/repositories/{projectId}/branches`, `default-branch`, and `branches/{branch}` (OneDev `RepositoryResource` parity); `ProjectBranchesPage` loads live branch list with commit hash and updated time

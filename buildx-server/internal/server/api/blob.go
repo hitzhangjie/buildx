@@ -15,11 +15,12 @@ import (
 )
 
 // BlobHandler serves file and directory browsing from project git repos.
-// It also dispatches search requests to SearchHandler.
+// It also dispatches search and code-comment requests to sibling handlers.
 type BlobHandler struct {
-	Projects projectService
-	Security securityService
-	Search   *SearchHandler // set to enable search endpoints
+	Projects     projectService
+	Security     securityService
+	Search       *SearchHandler       // set to enable search endpoints
+	CodeComments *CodeCommentsHandler // set to enable code comment listing
 }
 
 // ServeHTTP handles wildcard requests under /~api/projects/* and dispatches
@@ -41,6 +42,15 @@ func (h *BlobHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.Search.SearchFiles(w, r)
 			return
 		}
+		if strings.HasSuffix(rest, "/search/symbols") {
+			h.Search.SearchSymbols(w, r)
+			return
+		}
+	}
+
+	if h.CodeComments != nil && strings.HasSuffix(rest, "/code-comments") {
+		h.CodeComments.ListByFile(w, r, strings.TrimSuffix(rest, "/code-comments"))
+		return
 	}
 
 	if !strings.HasSuffix(rest, "/blob") {

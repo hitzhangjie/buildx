@@ -1,7 +1,12 @@
 import type { SidebarMenuItemDef } from "./SidebarMenuItems";
+import { getAdministrationSidebarMenu } from "./administrationSidebar";
 
-export function getGlobalSidebarMenu(): SidebarMenuItemDef[] {
-  return [
+type GlobalSidebarOptions = {
+  isAdministrator?: boolean;
+};
+
+export function getGlobalSidebarMenu(options: GlobalSidebarOptions = {}): SidebarMenuItemDef[] {
+  const items: SidebarMenuItemDef[] = [
     {
       label: "Projects",
       icon: "project",
@@ -19,4 +24,10 @@ export function getGlobalSidebarMenu(): SidebarMenuItemDef[] {
       ],
     },
   ];
+
+  if (options.isAdministrator) {
+    items.push(getAdministrationSidebarMenu());
+  }
+
+  return items;
 }

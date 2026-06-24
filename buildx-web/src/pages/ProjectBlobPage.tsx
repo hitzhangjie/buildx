@@ -1,20 +1,26 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { fetchBlob, createFile, type BlobContent, type BlobEntry } from "../api/blob";
-import type { SearchFileHit, SearchTextHit } from "../api/search";
+import { createCodeComment, fetchCodeComments, type CodeComment } from "../api/codeComments";
+import { fetchProjects } from "../api/projects";
+import type { SearchFileHit, SearchTextHit, SearchSymbolHit } from "../api/search";
 import { NoCommitsPanel } from "../components/onedev/panels/NoCommitsPanel";
 import { useProjectContext } from "../context/ProjectContext";
 import { ProjectLayout } from "../layout/ProjectLayout";
 import { getMockReadme } from "../mocks/fixtures/blob";
 import { USE_MOCK } from "../mocks/config";
 import {
+  blobSelectionUrl,
   blobUrl,
   parentBlobUrl,
   parseBlobSegments,
   fileIcon,
   type BlobMode,
 } from "../util/blobPath";
+import { parseSourcePosition, sourcePositionFromRange, type PlanarRange } from "../util/planarRange";
 import { RevisionPicker } from "../components/onedev/panels/RevisionPicker";
+import { SourceView } from "../components/onedev/SourceView";
+import { useAuth } from "../context/AuthContext";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
 import { InlineDropdown } from "../components/onedev/DropdownMenu";
@@ -22,6 +28,7 @@ import { CloneDialog } from "../components/onedev/panels/CloneDialog";
 import { QuickSearchPanel } from "../components/search/QuickSearchPanel";
 import { AdvancedSearchPanel } from "../components/search/AdvancedSearchPanel";
 import { SearchResultPanel } from "../components/search/SearchResultPanel";
+import { bindBlobSearchShortcuts } from "../util/blobSearchShortcuts";
 
 // ---------------------------------------------------------------------------
 // BlobNavigator – breadcrumb with optional inline file-name input
@@ -203,7 +210,148 @@ function FolderView({
 // FileView
 // ---------------------------------------------------------------------------
 
-function FileView({ blob }: { blob: BlobContent }) {
+function FileView({
+  projectPath,
+  revision,
+  path,
+  blob,
+  position,
+  commentId,
+  onPositionChange,
+  onCommentChange,
+}: {
+  projectPath: string;
+  revision: string;
+  path: string;
+  blob: BlobContent;
+  position: string | null;
+  commentId: string | null;
+  onPositionChange: (position: string | null) => void;
+  onCommentChange: (commentId: string | null) => void;
+}) {
+  const { user } = useAuth();
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [comments, setComments] = useState<CodeComment[]>([]);
+  const [draftRange, setDraftRange] = useState<PlanarRange | null>(null);
+  const [draftContent, setDraftContent] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+
+  const markPosition = parseSourcePosition(position);
+  const loginHref = `/~login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchProjects().then((projects) => {
+      if (!cancelled) {
+        setProjectId(projects.find((p) => p.path === projectPath)?.id ?? null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
+
+  useEffect(() => {
+    if (!blob.commitHash || !projectPath) {
+      setComments([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchCodeComments(projectPath, blob.commitHash, path)
+      .then((items) => {
+        if (!cancelled) {
+          setComments(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setComments([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath, blob.commitHash, path]);
+
+  useEffect(() => {
+    if (!commentId) {
+      return;
+    }
+    const open = comments.find((c) => String(c.id) === commentId);
+    if (open?.mark.range) {
+      setDraftRange(open.mark.range);
+      setDraftContent(open.content);
+    }
+  }, [commentId, comments]);
+
+  const handleAddComment = useCallback(
+    (range: PlanarRange) => {
+      setDraftRange(range);
+      setDraftContent("");
+      setCommentError(null);
+      onCommentChange(null);
+      onPositionChange(sourcePositionFromRange(range));
+    },
+    [onCommentChange, onPositionChange],
+  );
+
+  const handleSaveComment = useCallback(async () => {
+    if (!projectId || !blob.commitHash || !draftRange || !draftContent.trim()) {
+      return;
+    }
+    setSavingComment(true);
+    setCommentError(null);
+    try {
+      const created = await createCodeComment({
+        projectId,
+        content: draftContent.trim(),
+        mark: {
+          commitHash: blob.commitHash,
+          path,
+          range: draftRange,
+        },
+      });
+      setComments((prev) => [...prev, created]);
+      setDraftRange(null);
+      setDraftContent("");
+      onCommentChange(String(created.id));
+      onPositionChange(sourcePositionFromRange(created.mark.range));
+    } catch (err) {
+      setCommentError((err as Error).message || "Failed to save comment");
+    } finally {
+      setSavingComment(false);
+    }
+  }, [
+    projectId,
+    blob.commitHash,
+    draftRange,
+    draftContent,
+    path,
+    onCommentChange,
+    onPositionChange,
+  ]);
+
+  const handleCancelComment = useCallback(() => {
+    setDraftRange(null);
+    setDraftContent("");
+    setCommentError(null);
+    onCommentChange(null);
+  }, [onCommentChange]);
+
+  const handleOpenComment = useCallback(
+    (comment: CodeComment) => {
+      if (!comment.mark.range) {
+        return;
+      }
+      setDraftRange(comment.mark.range);
+      setDraftContent(comment.content);
+      onCommentChange(String(comment.id));
+      onPositionChange(sourcePositionFromRange(comment.mark.range));
+    },
+    [onCommentChange, onPositionChange],
+  );
+
   return (
     <>
       <div className="border-bottom d-flex align-items-center px-3 py-2 justify-content-between">
@@ -221,7 +369,31 @@ function FileView({ blob }: { blob: BlobContent }) {
           </a>
         </span>
       </div>
-      <pre className="p-4 mb-0 font-size-sm blob-file-content">{blob.content}</pre>
+      {commentError && <div className="alert alert-light-danger mx-3 mt-3 mb-0">{commentError}</div>}
+      <SourceView
+        filePath={path}
+        content={blob.content ?? ""}
+        position={markPosition}
+        selectionUrl={(range) =>
+          `${window.location.origin}${blobSelectionUrl(
+            projectPath,
+            revision,
+            path,
+            sourcePositionFromRange(range),
+          )}`
+        }
+        loggedIn={Boolean(user)}
+        loginHref={loginHref}
+        comments={comments}
+        draftRange={draftRange}
+        draftContent={draftContent}
+        onDraftContentChange={setDraftContent}
+        onAddComment={handleAddComment}
+        onSaveComment={() => void handleSaveComment()}
+        onCancelComment={handleCancelComment}
+        onOpenComment={handleOpenComment}
+        savingComment={savingComment}
+      />
     </>
   );
 }
@@ -238,7 +410,30 @@ export function ProjectBlobPage() {
 
   // Parse mode and extra params from URL
   const mode: BlobMode = (searchParams.get("mode") as BlobMode) || "view";
+  const editMode = mode === "add" || mode === "edit";
   const initialPath = searchParams.get("initialPath") || undefined;
+  const position = searchParams.get("position");
+  const commentId = searchParams.get("comment");
+
+  const updateBlobQuery = useCallback(
+    (updates: Record<string, string | null>) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          for (const [key, value] of Object.entries(updates)) {
+            if (value) {
+              next.set(key, value);
+            } else {
+              next.delete(key);
+            }
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   // Blob data state
   const [blob, setBlob] = useState<BlobContent | null>(null);
@@ -258,8 +453,9 @@ export function ProjectBlobPage() {
   const [searchResults, setSearchResults] = useState<{
     textHits?: SearchTextHit[];
     fileHits?: SearchFileHit[];
+    symbolHits?: SearchSymbolHit[];
     hasMore: boolean;
-    searchType: "text" | "file";
+    searchType: "text" | "file" | "symbol";
     query: string;
   } | null>(null);
 
@@ -304,24 +500,21 @@ export function ProjectBlobPage() {
     }
   }, [mode]);
 
-  // Keyboard shortcut 't' for quick search.
+  // Keyboard shortcuts: t = quick search, v = advanced search (OneDev project-blob.js).
+  const openQuickSearchRef = useRef(() => setSearchOpen("quick"));
+  const openAdvancedSearchRef = useRef(() => setSearchOpen("advanced"));
+  openQuickSearchRef.current = () => setSearchOpen("quick");
+  openAdvancedSearchRef.current = () => setSearchOpen("advanced");
+
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag !== "INPUT" && tag !== "TEXTAREA" && !(e.target as HTMLElement).isContentEditable) {
-          e.preventDefault();
-          setSearchOpen("quick");
-        }
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return bindBlobSearchShortcuts({
+      onQuickSearch: () => openQuickSearchRef.current(),
+      onAdvancedSearch: () => openAdvancedSearchRef.current(),
+    });
   }, []);
 
   // When viewing a file and entering add/edit mode, the new file should be
   // created in the file's parent directory, not "inside" the file.
-  const editMode = mode === "add" || mode === "edit";
   const directoryPath =
     editMode && blob?.type === "file"
       ? path.split("/").slice(0, -1).join("/")
@@ -372,7 +565,6 @@ export function ProjectBlobPage() {
 
   // --- Determine what to render in the content area ---
 
-  const isEditMode = mode === "add" || mode === "edit";
   const hasNoCommits =
     !loading &&
     !error &&
@@ -382,7 +574,7 @@ export function ProjectBlobPage() {
 
   let content: React.ReactNode;
 
-  if (isEditMode) {
+  if (editMode) {
     // ADD or EDIT mode override the normal view
     if (mode === "add" && !newFileName) {
       // No file name entered yet — show prompt
@@ -417,7 +609,18 @@ export function ProjectBlobPage() {
   } else if (blob && blob.type === "directory") {
     content = <FolderView projectPath={projectPath} revision={displayRevision || revision} path={path} blob={blob} />;
   } else if (blob) {
-    content = <FileView blob={blob} />;
+    content = (
+      <FileView
+        projectPath={projectPath}
+        revision={displayRevision || revision}
+        path={path}
+        blob={blob}
+        position={position}
+        commentId={commentId}
+        onPositionChange={(nextPosition) => updateBlobQuery({ position: nextPosition })}
+        onCommentChange={(nextCommentId) => updateBlobQuery({ comment: nextCommentId })}
+      />
+    );
   } else {
     content = null;
   }
@@ -437,8 +640,8 @@ export function ProjectBlobPage() {
             <BlobNavigator
               projectPath={projectPath}
               revision={displayRevision || revision}
-              path={isEditMode ? directoryPath : path}
-              mode={isEditMode ? mode : undefined}
+              path={editMode ? directoryPath : path}
+              mode={editMode ? mode : undefined}
               newFileName={newFileName}
               onNewFileNameChange={setNewFileName}
             />
@@ -465,7 +668,7 @@ export function ProjectBlobPage() {
               />
             </span>
 
-            {!isEditMode && (
+            {!editMode && (
               <InlineDropdown
                 wrapperClassName="mr-3"
                 className="text-nowrap"
@@ -563,6 +766,7 @@ export function ProjectBlobPage() {
           <SearchResultPanel
             textHits={searchResults.textHits}
             fileHits={searchResults.fileHits}
+            symbolHits={searchResults.symbolHits}
             hasMore={searchResults.hasMore}
             searchType={searchResults.searchType}
             query={searchResults.query}
@@ -600,11 +804,11 @@ export function ProjectBlobPage() {
           revision={displayRevision || revision}
           currentPath={path}
           onClose={() => setSearchOpen(null)}
-          onSearchComplete={(hits, type, hasMore) => {
-            const query = ""; // AdvancedSearchPanel manages its own query state
+          onSearchComplete={(hits, type, hasMore, query) => {
             setSearchResults({
               textHits: type === "text" ? (hits as SearchTextHit[]) : undefined,
               fileHits: type === "file" ? (hits as SearchFileHit[]) : undefined,
+              symbolHits: type === "symbol" ? (hits as SearchSymbolHit[]) : undefined,
               hasMore,
               searchType: type,
               query,

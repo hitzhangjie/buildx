@@ -56,6 +56,10 @@
   flex-shrink: 0;
 }
 
+.search-result > .body .scope {
+  color: var(--gray);
+}
+
 .dark-mode .search-result > .body li.blob > div > a.blob:hover {
   background: var(--dark-mode-lighter-dark);
 }

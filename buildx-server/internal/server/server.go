@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/codecomment"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/persistence/sqlite"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/security"
@@ -54,7 +55,9 @@ func (s *Server) routes() chi.Router {
 	userHandler := &api.UsersHandler{Security: sec}
 	settingsHandler := &api.SettingsHandler{}
 	searchHandler := &api.SearchHandler{Projects: projects, Security: sec}
-	blobHandler := &api.BlobHandler{Projects: projects, Security: sec, Search: searchHandler}
+	codeComments := codecomment.NewDBStore(s.store.DB())
+	codeCommentsHandler := &api.CodeCommentsHandler{Comments: codeComments, Projects: projects, Security: sec}
+	blobHandler := &api.BlobHandler{Projects: projects, Security: sec, Search: searchHandler, CodeComments: codeCommentsHandler}
 	repoHandler := &api.RepositoryHandler{Projects: projects, Security: sec}
 	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
 	tokenHandler := &api.AccessTokensHandler{Security: sec}
@@ -146,6 +149,22 @@ func (s *Server) routes() chi.Router {
 
 		// File create/update: POST with commit message and base64 content.
 		r.Post("/projects/*", blobHandler.FilesPost)
+
+		r.Get("/code-comments/{commentId}", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseCommentID(w, r)
+			if !ok {
+				return
+			}
+			codeCommentsHandler.Get(w, r, id)
+		})
+		r.Post("/code-comments", codeCommentsHandler.Create)
+		r.Delete("/code-comments/{commentId}", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseCommentID(w, r)
+			if !ok {
+				return
+			}
+			codeCommentsHandler.Delete(w, r, id)
+		})
 	})
 
 	// Static web UI — embedded placeholder, or BUILDX_WEB_DIR when OneDev assets are deployed.

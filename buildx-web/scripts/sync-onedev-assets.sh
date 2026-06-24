@@ -23,6 +23,8 @@ cp "$ONEDEV_WEB/page/project/blob/project-blob.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/project/blob/navigator/blob-navigator.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/project/blob/render/folder/folder-view.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/project/blob/render/nocommits/no-commits.css" "$PUBLIC/onedev/css/"
+cp "$ONEDEV_WEB/page/project/blob/render/source/source-view.css" "$PUBLIC/onedev/css/"
+cp "$ONEDEV_WEB/asset/selectionpopover/jquery.selectionpopover.css" "$PUBLIC/onedev/css/selection-popover.css"
 SELECT2_RES="$ONEDEV_WEB/component/select2/res"
 cp "$SELECT2_RES/select2.css" "$SELECT2_RES/select2-bootstrap.css" "$PUBLIC/onedev/css/"
 cp "$SELECT2_RES/select2.png" "$SELECT2_RES/select2x2.png" "$SELECT2_RES/select2-spinner.gif" "$SELECT2_RES/dark-select2-spinner.gif" "$PUBLIC/onedev/css/" 2>/dev/null || true

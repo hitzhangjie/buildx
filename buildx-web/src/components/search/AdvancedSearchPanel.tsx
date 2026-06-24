@@ -1,5 +1,13 @@
-import { useState, useEffect, useRef, type ReactNode } from "react";
-import { searchText, searchFileNames, type SearchFileHit, type SearchTextHit, type TextSearchParams } from "../../api/search";
+import { useState, useEffect, useRef } from "react";
+import {
+  searchText,
+  searchFileNames,
+  searchSymbols,
+  type SearchFileHit,
+  type SearchTextHit,
+  type SearchSymbolHit,
+  type TextSearchParams,
+} from "../../api/search";
 import { Icon } from "../onedev/Icon";
 import { SearchModal } from "./SearchModal";
 import "./advanced-search.css";
@@ -10,33 +18,15 @@ export type AdvancedSearchPanelProps = {
   revision: string;
   currentPath: string;
   onClose: () => void;
-  onSearchComplete: (hits: SearchTextHit[] | SearchFileHit[], type: "text" | "file", hasMore: boolean) => void;
+  onSearchComplete: (
+    hits: SearchTextHit[] | SearchFileHit[] | SearchSymbolHit[],
+    type: "text" | "file" | "symbol",
+    hasMore: boolean,
+    query: string,
+  ) => void;
 };
 
 type Tab = "text" | "files" | "symbols";
-
-function SearchCheckbox({
-  checked,
-  onChange,
-  children,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  children: ReactNode;
-}) {
-  return (
-    <label className="checkbox">
-      <input
-        type="checkbox"
-        className="form-check-input"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span />
-      {children}
-    </label>
-  );
-}
 
 export function AdvancedSearchPanel({
   isOpen,
@@ -61,11 +51,17 @@ export function AdvancedSearchPanel({
   const [fileNameQuery, setFileNameQuery] = useState("");
   const [fileCaseSensitive, setFileCaseSensitive] = useState(false);
 
+  // Symbols tab state.
+  const [symbolQuery, setSymbolQuery] = useState("");
+  const [symbolCaseSensitive, setSymbolCaseSensitive] = useState(false);
+  const [symbolFilePatterns, setSymbolFilePatterns] = useState("");
+
   // Search inside current tree.
   const [insideCurrentDir, setInsideCurrentDir] = useState(false);
 
   const searchForRef = useRef<HTMLInputElement>(null);
   const fileNameRef = useRef<HTMLInputElement>(null);
+  const symbolNameRef = useRef<HTMLInputElement>(null);
 
   // Focus the active tab's input on open.
   useEffect(() => {
@@ -73,6 +69,7 @@ export function AdvancedSearchPanel({
       const timer = setTimeout(() => {
         if (activeTab === "text") searchForRef.current?.focus();
         else if (activeTab === "files") fileNameRef.current?.focus();
+        else if (activeTab === "symbols") symbolNameRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -117,19 +114,45 @@ export function AdvancedSearchPanel({
           fileNames: filePatterns || undefined,
         };
         const result = await searchText(projectPath, revision, params, directory);
-        onSearchComplete(result.hits, "text", result.hasMore);
+        onSearchComplete(result.hits, "text", result.hasMore, searchFor);
       } else if (activeTab === "files") {
         if (!fileNameQuery.trim()) {
           setError("Please enter a file name pattern.");
           setLoading(false);
           return;
         }
-        const result = await searchFileNames(projectPath, revision, fileNameQuery, fileCaseSensitive, directory);
-        onSearchComplete(result.hits, "file", result.hasMore);
+        const result = await searchFileNames(
+          projectPath,
+          revision,
+          fileNameQuery,
+          fileCaseSensitive,
+          directory,
+        );
+        onSearchComplete(result.hits, "file", result.hasMore, fileNameQuery);
+      } else if (activeTab === "symbols") {
+        if (!symbolQuery.trim()) {
+          setError("Please enter a symbol name.");
+          setLoading(false);
+          return;
+        }
+        const result = await searchSymbols(
+          projectPath,
+          revision,
+          symbolQuery,
+          symbolCaseSensitive,
+          symbolFilePatterns || undefined,
+          directory,
+        );
+        onSearchComplete(result.hits, "symbol", result.hasMore, symbolQuery);
       }
       onClose();
     } catch (err) {
-      setError((err as { message?: string }).message ?? "Search failed");
+      const message = (err as { message?: string }).message ?? "Search failed";
+      if (message.toLowerCase().includes("too general")) {
+        setError("Query is too general. Please include at least one non-wildcard character.");
+      } else {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -178,10 +201,9 @@ export function AdvancedSearchPanel({
             </li>
             <li className="nav-item">
               <a
-                className="nav-link disabled"
+                className={`nav-link${activeTab === "symbols" ? " active" : ""}`}
                 href="#"
-                onClick={(e) => e.preventDefault()}
-                title="Symbol search coming soon"
+                onClick={(e) => { e.preventDefault(); setActiveTab("symbols"); }}
               >
                 Symbols
               </a>
@@ -195,9 +217,7 @@ export function AdvancedSearchPanel({
           {activeTab === "text" && (
             <div className="option">
               <div className="form-group">
-                <label className="control-label">
-                  Search For <span className="text-danger">*</span>
-                </label>
+                <label className="font-weight-bold">Search For</label>
                 <input
                   ref={searchForRef}
                   type="text"
@@ -208,26 +228,27 @@ export function AdvancedSearchPanel({
                 />
               </div>
               <div className="form-group">
-                <div className="checkbox-inline">
-                  <SearchCheckbox checked={regex} onChange={setRegex}>
-                    Regular Expression
-                  </SearchCheckbox>
-                  <SearchCheckbox checked={wholeWord} onChange={setWholeWord}>
-                    Whole Word
-                  </SearchCheckbox>
-                  <SearchCheckbox checked={caseSensitive} onChange={setCaseSensitive}>
-                    Case Sensitive
-                  </SearchCheckbox>
-                </div>
+                <label className="checkbox mr-3">
+                  <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />{" "}
+                  Regular Expression
+                </label>
+                <label className="checkbox mr-3">
+                  <input type="checkbox" checked={wholeWord} onChange={(e) => setWholeWord(e.target.checked)} />{" "}
+                  Whole Word
+                </label>
+                <label className="checkbox">
+                  <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} />{" "}
+                  Case Sensitive
+                </label>
               </div>
               <div className="form-group">
-                <label className="control-label">File Name Patterns (separated by comma)</label>
+                <label>File Name Patterns (separated by comma)</label>
                 <input
                   type="text"
                   className="form-control"
                   value={filePatterns}
                   onChange={(e) => setFilePatterns(e.target.value)}
-                  placeholder="File name patterns such as *.java, *.c"
+                  placeholder="e.g. *.go, *.ts"
                 />
               </div>
             </div>
@@ -248,26 +269,63 @@ export function AdvancedSearchPanel({
                 <small className="form-text text-muted">* = any string, ? = any character</small>
               </div>
               <div className="form-group">
-                <SearchCheckbox checked={fileCaseSensitive} onChange={setFileCaseSensitive}>
+                <label className="checkbox">
+                  <input type="checkbox" checked={fileCaseSensitive} onChange={(e) => setFileCaseSensitive(e.target.checked)} />{" "}
                   Case Sensitive
-                </SearchCheckbox>
+                </label>
               </div>
             </div>
           )}
 
           {activeTab === "symbols" && (
             <div className="option">
-              <div className="alert alert-light-warning">
-                Symbol search requires code indexing infrastructure and will be available in a future update.
+              <div className="form-group">
+                <label className="font-weight-bold">
+                  Symbol Name <span className="text-danger">*</span>
+                </label>
+                <input
+                  ref={symbolNameRef}
+                  type="text"
+                  className="form-control"
+                  value={symbolQuery}
+                  onChange={(e) => setSymbolQuery(e.target.value)}
+                  placeholder="Enter symbol name…"
+                />
+                <small className="form-text text-muted">* = any string, ? = any character</small>
+              </div>
+              <div className="form-group">
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={symbolCaseSensitive}
+                    onChange={(e) => setSymbolCaseSensitive(e.target.checked)}
+                  />{" "}
+                  Case Sensitive
+                </label>
+              </div>
+              <div className="form-group">
+                <label>File Name Patterns (separated by comma)</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={symbolFilePatterns}
+                  onChange={(e) => setSymbolFilePatterns(e.target.value)}
+                  placeholder="e.g. *.go, *.java"
+                />
               </div>
             </div>
           )}
 
           {currentPath && (
             <div className="form-group">
-              <SearchCheckbox checked={insideCurrentDir} onChange={setInsideCurrentDir}>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={insideCurrentDir}
+                  onChange={(e) => setInsideCurrentDir(e.target.checked)}
+                />{" "}
                 Search inside current tree
-              </SearchCheckbox>
+              </label>
             </div>
           )}
         </div>

@@ -97,6 +97,18 @@ func (r *Repository) revisionExists(revision string) bool {
 	return err == nil
 }
 
+// ResolveCommitHash resolves a revision to its commit hash.
+func (r *Repository) ResolveCommitHash(revision string) (string, error) {
+	if revision == "" {
+		revision = r.DefaultRevision()
+	}
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	if err != nil {
+		return "", err
+	}
+	return hash.String(), nil
+}
+
 // BranchDetail is the REST shape for a single branch ref.
 type BranchDetail struct {
 	RefName    string `json:"refName"`
@@ -836,13 +848,19 @@ func (r *Repository) Blob(ctx context.Context, revision, path string) (*BlobCont
 		return nil, nil
 	}
 
+	commitHash, err := r.ResolveCommitHash(revision)
+	if err != nil {
+		return nil, err
+	}
+
 	entries, err := r.listTree(revision, path)
 	if err == nil {
 		return &BlobContent{
-			Revision: revision,
-			Path:     path,
-			Type:     "directory",
-			Entries:  entries,
+			Revision:   revision,
+			CommitHash: commitHash,
+			Path:       path,
+			Type:       "directory",
+			Entries:    entries,
 		}, nil
 	}
 
@@ -852,11 +870,12 @@ func (r *Repository) Blob(ctx context.Context, revision, path string) (*BlobCont
 	}
 
 	return &BlobContent{
-		Revision: revision,
-		Path:     path,
-		Type:     "file",
-		Content:  content,
-		Size:     size,
+		Revision:   revision,
+		CommitHash: commitHash,
+		Path:       path,
+		Type:       "file",
+		Content:    content,
+		Size:       size,
 	}, nil
 }
 

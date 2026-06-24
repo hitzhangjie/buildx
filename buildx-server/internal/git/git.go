@@ -68,12 +68,13 @@ type ProjectStats struct {
 // BlobContent is the result for a blob request — either a directory listing
 // or file content, matching the frontend's BlobContent shape.
 type BlobContent struct {
-	Revision string      `json:"revision"`
-	Path     string      `json:"path"`
-	Type     string      `json:"type"` // "directory" or "file"
-	Entries  []BlobEntry `json:"entries,omitempty"`
-	Content  string      `json:"content,omitempty"`
-	Size     int64       `json:"size,omitempty"`
+	Revision   string      `json:"revision"`
+	CommitHash string      `json:"commitHash,omitempty"`
+	Path       string      `json:"path"`
+	Type       string      `json:"type"` // "directory" or "file"
+	Entries    []BlobEntry `json:"entries,omitempty"`
+	Content    string      `json:"content,omitempty"`
+	Size       int64       `json:"size,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,28 @@ type SearchTextHit struct {
 	LineNo      int          `json:"lineNo"`
 	LineContent string       `json:"lineContent"`
 	Match       *PlanarRange `json:"match,omitempty"`
+}
+
+// SearchSymbolHit is one matched symbol definition in a symbol search.
+type SearchSymbolHit struct {
+	FilePath    string       `json:"filePath"`
+	SymbolName  string       `json:"symbolName"`
+	SymbolType  string       `json:"symbolType,omitempty"`
+	Namespace   string       `json:"namespace,omitempty"`
+	LineNo      int          `json:"lineNo"`
+	LineContent string       `json:"lineContent"`
+	Match       *LinearRange `json:"match,omitempty"`
+}
+
+// SymbolSearchOptions configures a symbol search operation.
+type SymbolSearchOptions struct {
+	Revision      string
+	Query         string
+	CaseSensitive bool
+	FileNames     string // comma-separated glob patterns
+	Directory     string
+	MaxResults    int
+	Primary       *bool // nil = all symbols, true/false = primary/secondary only
 }
 
 // SearchOptions configures a search operation.

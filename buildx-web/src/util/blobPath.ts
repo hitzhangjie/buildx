@@ -42,6 +42,16 @@ export function blobUrl(
   return url;
 }
 
+/** Permanent link for a text selection in a file view. */
+export function blobSelectionUrl(
+  projectPath: string,
+  revision: string,
+  path: string,
+  position: string,
+): string {
+  return blobUrl(projectPath, revision, path, "view", { position });
+}
+
 /**
  * Generate the URL for creating a new file in the given directory.
  * Puts the page in ADD mode with an optional initial path.
