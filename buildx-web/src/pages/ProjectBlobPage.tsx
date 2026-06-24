@@ -20,6 +20,7 @@ import {
 import { parseSourcePosition, sourcePositionFromRange, type PlanarRange } from "../util/planarRange";
 import { RevisionPicker } from "../components/onedev/panels/RevisionPicker";
 import { SourceView } from "../components/onedev/SourceView";
+import { MarkdownContent } from "../components/onedev/MarkdownContent";
 import { useAuth } from "../context/AuthContext";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
@@ -29,6 +30,10 @@ import { QuickSearchPanel } from "../components/search/QuickSearchPanel";
 import { AdvancedSearchPanel } from "../components/search/AdvancedSearchPanel";
 import { SearchResultPanel } from "../components/search/SearchResultPanel";
 import { bindBlobSearchShortcuts } from "../util/blobSearchShortcuts";
+
+function isMarkdownFile(path: string) {
+  return /\.(md|markdown)$/i.test(path);
+}
 
 // ---------------------------------------------------------------------------
 // BlobNavigator – breadcrumb with optional inline file-name input
@@ -168,7 +173,54 @@ function FolderView({
   blob: BlobContent;
 }) {
   const parent = parentBlobUrl(projectPath, revision, path);
-  const readme = USE_MOCK && path === "" ? getMockReadme("") : null;
+  const [readmeContent, setReadmeContent] = useState<string | null>(null);
+  const [readmeTitle, setReadmeTitle] = useState<string>("README.md");
+  const isRootPath = path === "";
+  const readmeEntry =
+    isRootPath
+      ? (blob.entries ?? []).find(
+          (entry) => entry.type === "file" && /^readme(?:\..+)?$/i.test(entry.name),
+        ) ?? null
+      : null;
+  const visibleEntries = isRootPath
+    ? (blob.entries ?? []).filter((entry) => entry.path !== readmeEntry?.path)
+    : (blob.entries ?? []);
+
+  useEffect(() => {
+    if (!isRootPath || !readmeEntry) {
+      setReadmeContent(null);
+      setReadmeTitle("README.md");
+      return;
+    }
+    const currentReadmeEntry = readmeEntry;
+    let cancelled = false;
+    async function loadReadme() {
+      if (USE_MOCK) {
+        const mockReadme = getMockReadme(path);
+        if (!cancelled && mockReadme) {
+          setReadmeTitle(mockReadme.title);
+          setReadmeContent(mockReadme.content);
+        }
+        return;
+      }
+      try {
+        const readmeBlob = await fetchBlob(projectPath, revision, currentReadmeEntry.path);
+        if (!cancelled) {
+          setReadmeTitle(currentReadmeEntry.name);
+          setReadmeContent(readmeBlob?.type === "file" ? (readmeBlob.content ?? "") : null);
+        }
+      } catch {
+        if (!cancelled) {
+          setReadmeTitle(currentReadmeEntry.name);
+          setReadmeContent(null);
+        }
+      }
+    }
+    void loadReadme();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRootPath, path, projectPath, readmeEntry, revision]);
 
   return (
     <div className="folder-view">
@@ -184,7 +236,7 @@ function FolderView({
               </td>
             </tr>
           )}
-          {(blob.entries ?? []).map((entry) => (
+          {visibleEntries.map((entry) => (
             <FolderRow
               key={entry.path}
               projectPath={projectPath}
@@ -194,12 +246,14 @@ function FolderView({
           ))}
         </tbody>
       </table>
-      {readme && (
+      {readmeEntry && readmeContent !== null && (
         <div className="readme">
-          <div className="head px-4 pt-4">
-            <b className="title mr-2">{readme.title}</b>
+          <div className="head">
+            <b className="title mr-2">{readmeTitle}</b>
           </div>
-          <pre className="body p-4 mb-0 font-size-sm">{readme.content}</pre>
+          <div className="body p-4">
+            <MarkdownContent content={readmeContent} className="font-size-sm" />
+          </div>
         </div>
       )}
     </div>
@@ -239,6 +293,7 @@ function FileView({
 
   const markPosition = parseSourcePosition(position);
   const loginHref = `/~login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  const isMarkdown = isMarkdownFile(path);
 
   useEffect(() => {
     let cancelled = false;
@@ -370,30 +425,36 @@ function FileView({
         </span>
       </div>
       {commentError && <div className="alert alert-light-danger mx-3 mt-3 mb-0">{commentError}</div>}
-      <SourceView
-        filePath={path}
-        content={blob.content ?? ""}
-        position={markPosition}
-        selectionUrl={(range) =>
-          `${window.location.origin}${blobSelectionUrl(
-            projectPath,
-            revision,
-            path,
-            sourcePositionFromRange(range),
-          )}`
-        }
-        loggedIn={Boolean(user)}
-        loginHref={loginHref}
-        comments={comments}
-        draftRange={draftRange}
-        draftContent={draftContent}
-        onDraftContentChange={setDraftContent}
-        onAddComment={handleAddComment}
-        onSaveComment={() => void handleSaveComment()}
-        onCancelComment={handleCancelComment}
-        onOpenComment={handleOpenComment}
-        savingComment={savingComment}
-      />
+      {isMarkdown ? (
+        <div className="p-4">
+          <MarkdownContent content={blob.content ?? ""} />
+        </div>
+      ) : (
+        <SourceView
+          filePath={path}
+          content={blob.content ?? ""}
+          position={markPosition}
+          selectionUrl={(range) =>
+            `${window.location.origin}${blobSelectionUrl(
+              projectPath,
+              revision,
+              path,
+              sourcePositionFromRange(range),
+            )}`
+          }
+          loggedIn={Boolean(user)}
+          loginHref={loginHref}
+          comments={comments}
+          draftRange={draftRange}
+          draftContent={draftContent}
+          onDraftContentChange={setDraftContent}
+          onAddComment={handleAddComment}
+          onSaveComment={() => void handleSaveComment()}
+          onCancelComment={handleCancelComment}
+          onOpenComment={handleOpenComment}
+          savingComment={savingComment}
+        />
+      )}
     </>
   );
 }
@@ -723,7 +784,7 @@ export function ProjectBlobPage() {
               {({ close }) => (
                 <div className="list-group list-group-flush">
                   <a
-                    className="list-group-item list-group-item-action"
+                    className="list-group-item list-group-item-action d-flex align-items-center justify-content-between"
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
@@ -731,10 +792,11 @@ export function ProjectBlobPage() {
                       setSearchOpen("quick");
                     }}
                   >
-                    Quick Search
+                    <span>Quick Search</span>
+                    <span className="text-muted pl-3">T</span>
                   </a>
                   <a
-                    className="list-group-item list-group-item-action"
+                    className="list-group-item list-group-item-action d-flex align-items-center justify-content-between"
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
@@ -742,7 +804,8 @@ export function ProjectBlobPage() {
                       setSearchOpen("advanced");
                     }}
                   >
-                    Advanced Search
+                    <span>Advanced Search</span>
+                    <span className="text-muted pl-3">V</span>
                   </a>
                 </div>
               )}

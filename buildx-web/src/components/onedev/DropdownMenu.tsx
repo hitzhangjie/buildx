@@ -27,22 +27,28 @@ export function DropdownMenu({
   children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left?: number; right?: number }>({ top: 0 });
+  const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   // Calculate position based on trigger element
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
+
     const rect = trigger.getBoundingClientRect();
-    const pos: { top: number; left?: number; right?: number } = {
+    const viewportPadding = 8;
+    const menuWidth = menuRef.current?.offsetWidth ?? 0;
+
+    // Prefer requested alignment, then clamp to viewport to prevent truncation.
+    const preferredLeft = align === "right" && menuWidth > 0 ? rect.right - menuWidth : rect.left;
+    const maxLeft = menuWidth > 0
+      ? Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding)
+      : Math.max(viewportPadding, window.innerWidth - viewportPadding);
+    const clampedLeft = Math.min(Math.max(preferredLeft, viewportPadding), maxLeft);
+
+    setPosition({
       top: rect.bottom + 4, // 4px gap below trigger
-    };
-    if (align === "right") {
-      pos.right = window.innerWidth - rect.right;
-    } else {
-      pos.left = rect.left;
-    }
-    setPosition(pos);
+      left: clampedLeft,
+    });
   }, [triggerRef, align]);
 
   useEffect(() => {
@@ -74,15 +80,10 @@ export function DropdownMenu({
     position: "fixed",
     zIndex: 1050,
     top: position.top,
+    left: position.left,
+    right: "auto",
     float: "none",
   };
-  if (align === "right") {
-    style.right = position.right;
-    style.left = "auto"; // override bootstrap .dropdown-menu { left: 0 }
-  } else {
-    style.left = position.left;
-    style.right = "auto";
-  }
 
   const panelClass = ["floating", "dropdown-menu", "show", panelClassName].filter(Boolean).join(" ");
 

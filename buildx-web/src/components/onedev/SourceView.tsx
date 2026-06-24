@@ -151,6 +151,7 @@ export function SourceView({
     url: string;
   } | null>(null);
   const lastRangeKey = useRef<string>("");
+  const isMouseSelecting = useRef(false);
 
   const closePopover = useCallback(() => setPopover(null), []);
 
@@ -196,6 +197,29 @@ export function SourceView({
     [closePopover, popover, selectionUrl],
   );
 
+  const updatePopoverFromCurrentSelection = useCallback(
+    (view: EditorView, fallbackMouse?: { top: number; left: number }) => {
+      const { anchor, head } = view.state.selection.main;
+      const range = rangeFromSelection(view.state.doc, anchor, head);
+      if (!range) {
+        closePopover();
+        return;
+      }
+      const anchorCoords = view.coordsAtPos(anchor);
+      const headCoords = view.coordsAtPos(head);
+      const top =
+        fallbackMouse?.top ??
+        Math.min(anchorCoords?.top ?? Number.POSITIVE_INFINITY, headCoords?.top ?? Number.POSITIVE_INFINITY);
+      const left =
+        fallbackMouse?.left ??
+        ((anchorCoords && headCoords
+          ? Math.min(anchorCoords.left, headCoords.left) + Math.abs(anchorCoords.left - headCoords.left) / 2
+          : (anchorCoords?.left ?? headCoords?.left)) ?? 0);
+      showPopoverForSelection(view, { top: Number.isFinite(top) ? top : 0, left });
+    },
+    [closePopover, showPopoverForSelection],
+  );
+
   useEffect(() => {
     if (!containerRef.current) {
       return;
@@ -231,20 +255,14 @@ export function SourceView({
         EditorView.domEventHandlers({
           mouseup(event, view) {
             setTimeout(() => {
-              showPopoverForSelection(view, { top: event.clientY, left: event.clientX });
+              updatePopoverFromCurrentSelection(view, { top: event.clientY, left: event.clientX });
             }, 100);
             return false;
           },
           keyup(event, view) {
             if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
               setTimeout(() => {
-                const coords = view.coordsAtPos(view.state.selection.main.head);
-                if (coords) {
-                  showPopoverForSelection(view, {
-                    top: coords.top,
-                    left: (coords.left + coords.right) / 2,
-                  });
-                }
+                updatePopoverFromCurrentSelection(view);
               }, 100);
             }
             return false;
@@ -256,13 +274,39 @@ export function SourceView({
 
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
+    const onDocumentMouseDown = () => {
+      isMouseSelecting.current = true;
+    };
+    const onDocumentMouseUp = (event: MouseEvent) => {
+      isMouseSelecting.current = false;
+      // Mouse can be released outside editor during drag-select; still update popover.
+      setTimeout(() => {
+        updatePopoverFromCurrentSelection(view, { top: event.clientY, left: event.clientX });
+      }, 100);
+    };
+    const onSelectionChange = () => {
+      // Ignore transient selection updates while user is still dragging.
+      if (isMouseSelecting.current) {
+        return;
+      }
+      // Keep popover state synced for keyboard/native selection changes.
+      setTimeout(() => {
+        updatePopoverFromCurrentSelection(view);
+      }, 0);
+    };
+    document.addEventListener("mousedown", onDocumentMouseDown);
+    document.addEventListener("mouseup", onDocumentMouseUp);
+    document.addEventListener("selectionchange", onSelectionChange);
 
     return () => {
+      document.removeEventListener("mousedown", onDocumentMouseDown);
+      document.removeEventListener("mouseup", onDocumentMouseUp);
+      document.removeEventListener("selectionchange", onSelectionChange);
       view.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath]);
+  }, [filePath, updatePopoverFromCurrentSelection]);
 
   useEffect(() => {
     const view = viewRef.current;
