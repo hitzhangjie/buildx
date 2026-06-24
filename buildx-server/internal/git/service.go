@@ -926,6 +926,14 @@ func (r *Repository) listTree(revision, path string) ([]BlobEntry, error) {
 		})
 	}
 
+	// Sort: directories first, then files, then alphabetically by name.
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Type != entries[j].Type {
+			return entries[i].Type == "directory"
+		}
+		return entries[i].Name < entries[j].Name
+	})
+
 	// Populate last-commit info for each entry.
 	for i := range entries {
 		entries[i].LastCommit = r.lastCommit(revision, entries[i].Path)

@@ -150,6 +150,45 @@ func TestBlob_file(t *testing.T) {
 	}
 }
 
+func TestBlob_directorySorting(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+	bareDir, workDir, _ := testutil.SetupBareWithCommit(t)
+
+	// Create files and subdirectories in mixed order.
+	// Expected order: directories first (bar, sub), then files (README.md, a.txt, z.txt), each alpha-sorted.
+	testutil.CommitFile(t, workDir, "z.txt", "z\n", "add z.txt")
+	testutil.CommitFile(t, workDir, "bar/file.txt", "bar\n", "add bar/file.txt")
+	testutil.CommitFile(t, workDir, "a.txt", "a\n", "add a.txt")
+	testutil.CommitFile(t, workDir, "sub/nested.txt", "sub\n", "add sub/nested.txt")
+	testutil.Push(t, workDir, bareDir, "HEAD:refs/heads/main")
+
+	repo, _ := git.Open(bareDir)
+	content, err := repo.Blob(context.Background(), "main", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content == nil || content.Type != "directory" {
+		t.Fatal("expected directory blob")
+	}
+
+	var names []string
+	for _, e := range content.Entries {
+		names = append(names, e.Name)
+	}
+	// Expected: directories first (bar, sub), then files (README.md, a.txt, z.txt), each alpha-sorted.
+	want := []string{"bar", "sub", "README.md", "a.txt", "z.txt"}
+	if len(names) != len(want) {
+		t.Fatalf("got %d entries %v, want %d entries %v", len(names), names, len(want), want)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("entry[%d] = %q, want %q (full list: %v)", i, names[i], want[i], names)
+		}
+	}
+}
+
 func TestListCommits(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found")
