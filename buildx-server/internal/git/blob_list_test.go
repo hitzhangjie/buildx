@@ -186,3 +186,59 @@ func TestListCommitsAfterPush(t *testing.T) {
 		t.Fatalf("author=%+v", commits[0].Author)
 	}
 }
+
+func TestBlobLastCommitForDirectories(t *testing.T) {
+	dir := t.TempDir()
+	work := filepath.Join(dir, "work")
+	gitDir := filepath.Join(dir, "git")
+	if err := os.MkdirAll(work, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(gitDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitBare(gitDir); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	run("git", "-C", work, "init")
+	run("git", "-C", work, "config", "user.email", "t@t.com")
+	run("git", "-C", work, "config", "user.name", "t")
+	// Create a file in a subdirectory
+	subdir := filepath.Join(work, "src")
+	if err := os.MkdirAll(subdir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "main.go"), []byte("package main"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("git", "-C", work, "add", ".")
+	run("git", "-C", work, "commit", "-m", "add src/main.go")
+	run("git", "-C", work, "branch", "-M", "main")
+	run("git", "-C", work, "remote", "add", "origin", gitDir)
+	run("git", "-C", work, "push", "-u", "origin", "main")
+
+	repo, err := Open(gitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, err := repo.Blob(context.Background(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob == nil {
+		t.Fatal("blob is nil")
+	}
+	for _, e := range blob.Entries {
+		t.Logf("entry: name=%q path=%q type=%s lastCommit=%+v", e.Name, e.Path, e.Type, e.LastCommit)
+		if e.LastCommit == nil {
+			t.Errorf("entry %q (type=%s) has nil LastCommit", e.Path, e.Type)
+		}
+	}
+}

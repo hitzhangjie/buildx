@@ -936,7 +936,7 @@ func (r *Repository) listTree(revision, path string) ([]BlobEntry, error) {
 
 	// Populate last-commit info for each entry.
 	for i := range entries {
-		entries[i].LastCommit = r.lastCommit(revision, entries[i].Path)
+		entries[i].LastCommit = r.lastCommit(revision, entries[i].Path, entries[i].Type == "directory")
 	}
 
 	return entries, nil
@@ -985,7 +985,7 @@ func (r *Repository) readFile(revision, path string) (string, int64, error) {
 // Last-commit info for a path
 // ---------------------------------------------------------------------------
 
-func (r *Repository) lastCommit(revision, path string) *CommitInfo {
+func (r *Repository) lastCommit(revision, path string, isDir bool) *CommitInfo {
 	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
 	if err != nil {
 		return nil
@@ -995,6 +995,9 @@ func (r *Repository) lastCommit(revision, path string) *CommitInfo {
 		From:  *hash,
 		Order: gogit.LogOrderCommitterTime,
 		PathFilter: func(p string) bool {
+			if isDir {
+				return strings.HasPrefix(p, path+"/")
+			}
 			return p == path
 		},
 	}
