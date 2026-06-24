@@ -15,15 +15,34 @@ import (
 )
 
 // BlobHandler serves file and directory browsing from project git repos.
+// It also dispatches search requests to SearchHandler.
 type BlobHandler struct {
 	Projects projectService
 	Security securityService
+	Search   *SearchHandler // set to enable search endpoints
 }
 
 // ServeHTTP handles wildcard requests under /~api/projects/* and dispatches
-// blob requests (those ending with /blob). Falls through to 404 for other paths.
+// to blob, search, or file handlers based on the URL suffix.
 func (h *BlobHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rest := chi.URLParam(r, "*")
+
+	// Dispatch search requests.
+	if h.Search != nil {
+		if strings.HasSuffix(rest, "/search/quick") {
+			h.Search.SearchQuick(w, r)
+			return
+		}
+		if strings.HasSuffix(rest, "/search/text") {
+			h.Search.SearchText(w, r)
+			return
+		}
+		if strings.HasSuffix(rest, "/search/files") {
+			h.Search.SearchFiles(w, r)
+			return
+		}
+	}
+
 	if !strings.HasSuffix(rest, "/blob") {
 		writeNotFound(w, r, "api_path", "rest", rest)
 		return

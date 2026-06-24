@@ -50,10 +50,11 @@ func (s *Server) routes() chi.Router {
 	projects := project.NewDBStore(s.store.DB(), s.cfg.DataDir)
 
 	authHandler := &api.AuthHandler{Security: sec}
-	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec}
+	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec, SSHAddr: s.cfg.SSHAddr}
 	userHandler := &api.UsersHandler{Security: sec}
 	settingsHandler := &api.SettingsHandler{}
-	blobHandler := &api.BlobHandler{Projects: projects, Security: sec}
+	searchHandler := &api.SearchHandler{Projects: projects, Security: sec}
+	blobHandler := &api.BlobHandler{Projects: projects, Security: sec, Search: searchHandler}
 	repoHandler := &api.RepositoryHandler{Projects: projects, Security: sec}
 	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
 	tokenHandler := &api.AccessTokensHandler{Security: sec}
@@ -129,6 +130,15 @@ func (s *Server) routes() chi.Router {
 				return
 			}
 			tokenHandler.Delete(w, r, id)
+		})
+
+		r.Get("/projects/{projectId}/clone-url", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			projectHandler.CloneURL(w, r, id)
 		})
 
 		// Blob: wildcard catches project paths with optional slashes (nested projects).

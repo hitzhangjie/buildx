@@ -1,0 +1,64 @@
+.quick-search {
+  width: 100%;
+  background: #fff;
+  border-radius: 0.42rem;
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.3);
+  opacity: 1;
+}
+.dark-mode .quick-search {
+  background: var(--dark-mode-dark);
+}
+.quick-search > .modal-body > .result {
+  max-height: 400px;
+  min-height: 100px;
+}
+.quick-search .result ul li.hit {
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.quick-search .result ul li.hit:hover {
+  background: var(--light);
+}
+.quick-search .result ul li.hit.active {
+  background: var(--primary);
+  color: #fff;
+}
+.quick-search .result ul li.hit.active a {
+  color: #fff;
+}
+.quick-search .result ul li.hit a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.quick-search .result ul li.hit .icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+.quick-search .result ul li.hit .text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quick-search .result ul li.hit .scope {
+  color: var(--gray);
+  font-size: 12px;
+}
+.quick-search .result ul li.hit.more-matches a {
+  font-style: italic;
+  color: var(--primary);
+}
+.quick-search .no-matches {
+  margin: 8px 0;
+}
+
+.dark-mode .quick-search .result ul li.hit:hover {
+  background: var(--dark-mode-lighter-dark);
+}
+.dark-mode .quick-search .result ul li.hit.active {
+  background: var(--primary);
+}

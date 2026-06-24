@@ -110,3 +110,48 @@ func InitBare(path string) error {
 func (r *Repository) Inner() *gogit.Repository {
 	return r.inner
 }
+
+// ---------------------------------------------------------------------------
+// Search types
+// ---------------------------------------------------------------------------
+
+// LinearRange describes a contiguous range on a single line.
+type LinearRange struct {
+	From int `json:"from"`
+	To   int `json:"to"`
+}
+
+// PlanarRange describes a 2-D range (row/col) within a file.
+type PlanarRange struct {
+	FromRow int `json:"fromRow"`
+	FromCol int `json:"fromCol"`
+	ToRow   int `json:"toRow"`
+	ToCol   int `json:"toCol"`
+}
+
+// SearchFileHit is one matched file in a file-name search.
+type SearchFileHit struct {
+	FilePath string       `json:"filePath"`
+	FileName string       `json:"fileName"`
+	Match    *LinearRange `json:"match,omitempty"`
+}
+
+// SearchTextHit is one matched line in a text-content search.
+type SearchTextHit struct {
+	FilePath    string       `json:"filePath"`
+	LineNo      int          `json:"lineNo"`
+	LineContent string       `json:"lineContent"`
+	Match       *PlanarRange `json:"match,omitempty"`
+}
+
+// SearchOptions configures a search operation.
+type SearchOptions struct {
+	Revision      string
+	Query         string
+	CaseSensitive bool
+	Regex         bool
+	WholeWord     bool
+	FileNames     string // comma-separated glob patterns for file-name filtering
+	Directory     string // optional subtree restriction
+	MaxResults    int
+}

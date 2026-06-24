@@ -103,6 +103,25 @@ export async function moveProject(projectId: number, targetParentId: number | nu
   });
 }
 
+export type CloneUrl = {
+  http: string;
+  ssh: string;
+};
+
+/**
+ * Fetch clone URLs (HTTP and SSH) for a project.
+ * Matches OneDev's GET /~api/projects/{projectId}/clone-url.
+ */
+export async function fetchCloneUrl(projectId: number): Promise<CloneUrl> {
+  if (USE_MOCK) {
+    // In mock mode, we can't know the project path from just an ID.
+    // Construct a reasonable fallback.
+    const origin = window.location.origin;
+    return { http: `${origin}/mock-project.git`, ssh: "" };
+  }
+  return apiFetch<CloneUrl>(`/~api/projects/${projectId}/clone-url`);
+}
+
 /**
  * Delete a single project. Matches OneDev's projectService.delete().
  */

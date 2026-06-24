@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -350,8 +351,381 @@ func (r *Repository) CountFiles(revision string) (int, error) {
 }
 
 // ---------------------------------------------------------------------------
-// Commits — log walk for REST commits list
+// Search — file name and text content search via tree walk
 // ---------------------------------------------------------------------------
+
+// SearchFiles searches file names in the repository at the given revision.
+// It walks the entire tree (or a subtree if Directory is set) and matches
+// filenames against the query. For quick search (default), it uses
+// case-insensitive contains matching. For advanced search, it uses path.Match
+// wildcard matching (* and ?).
+func (r *Repository) SearchFiles(ctx context.Context, opts SearchOptions) ([]SearchFileHit, bool, error) {
+	if opts.MaxResults <= 0 {
+		opts.MaxResults = 15
+	}
+
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(opts.Revision))
+	if err != nil {
+		return nil, false, err
+	}
+
+	commit, err := r.inner.CommitObject(*hash)
+	if err != nil {
+		return nil, false, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Navigate into subtree if directory is specified.
+	if opts.Directory != "" {
+		dirTree, dirErr := tree.Tree(opts.Directory)
+		if dirErr != nil {
+			return nil, false, nil // directory not found → empty results
+		}
+		tree = dirTree
+	}
+
+	// Normalize query for case-insensitive matching.
+	query := opts.Query
+	if !opts.CaseSensitive {
+		query = strings.ToLower(query)
+	}
+
+	hits := make([]SearchFileHit, 0, opts.MaxResults)
+	iter := tree.Files()
+	defer iter.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return hits, false, ctx.Err()
+		default:
+		}
+
+		file, err := iter.Next()
+		if err != nil {
+			break // end of iteration
+		}
+
+		name := file.Name
+		// Extract just the filename (last segment) and full path relative to search root.
+		fileName := name
+		if idx := strings.LastIndexByte(name, '/'); idx >= 0 {
+			fileName = name[idx+1:]
+		}
+
+		// Prepend directory prefix to get the full repo-relative path.
+		fullPath := name
+		if opts.Directory != "" {
+			fullPath = opts.Directory + "/" + name
+		}
+
+		matchName := fileName
+		if !opts.CaseSensitive {
+			matchName = strings.ToLower(fileName)
+		}
+
+		matched := false
+		var matchRange *LinearRange
+
+		if opts.Regex {
+			// In file-name search, regex is not the primary use case, but support it.
+			if idx := indexOfPattern(matchName, query, opts.CaseSensitive); idx >= 0 {
+				matched = true
+				matchRange = &LinearRange{From: idx, To: idx + len(query)}
+			}
+		} else {
+			// Try contains first; if that fails, try path.Match for wildcard patterns.
+			idx := strings.Index(matchName, query)
+			if idx >= 0 {
+				matched = true
+				matchRange = &LinearRange{From: idx, To: idx + len(query)}
+			} else if hasWildcard(query) {
+				ok, _ := pathMatch(query, fileName, opts.CaseSensitive)
+				if ok {
+					matched = true
+				}
+			}
+		}
+
+		if matched {
+			hits = append(hits, SearchFileHit{
+				FilePath: fullPath,
+				FileName: fileName,
+				Match:    matchRange,
+			})
+			if len(hits) >= opts.MaxResults {
+				// Check if there are more results.
+				_, err := iter.Next()
+				return hits, err == nil, nil
+			}
+		}
+	}
+
+	return hits, false, nil
+}
+
+// SearchText searches file contents at the given revision for the query.
+// It supports regex, whole-word, and case-sensitive matching. Binary files
+// are skipped. The optional FileNames parameter restricts the search to
+// files matching the given comma-separated glob patterns.
+func (r *Repository) SearchText(ctx context.Context, opts SearchOptions) ([]SearchTextHit, bool, error) {
+	if opts.MaxResults <= 0 {
+		opts.MaxResults = 100
+	}
+
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(opts.Revision))
+	if err != nil {
+		return nil, false, err
+	}
+
+	commit, err := r.inner.CommitObject(*hash)
+	if err != nil {
+		return nil, false, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, false, err
+	}
+
+	if opts.Directory != "" {
+		dirTree, dirErr := tree.Tree(opts.Directory)
+		if dirErr != nil {
+			return nil, false, nil
+		}
+		tree = dirTree
+	}
+
+	// Pre-compile regex if needed.
+	var regexPattern *regexp.Regexp
+	if opts.Regex {
+		re, compErr := compileRegex(opts.Query, opts.CaseSensitive)
+		if compErr != nil {
+			return nil, false, compErr
+		}
+		regexPattern = re
+	}
+
+	// Parse file-name filter patterns.
+	var filePatterns []string
+	if opts.FileNames != "" {
+		for _, p := range strings.Split(opts.FileNames, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				filePatterns = append(filePatterns, p)
+			}
+		}
+	}
+
+	hits := make([]SearchTextHit, 0, opts.MaxResults)
+	iter := tree.Files()
+	defer iter.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return hits, false, ctx.Err()
+		default:
+		}
+
+		file, err := iter.Next()
+		if err != nil {
+			break
+		}
+
+		// Filter by file-name patterns.
+		if len(filePatterns) > 0 && !matchesAnyPattern(file.Name, filePatterns, opts.CaseSensitive) {
+			continue
+		}
+
+		// Skip binary files.
+		isBin, err := file.IsBinary()
+		if err != nil {
+			continue
+		}
+		if isBin {
+			continue
+		}
+
+		// Read file lines.
+		lines, err := file.Lines()
+		if err != nil {
+			continue
+		}
+
+		fullPath := file.Name
+		if opts.Directory != "" {
+			fullPath = opts.Directory + "/" + file.Name
+		}
+
+		for lineIdx, line := range lines {
+			lineNo := lineIdx + 1
+			matchRange := matchLine(line, opts.Query, opts.CaseSensitive, opts.WholeWord, regexPattern)
+			if matchRange != nil {
+				hits = append(hits, SearchTextHit{
+					FilePath:    fullPath,
+					LineNo:      lineNo,
+					LineContent: line,
+					Match:       matchRange,
+				})
+				if len(hits) >= opts.MaxResults {
+					// Check if more results exist.
+					_, nextErr := iter.Next()
+					if nextErr == nil {
+						return hits, true, nil
+					}
+					// No more files; check if more lines in current file.
+					for j := lineIdx + 1; j < len(lines); j++ {
+						mr := matchLine(lines[j], opts.Query, opts.CaseSensitive, opts.WholeWord, regexPattern)
+						if mr != nil {
+							return hits, true, nil
+						}
+					}
+					return hits, false, nil
+				}
+			}
+		}
+	}
+
+	return hits, false, nil
+}
+
+// ---------------------------------------------------------------------------
+// Search helpers
+// ---------------------------------------------------------------------------
+
+func compileRegex(query string, caseSensitive bool) (*regexp.Regexp, error) {
+	pattern := query
+	if !caseSensitive {
+		pattern = "(?i)" + pattern
+	}
+	return regexp.Compile(pattern)
+}
+
+func matchLine(line, query string, caseSensitive, wholeWord bool, regex *regexp.Regexp) *PlanarRange {
+	if regex != nil {
+		loc := regex.FindStringIndex(line)
+		if loc != nil {
+			return &PlanarRange{
+				FromRow: 0, FromCol: loc[0],
+				ToRow: 0, ToCol: loc[1],
+			}
+		}
+		return nil
+	}
+
+	searchLine := line
+	searchQuery := query
+	if !caseSensitive {
+		searchLine = strings.ToLower(line)
+		searchQuery = strings.ToLower(query)
+	}
+
+	for i := 0; i <= len(searchLine)-len(searchQuery); i++ {
+		if searchLine[i:i+len(searchQuery)] == searchQuery {
+			if wholeWord && !isWordBoundary(searchLine, i, i+len(searchQuery)) {
+				continue
+			}
+			return &PlanarRange{
+				FromRow: 0, FromCol: i,
+				ToRow: 0, ToCol: i + len(searchQuery),
+			}
+		}
+	}
+	return nil
+}
+
+func isWordBoundary(s string, start, end int) bool {
+	leftOk := start == 0 || !isWordChar(s[start-1])
+	rightOk := end >= len(s) || !isWordChar(s[end])
+	return leftOk && rightOk
+}
+
+func isWordChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+}
+
+func hasWildcard(query string) bool {
+	return strings.ContainsAny(query, "*?")
+}
+
+func pathMatch(pattern, name string, caseSensitive bool) (bool, error) {
+	if !caseSensitive {
+		pattern = strings.ToLower(pattern)
+		name = strings.ToLower(name)
+	}
+	return matchSimpleGlob(pattern, name)
+}
+
+// matchSimpleGlob matches a pattern containing * and ? wildcards against a name.
+// Pattern segments are matched against path segments separated by /.
+func matchSimpleGlob(pattern, name string) (bool, error) {
+	// Simple implementation: treat the whole pattern as matching the whole name.
+	return globMatch(pattern, name), nil
+}
+
+func globMatch(pattern, name string) bool {
+	px, nx := 0, 0
+	nextPx, nextNx := 0, 0
+	starred := false
+
+	for px < len(pattern) || nx < len(name) {
+		if px < len(pattern) {
+			c := pattern[px]
+			switch c {
+			case '?':
+				if nx < len(name) {
+					px++
+					nx++
+					continue
+				}
+			case '*':
+				starred = true
+				nextPx = px
+				nextNx = nx + 1
+				px++
+				continue
+			default:
+				if nx < len(name) && (c == name[nx]) {
+					px++
+					nx++
+					continue
+				}
+			}
+		}
+		if starred {
+			px = nextPx + 1
+			nx = nextNx
+			if nx < len(name) {
+				nextNx++
+				continue
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func matchesAnyPattern(fileName string, patterns []string, caseSensitive bool) bool {
+	for _, p := range patterns {
+		ok, _ := pathMatch(p, fileName, caseSensitive)
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+func indexOfPattern(s, query string, caseSensitive bool) int {
+	if !caseSensitive {
+		s = strings.ToLower(s)
+	}
+	return strings.Index(s, query)
+}
 
 // ListCommits returns up to count commits reachable from revision (default branch when empty).
 func (r *Repository) ListCommits(revision string, count int) ([]Commit, error) {

@@ -106,6 +106,54 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 type ProjectsHandler struct {
 	Projects projectService
 	Security securityService
+	SSHAddr  string // e.g. ":9911" — used to construct SSH clone URLs
+}
+
+// cloneURLResponse is the JSON shape for GET /~api/projects/{id}/clone-url.
+type cloneURLResponse struct {
+	HTTP string `json:"http"`
+	SSH  string `json:"ssh"`
+}
+
+// CloneURL returns HTTP and SSH clone URLs for a project.
+func (h *ProjectsHandler) CloneURL(w http.ResponseWriter, r *http.Request, projectID int64) {
+	op := StartOp(r, "ProjectsHandler.CloneURL", "project_id", projectID)
+	if _, err := h.authenticate(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	p, err := h.Projects.Get(r.Context(), projectID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if p == nil {
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_id", projectID)
+		return
+	}
+
+	// Determine the scheme from common reverse-proxy headers.
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+
+	httpURL := scheme + "://" + r.Host + "/" + p.Path + ".git"
+
+	// Build SSH clone URL. Extract host from r.Host (strip port if present).
+	sshHost := r.Host
+	if idx := strings.LastIndex(sshHost, ":"); idx != -1 {
+		sshHost = sshHost[:idx]
+	}
+	sshPort := strings.TrimPrefix(h.SSHAddr, ":")
+	sshURL := "ssh://git@" + sshHost + ":" + sshPort + "/" + p.Path + ".git"
+
+	op.OK(http.StatusOK, "project_path", p.Path)
+	writeJSON(w, r, http.StatusOK, cloneURLResponse{HTTP: httpURL, SSH: sshURL})
 }
 
 // projectListItem enriches a Project with aggregate git stats for the

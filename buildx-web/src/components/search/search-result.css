@@ -1,0 +1,64 @@
+.search-result > .head {
+  border-bottom: 1px solid var(--secondary);
+}
+.dark-mode .search-result > .head {
+  border-bottom-color: var(--dark-mode-lighter-dark);
+}
+
+.search-result > .body li.blob {
+  padding: 2px 0;
+}
+.search-result > .body li.blob > div > a.expand {
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.search-result > .body li.blob > div > a.blob {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.search-result > .body li.blob > div > a.blob:hover {
+  background: var(--light);
+  border-radius: 3px;
+}
+.search-result > .body li.blob > ul {
+  margin-left: 20px;
+}
+.search-result > .body li.hit {
+  padding: 1px 4px;
+}
+.search-result > .body li.hit a.hit {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.search-result > .body li.hit a.hit:hover {
+  background: var(--light);
+  border-radius: 3px;
+}
+
+/* Active match highlight */
+.search-result > .body .selectable.active,
+.search-result > .body .selectable.active a {
+  background: var(--primary) !important;
+  color: #fff !important;
+  border-radius: 3px;
+}
+
+.search-result > .body .line-no {
+  color: var(--gray);
+  min-width: 3em;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.dark-mode .search-result > .body li.blob > div > a.blob:hover {
+  background: var(--dark-mode-lighter-dark);
+}
+.dark-mode .search-result > .body li.hit a.hit:hover {
+  background: var(--dark-mode-lighter-dark);
+}
