@@ -1,0 +1,21 @@
+---
+description: BuildX project context — Go port of OneDev backend, monorepo layout
+alwaysApply: true
+---
+
+# BuildX project context
+
+BuildX is a **ground-up Go reimplementation** of the [OneDev](https://github.com/theonedev/onedev) backend (Java), not a fork. Product and API compatibility guide the migration.
+
+## Layout
+
+| Path | Role |
+|---|---|
+| `buildx-server/` | Go server (migrated from `references/onedev`) |
+| `buildx-cli/` | Go CLI (migrated from `references/tod`, parity with tod) |
+| `references/` | Read-only git submodules — upstream OneDev sources |
+| `docs/` | Project documentation and migration progress |
+
+## References are read-only
+
+Never edit, format, or commit changes under `references/`. Use them only to read and compare when porting code. Implement all changes in `buildx-server/`, `buildx-cli/`, or repo-root `docs/`.
