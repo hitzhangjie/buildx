@@ -17,6 +17,7 @@ export BUILDX_INITIAL_PASSWORD=zhangjie
 export BUILDX_INITIAL_EMAIL=hit.zhangjie@gmail.com
 
 export BUILDX_HOTRELOAD=1
+export BUILDX_LOG_LEVEL=debug
 
 BINARY="$REPO_ROOT/buildx-server/bin/buildx-server"
 if [ ! -x "$BINARY" ]; then
