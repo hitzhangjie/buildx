@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep *)",
+      "Bash(git *)",
+      "Bash(go *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(grep *)",
+      "Bash(sqlite3 *)",
+      "Bash(awk *)"
+    ]
+  }
+}

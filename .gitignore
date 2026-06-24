@@ -36,9 +36,6 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Claude Code
-.claude
-
 # Environment
 .env
 .env.local
