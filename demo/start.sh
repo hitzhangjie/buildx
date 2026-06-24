@@ -16,6 +16,8 @@ export BUILDX_INITIAL_USER=zhangjie
 export BUILDX_INITIAL_PASSWORD=zhangjie
 export BUILDX_INITIAL_EMAIL=hit.zhangjie@gmail.com
 
+export BUILDX_HOTRELOAD=1
+
 BINARY="$REPO_ROOT/buildx-server/bin/buildx-server"
 if [ ! -x "$BINARY" ]; then
   echo "ERROR: $BINARY not found or not executable. Run 'make build' first." >&2

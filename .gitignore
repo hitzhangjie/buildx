@@ -61,3 +61,6 @@ buildx-web/dist/
 buildx-web/public/onedev/
 buildx-web/public/~icon/
 buildx-web/public/~img/
+
+# demo
+demo/data/
