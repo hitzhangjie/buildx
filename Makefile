@@ -87,4 +87,4 @@ lint:
 	$(MAKE) -C buildx-server lint
 
 cloc:
-	cloc . --exclude-dir=references,.claude,.cursor,node_modules,dist,bin,webdist
+	cloc . --exclude-dir=vendor,.claude,.cursor,node_modules,dist,bin,webdist,references

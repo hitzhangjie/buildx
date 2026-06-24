@@ -269,7 +269,7 @@ export function LoginPage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      await login(userName, password);
+      await login(userName, password, rememberMe);
       if (rememberMe) {
         localStorage.setItem("buildx-remember-user", userName);
       }

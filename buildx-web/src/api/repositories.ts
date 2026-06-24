@@ -1,4 +1,4 @@
-import { apiFetch, authHeader } from "./client";
+import { apiFetch } from "./client";
 
 export type BranchRef = {
   refName: string;
@@ -12,9 +12,8 @@ export async function fetchBranches(projectId: number): Promise<string[]> {
 }
 
 export async function fetchDefaultBranch(projectId: number): Promise<string | null> {
-  const response = await fetch(`/~api/repositories/${projectId}/default-branch`, {
-    headers: authHeader(),
-  });
+  // Use raw fetch because apiFetch throws on non-OK; 204 means no default branch.
+  const response = await fetch(`/~api/repositories/${projectId}/default-branch`);
   if (response.status === 204) {
     return null;
   }

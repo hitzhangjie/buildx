@@ -1,4 +1,4 @@
-import { apiFetch, clearStoredAuth, loadStoredAuth, saveStoredAuth } from "./client";
+import { apiFetch } from "./client";
 import { USE_MOCK } from "../mocks/config";
 
 export type User = {
@@ -9,34 +9,37 @@ export type User = {
 
 export async function fetchCurrentUser(): Promise<User | null> {
   if (USE_MOCK) {
-    const auth = loadStoredAuth();
-    if (!auth) {
-      return null;
-    }
-    return { id: 1, name: auth.username, fullName: auth.username };
-  }
-  if (!loadStoredAuth()) {
     return null;
   }
   try {
     return await apiFetch<User>("/~api/users/me");
   } catch {
-    clearStoredAuth();
     return null;
   }
 }
 
-export async function login(username: string, password: string): Promise<User> {
-  saveStoredAuth({ username, password });
+export async function login(
+  username: string,
+  password: string,
+  rememberMe: boolean,
+): Promise<User> {
   if (USE_MOCK) {
+    localStorage.setItem("buildx-mock-login", username);
     return { id: 1, name: username, fullName: username };
   }
-  const user = await apiFetch<User>("/~api/users/me");
+  const user = await apiFetch<User>("/~api/v1/login", {
+    method: "POST",
+    body: JSON.stringify({ userName: username, password, rememberMe }),
+  });
   return user;
 }
 
-export function logout(): void {
-  clearStoredAuth();
+export async function logout(): Promise<void> {
+  if (USE_MOCK) {
+    localStorage.removeItem("buildx-mock-login");
+    return;
+  }
+  await apiFetch("/~api/v1/logout", { method: "POST" });
 }
 
 export type SignUpRequest = {

@@ -223,6 +223,133 @@ func (r *Repository) TagDetail(tagName string) (*TagDetail, error) {
 }
 
 // ---------------------------------------------------------------------------
+// Count methods — aggregate stats for project list
+// ---------------------------------------------------------------------------
+
+// CountBranches returns the number of branches that point at commits.
+func (r *Repository) CountBranches() int {
+	refs, err := r.inner.References()
+	if err != nil {
+		return 0
+	}
+	defer refs.Close()
+
+	var count int
+	for {
+		ref, err := refs.Next()
+		if err != nil {
+			break
+		}
+		if !ref.Name().IsBranch() {
+			continue
+		}
+		if _, err := r.inner.CommitObject(ref.Hash()); err != nil {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+// CountTags returns the number of tags (annotated and lightweight).
+func (r *Repository) CountTags() int {
+	refs, err := r.inner.References()
+	if err != nil {
+		return 0
+	}
+	defer refs.Close()
+
+	var count int
+	for {
+		ref, err := refs.Next()
+		if err != nil {
+			break
+		}
+		if !ref.Name().IsTag() {
+			continue
+		}
+		if _, err := r.inner.TagObject(ref.Hash()); err == nil {
+			count++
+			continue
+		}
+		if _, err := r.inner.CommitObject(ref.Hash()); err == nil {
+			count++
+		}
+	}
+	return count
+}
+
+// CountCommits walks the commit log from the given revision (default branch
+// when empty) and returns the total number of reachable commits.
+func (r *Repository) CountCommits(revision string) (int, error) {
+	if !r.HasRefs() {
+		return 0, nil
+	}
+	if revision == "" {
+		revision = r.DefaultRevision()
+	}
+
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	if err != nil {
+		return 0, nil
+	}
+
+	iter, err := r.inner.Log(&gogit.LogOptions{From: *hash})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+
+	count := 0
+	for {
+		_, err := iter.Next()
+		if err != nil {
+			break
+		}
+		count++
+	}
+	return count, nil
+}
+
+// CountFiles counts all files (recursively) in the tree at the given revision
+// (default branch when empty).
+func (r *Repository) CountFiles(revision string) (int, error) {
+	if !r.HasRefs() {
+		return 0, nil
+	}
+	if revision == "" {
+		revision = r.DefaultRevision()
+	}
+
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	if err != nil {
+		return 0, nil
+	}
+
+	commit, err := r.inner.CommitObject(*hash)
+	if err != nil {
+		return 0, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	iter := tree.Files()
+	defer iter.Close()
+	for {
+		_, err := iter.Next()
+		if err != nil {
+			break
+		}
+		count++
+	}
+	return count, nil
+}
+
+// ---------------------------------------------------------------------------
 // Commits — log walk for REST commits list
 // ---------------------------------------------------------------------------
 

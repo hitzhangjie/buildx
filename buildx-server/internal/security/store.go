@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 	"golang.org/x/crypto/bcrypt"
@@ -40,8 +41,8 @@ func NewDBStore(db *sql.DB) *DBStore {
 	return &DBStore{db: db}
 }
 
-func (s *DBStore) Authenticate(ctx context.Context, username, password string) (*model.User, error) {
-	if username == "" || password == "" {
+func (s *DBStore) Authenticate(ctx context.Context, username, passwordOrToken string) (*model.User, error) {
+	if username == "" || passwordOrToken == "" {
 		return nil, ErrInvalidCredentials
 	}
 
@@ -56,12 +57,12 @@ func (s *DBStore) Authenticate(ctx context.Context, username, password string) (
 		if user.Type != model.UserTypeOrdinary {
 			return nil, ErrInvalidCredentials
 		}
-		if CheckPassword(user.Password, password) {
+		if CheckPassword(user.Password, passwordOrToken) {
 			return user, nil
 		}
 	}
 
-	tokenUser, err := s.authenticateByToken(ctx, username, password)
+	tokenUser, err := s.authenticateByToken(ctx, username, passwordOrToken)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +303,126 @@ func (s *DBStore) CreateAccessToken(ctx context.Context, ownerID int64, name str
 	}, nil
 }
 
+// ListAccessTokens returns all access tokens owned by a user.
+func (s *DBStore) ListAccessTokens(ctx context.Context, ownerID int64) ([]*model.AccessToken, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT o_id, o_name, o_owner_id, o_hasOwnerPermissions, o_createDate, o_expireDate
+		FROM o_AccessToken WHERE o_owner_id = ?
+		ORDER BY o_createDate DESC
+	`, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tokens []*model.AccessToken
+	for rows.Next() {
+		var t model.AccessToken
+		var hasOwner int
+		var createDate string
+		var expireDate sql.NullString
+		if err := rows.Scan(&t.ID, &t.Name, &t.OwnerID, &hasOwner, &createDate, &expireDate); err != nil {
+			return nil, err
+		}
+		t.HasOwnerPermissions = hasOwner == 1
+		t.CreateDate, _ = time.Parse("2006-01-02 15:04:05", createDate)
+		if expireDate.Valid {
+			ed, _ := time.Parse("2006-01-02 15:04:05", expireDate.String)
+			t.ExpireDate = &ed
+		}
+		tokens = append(tokens, &t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if tokens == nil {
+		tokens = []*model.AccessToken{}
+	}
+	return tokens, nil
+}
+
+// FindAccessTokenByID returns a single access token by its primary key.
+// Returns nil, nil when not found.
+func (s *DBStore) FindAccessTokenByID(ctx context.Context, id int64) (*model.AccessToken, error) {
+	return s.findAccessToken(ctx, id)
+}
+
+// FindAccessToken is an alias for FindAccessTokenByID, used by the API handler interface.
+func (s *DBStore) FindAccessToken(ctx context.Context, id int64) (*model.AccessToken, error) {
+	return s.findAccessToken(ctx, id)
+}
+
+// findAccessToken is the shared implementation for token lookup by ID.
+func (s *DBStore) findAccessToken(ctx context.Context, id int64) (*model.AccessToken, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT o_id, o_name, o_owner_id, o_value, o_hasOwnerPermissions, o_createDate, o_expireDate
+		FROM o_AccessToken WHERE o_id = ?
+	`, id)
+	var t model.AccessToken
+	var hasOwner int
+	var createDate string
+	var expireDate sql.NullString
+	if err := row.Scan(&t.ID, &t.Name, &t.OwnerID, &t.Value, &hasOwner, &createDate, &expireDate); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	t.HasOwnerPermissions = hasOwner == 1
+	t.CreateDate, _ = time.Parse("2006-01-02 15:04:05", createDate)
+	if expireDate.Valid {
+		ed, _ := time.Parse("2006-01-02 15:04:05", expireDate.String)
+		t.ExpireDate = &ed
+	}
+	return &t, nil
+}
+
+// FindAccessTokenByOwnerAndName looks up a token by owner + name for uniqueness validation.
+// Returns nil, nil when not found.
+func (s *DBStore) FindAccessTokenByOwnerAndName(ctx context.Context, ownerID int64, name string) (*model.AccessToken, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT o_id, o_name, o_owner_id, o_value, o_hasOwnerPermissions, o_createDate, o_expireDate
+		FROM o_AccessToken WHERE o_owner_id = ? AND o_name = ?
+	`, ownerID, name)
+	var t model.AccessToken
+	var hasOwner int
+	var createDate string
+	var expireDate sql.NullString
+	if err := row.Scan(&t.ID, &t.Name, &t.OwnerID, &t.Value, &hasOwner, &createDate, &expireDate); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	t.HasOwnerPermissions = hasOwner == 1
+	t.CreateDate, _ = time.Parse("2006-01-02 15:04:05", createDate)
+	if expireDate.Valid {
+		ed, _ := time.Parse("2006-01-02 15:04:05", expireDate.String)
+		t.ExpireDate = &ed
+	}
+	return &t, nil
+}
+
+// DeleteAccessToken removes an access token by its primary key.
+func (s *DBStore) DeleteAccessToken(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM o_AccessToken WHERE o_id = ?`, id)
+	return err
+}
+
+// UpdateAccessToken updates mutable fields (name, hasOwnerPermissions, expireDate) of an access token.
+// The value field is not updated through this method; regeneration is handled separately.
+func (s *DBStore) UpdateAccessToken(ctx context.Context, token *model.AccessToken) error {
+	var expireDate any
+	if token.ExpireDate != nil {
+		expireDate = token.ExpireDate.Format("2006-01-02 15:04:05")
+	}
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE o_AccessToken SET o_name = ?, o_hasOwnerPermissions = ?, o_expireDate = ?
+		WHERE o_id = ?
+	`, token.Name, boolToInt(token.HasOwnerPermissions), expireDate, token.ID)
+	return err
+}
+
 // Authorize checks whether a user may perform an action on a project.
 func (s *DBStore) Authorize(ctx context.Context, userID, projectID int64, action string) (bool, error) {
 	switch action {
@@ -310,4 +431,98 @@ func (s *DBStore) Authorize(ctx context.Context, userID, projectID int64, action
 	default:
 		return false, fmt.Errorf("unknown action %q", action)
 	}
+}
+
+const (
+	defaultSessionTTL      = 5 * time.Hour       // matches OneDev's 300-minute default
+	rememberMeSessionTTL   = 30 * 24 * time.Hour // 30 days
+	sessionCleanupInterval = 1 * time.Hour
+)
+
+// CreateSession creates a new login session. If rememberMe is true, the session
+// has a 30-day expiry; otherwise it uses the default 5-hour window.
+func (s *DBStore) CreateSession(ctx context.Context, userID int64, rememberMe bool) (*Session, error) {
+	token, err := GenerateSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	ttl := defaultSessionTTL
+	if rememberMe {
+		ttl = rememberMeSessionTTL
+	}
+
+	now := time.Now()
+	expireDate := now.Add(ttl)
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO o_Session (o_token, o_user_id, o_createDate, o_expireDate, o_rememberMe)
+		VALUES (?, ?, ?, ?, ?)
+	`, token, userID, now.Format(time.RFC3339), expireDate.Format(time.RFC3339), boolToInt(rememberMe))
+	if err != nil {
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	return &Session{
+		Token:      token,
+		UserID:     userID,
+		CreateDate: now,
+		ExpireDate: expireDate,
+		RememberMe: rememberMe,
+	}, nil
+}
+
+// ValidateSession looks up a session token, checks expiry, and validates the
+// associated user still exists and is not disabled. Returns the user on success.
+func (s *DBStore) ValidateSession(ctx context.Context, token string) (*model.User, error) {
+	if token == "" {
+		return nil, nil
+	}
+
+	var userID int64
+	var expireDateStr string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT o_user_id, o_expireDate FROM o_Session WHERE o_token = ?
+	`, token).Scan(&userID, &expireDateStr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("validate session: %w", err)
+	}
+
+	expireDate, err := time.Parse(time.RFC3339, expireDateStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse session expiry: %w", err)
+	}
+	if time.Now().After(expireDate) {
+		// Clean up expired session.
+		_, _ = s.db.ExecContext(ctx, `DELETE FROM o_Session WHERE o_token = ?`, token)
+		return nil, nil
+	}
+
+	user, err := s.GetUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil || user.Disabled {
+		// User gone or disabled — clean up the session.
+		_, _ = s.db.ExecContext(ctx, `DELETE FROM o_Session WHERE o_token = ?`, token)
+		return nil, nil
+	}
+
+	return user, nil
+}
+
+// DeleteSession removes a session by token (used for logout).
+func (s *DBStore) DeleteSession(ctx context.Context, token string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM o_Session WHERE o_token = ?`, token)
+	return err
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

@@ -56,6 +56,15 @@ type FileDiff struct {
 	Diff      string `json:"diff"`
 }
 
+// ProjectStats holds aggregate counts for a project's git repository.
+type ProjectStats struct {
+	FileCount      int `json:"fileCount"`
+	CommitCount    int `json:"commitCount"`
+	BranchCount    int `json:"branchCount"`
+	TagCount       int `json:"tagCount"`
+	WorkspaceCount int `json:"workspaceCount"`
+}
+
 // BlobContent is the result for a blob request — either a directory listing
 // or file content, matching the frontend's BlobContent shape.
 type BlobContent struct {

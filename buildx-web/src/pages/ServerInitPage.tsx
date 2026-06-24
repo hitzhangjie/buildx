@@ -40,7 +40,7 @@ export function ServerInitPage() {
         email: email.trim(),
         password,
       });
-      await login(name.trim(), password);
+      await login(name.trim(), password, false);
       setFlashMessage("Server initialized successfully");
       setStep("finish");
       setReady(true);

@@ -61,7 +61,7 @@ export function SignUpPage() {
         email: emailAddress.trim(),
         password,
       });
-      await login(name.trim(), password);
+      await login(name.trim(), password, false);
       setDone(true);
     } catch (err) {
       const message = (err as { message?: string }).message ?? "Sign up failed";

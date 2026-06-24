@@ -42,13 +42,20 @@ func Open(dataDir string) (*Store, error) {
 func (s *Store) DB() *sql.DB { return s.db }
 
 func (s *Store) Migrate(ctx context.Context) error {
-	content, err := migrationFS.ReadFile("migrations/001_initial.sql")
-	if err != nil {
-		return fmt.Errorf("read migration: %w", err)
+	// Run migrations in order. Each migration is idempotent (IF NOT EXISTS).
+	migrations := []string{
+		"migrations/001_initial.sql",
+		"migrations/002_session.sql",
 	}
-	for _, stmt := range splitSQL(string(content)) {
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("migrate: %w\nstatement: %s", err, stmt)
+	for _, name := range migrations {
+		content, err := migrationFS.ReadFile(name)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		for _, stmt := range splitSQL(string(content)) {
+			if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("migrate %s: %w\nstatement: %s", name, err, stmt)
+			}
 		}
 	}
 

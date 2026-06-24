@@ -388,10 +388,15 @@ export function ProjectListPanel({
             <div className="text-center py-10 text-muted">Loading…</div>
           ) : (
             <table className="table">
-              <thead style={{ display: "none" }}>
+              <thead>
                 <tr>
-                  {isLoggedIn && <th />}
+                  {isLoggedIn && <th className="row-selector" />}
                   <th>Project</th>
+                  <th className="text-right">Files</th>
+                  <th className="text-right">Commits</th>
+                  <th className="text-right">Branches</th>
+                  <th className="text-right">Tags</th>
+                  <th className="text-right">Workspaces</th>
                 </tr>
               </thead>
               <tbody>
@@ -423,11 +428,16 @@ export function ProjectListPanel({
                         <div className="mt-1 font-size-sm text-muted">{project.name}</div>
                       )}
                     </td>
+                    <td className="text-right text-muted">{project.stats?.fileCount ?? 0}</td>
+                    <td className="text-right text-muted">{project.stats?.commitCount ?? 0}</td>
+                    <td className="text-right text-muted">{project.stats?.branchCount ?? 0}</td>
+                    <td className="text-right text-muted">{project.stats?.tagCount ?? 0}</td>
+                    <td className="text-right text-muted">{project.stats?.workspaceCount ?? 0}</td>
                   </tr>
                 ))}
                 {projects.length === 0 && (
                   <tr>
-                    <td colSpan={isLoggedIn ? 2 : 1} className="no-elements">
+                    <td colSpan={isLoggedIn ? 7 : 6} className="no-elements">
                       No projects found
                     </td>
                   </tr>

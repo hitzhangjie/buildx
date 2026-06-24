@@ -2,12 +2,21 @@ import { apiFetch } from "./client";
 import { USE_MOCK } from "../mocks/config";
 import { mockProjects } from "../mocks/fixtures/projects";
 
+export type ProjectStats = {
+  fileCount: number;
+  commitCount: number;
+  branchCount: number;
+  tagCount: number;
+  workspaceCount: number;
+};
+
 export type Project = {
   id: number;
   name: string;
   path: string;
   key: string;
   description?: string;
+  stats?: ProjectStats;
 };
 
 export async function fetchProjects(): Promise<Project[]> {

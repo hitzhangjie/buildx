@@ -49,18 +49,21 @@ func (s *Server) routes() chi.Router {
 	sec := security.NewDBStore(s.store.DB())
 	projects := project.NewDBStore(s.store.DB(), s.cfg.DataDir)
 
+	authHandler := &api.AuthHandler{Security: sec}
 	projectHandler := &api.ProjectsHandler{Projects: projects, Security: sec}
 	userHandler := &api.UsersHandler{Security: sec}
 	settingsHandler := &api.SettingsHandler{}
 	blobHandler := &api.BlobHandler{Projects: projects, Security: sec}
 	repoHandler := &api.RepositoryHandler{Projects: projects, Security: sec}
 	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
+	tokenHandler := &api.AccessTokensHandler{Security: sec}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(bxmiddleware.AccessLog)
-	r.Use(gitHandler.Middleware) // intercept git HTTP before static catch-all
+	r.Use(bxmiddleware.CookieAuth(sec)) // populate context from session cookie
+	r.Use(gitHandler.Middleware)         // intercept git HTTP before static catch-all
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
@@ -70,6 +73,10 @@ func (s *Server) routes() chi.Router {
 	r.Get("/~api/v1/settings/branding", settingsHandler.Branding)
 	r.Get("/~api/v1/settings/security", settingsHandler.Security)
 	r.Get("/~api/v1/sso-providers", settingsHandler.SsoProviders)
+
+	// Login/logout — cookie-based session management.
+	r.Post("/~api/v1/login", authHandler.Login)
+	r.Post("/~api/v1/logout", authHandler.Logout)
 
 	r.Route("/~api", func(r chi.Router) {
 		r.Get("/users", userHandler.List)
@@ -103,6 +110,26 @@ func (s *Server) routes() chi.Router {
 		r.Get("/repositories/{projectId}/tags/*", repoHandler.GetTag)
 		r.Get("/repositories/{projectId}/commits", repoHandler.ListCommits)
 		r.Get("/repositories/{projectId}/commits/{commitHash}", repoHandler.GetCommit)
+
+	// Access token management.
+		r.Get("/access-tokens", tokenHandler.List)
+		r.Post("/access-tokens", tokenHandler.Create)
+		r.Get("/access-tokens/{accessTokenId}", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "accessTokenId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid access token id", http.StatusBadRequest)
+				return
+			}
+			tokenHandler.Get(w, r, id)
+		})
+		r.Delete("/access-tokens/{accessTokenId}", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "accessTokenId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid access token id", http.StatusBadRequest)
+				return
+			}
+			tokenHandler.Delete(w, r, id)
+		})
 
 		// Blob: wildcard catches project paths with optional slashes (nested projects).
 		r.Get("/projects/*", blobHandler.ServeHTTP)

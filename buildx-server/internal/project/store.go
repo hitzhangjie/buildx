@@ -260,6 +260,33 @@ func (s *DBStore) GitDir(projectID int64) string {
 	return filepath.Join(s.ProjectDir(projectID), "git")
 }
 
+// Stats returns aggregate git statistics for a project (file count, commit
+// count, branch count, tag count). Returns nil if the git repo cannot be
+// opened or is empty.
+func (s *DBStore) Stats(ctx context.Context, projectID int64) (*git.ProjectStats, error) {
+	repo, err := git.Open(s.GitDir(projectID))
+	if err != nil {
+		return nil, nil // repo doesn't exist yet — not an error
+	}
+
+	commitCount, err := repo.CountCommits("")
+	if err != nil {
+		commitCount = 0
+	}
+	fileCount, err := repo.CountFiles("")
+	if err != nil {
+		fileCount = 0
+	}
+
+	return &git.ProjectStats{
+		FileCount:      fileCount,
+		CommitCount:    commitCount,
+		BranchCount:    repo.CountBranches(),
+		TagCount:       repo.CountTags(),
+		WorkspaceCount: 0, // not yet implemented
+	}, nil
+}
+
 func (s *DBStore) initGitRepo(projectID int64) error {
 	projectDir := s.ProjectDir(projectID)
 	gitDir := s.GitDir(projectID)

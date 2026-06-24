@@ -245,6 +245,10 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BlobHandler) authenticate(r *http.Request) (*model.User, error) {
+	// Check context first (populated by CookieAuth middleware).
+	if u := security.UserFromContext(r.Context()); u != nil {
+		return u, nil
+	}
 	if user, pass, ok := r.BasicAuth(); ok {
 		return h.Security.Authenticate(r.Context(), user, pass)
 	}

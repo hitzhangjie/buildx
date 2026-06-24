@@ -12,8 +12,8 @@ import { fetchCurrentUser, login as apiLogin, logout as apiLogout, type User } f
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
+  logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -36,13 +36,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const next = await apiLogin(username, password);
+  const login = useCallback(async (username: string, password: string, rememberMe?: boolean) => {
+    const next = await apiLogin(username, password, rememberMe ?? false);
     setUser(next);
   }, []);
 
-  const logout = useCallback(() => {
-    apiLogout();
+  const logout = useCallback(async () => {
+    await apiLogout();
     setUser(null);
   }, []);
 

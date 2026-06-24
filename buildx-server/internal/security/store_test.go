@@ -9,10 +9,10 @@ import (
 )
 
 func TestDBStoreCreateAndAuthenticate(t *testing.T) {
-	_, _, sec := testutil.OpenTestDB(t)
+	_, _, db := testutil.OpenTestDB(t)
 	ctx := context.Background()
 
-	user, err := sec.CreateUser(ctx, "alice", "Alice", "alice@example.com", "secret123")
+	user, err := db.CreateUser(ctx, "alice", "Alice", "alice@example.com", "secret123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestDBStoreCreateAndAuthenticate(t *testing.T) {
 		t.Errorf("Name = %q", user.Name)
 	}
 
-	authUser, err := sec.Authenticate(ctx, "alice", "secret123")
+	authUser, err := db.Authenticate(ctx, "alice", "secret123")
 	if err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -33,12 +33,12 @@ func TestDBStoreCreateAndAuthenticate(t *testing.T) {
 }
 
 func TestDBStoreAuthenticate_invalidPassword(t *testing.T) {
-	_, _, sec := testutil.OpenTestDB(t)
+	_, _, db := testutil.OpenTestDB(t)
 	ctx := context.Background()
 
-	sec.CreateUser(ctx, "bob", "Bob", "bob@example.com", "correct")
+	db.CreateUser(ctx, "bob", "Bob", "bob@example.com", "correct")
 
-	_, err := sec.Authenticate(ctx, "bob", "wrong")
+	_, err := db.Authenticate(ctx, "bob", "wrong")
 	if err == nil {
 		t.Fatal("expected error for wrong password")
 	}
@@ -350,5 +350,150 @@ func TestDBStoreFindAccessToken_nonexistent(t *testing.T) {
 	}
 	if found != nil {
 		t.Fatal("expected nil for nonexistent token")
+	}
+}
+
+func TestDBStoreListAccessTokens(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "listuser", "List User", "list@example.com", "secret")
+	sec.CreateAccessToken(ctx, user.ID, "token-a")
+	sec.CreateAccessToken(ctx, user.ID, "token-b")
+
+	tokens, err := sec.ListAccessTokens(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 2 {
+		t.Errorf("got %d tokens, want 2", len(tokens))
+	}
+}
+
+func TestDBStoreListAccessTokens_empty(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "emptyuser", "Empty", "empty@example.com", "secret")
+
+	tokens, err := sec.ListAccessTokens(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tokens) != 0 {
+		t.Errorf("got %d tokens, want 0", len(tokens))
+	}
+}
+
+func TestDBStoreFindAccessTokenByID(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "finduser", "Find", "find@example.com", "secret")
+	created, _ := sec.CreateAccessToken(ctx, user.ID, "my-token")
+
+	found, err := sec.FindAccessToken(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found == nil {
+		t.Fatal("expected to find token by ID")
+	}
+	if found.Name != "my-token" {
+		t.Errorf("Name = %q, want %q", found.Name, "my-token")
+	}
+	if found.OwnerID != user.ID {
+		t.Errorf("OwnerID = %d, want %d", found.OwnerID, user.ID)
+	}
+}
+
+func TestDBStoreFindAccessTokenByID_nonexistent(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	found, err := sec.FindAccessToken(ctx, 99999)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found != nil {
+		t.Fatal("expected nil for nonexistent token ID")
+	}
+}
+
+func TestDBStoreFindAccessTokenByOwnerAndName(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "nameuser", "NameUser", "name@example.com", "secret")
+	sec.CreateAccessToken(ctx, user.ID, "unique-token")
+
+	found, err := sec.FindAccessTokenByOwnerAndName(ctx, user.ID, "unique-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found == nil {
+		t.Fatal("expected to find token by owner+name")
+	}
+	if found.Name != "unique-token" {
+		t.Errorf("Name = %q", found.Name)
+	}
+}
+
+func TestDBStoreFindAccessTokenByOwnerAndName_notFound(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "notfounduser", "NF", "nf@example.com", "secret")
+
+	found, err := sec.FindAccessTokenByOwnerAndName(ctx, user.ID, "does-not-exist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found != nil {
+		t.Fatal("expected nil for non-existent owner+name")
+	}
+}
+
+func TestDBStoreDeleteAccessToken(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "deluser", "Del", "del@example.com", "secret")
+	created, _ := sec.CreateAccessToken(ctx, user.ID, "to-delete")
+
+	err := sec.DeleteAccessToken(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := sec.FindAccessToken(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found != nil {
+		t.Fatal("expected nil after delete")
+	}
+}
+
+func TestDBStoreUpdateAccessToken(t *testing.T) {
+	_, _, sec := testutil.OpenTestDB(t)
+	ctx := context.Background()
+
+	user, _ := sec.CreateUser(ctx, "upduser", "Upd", "upd@example.com", "secret")
+	created, _ := sec.CreateAccessToken(ctx, user.ID, "original-name")
+
+	created.Name = "updated-name"
+	created.HasOwnerPermissions = true
+	err := sec.UpdateAccessToken(ctx, created)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found, _ := sec.FindAccessToken(ctx, created.ID)
+	if found.Name != "updated-name" {
+		t.Errorf("Name = %q, want %q", found.Name, "updated-name")
+	}
+	if !found.HasOwnerPermissions {
+		t.Error("expected HasOwnerPermissions to be true after update")
 	}
 }

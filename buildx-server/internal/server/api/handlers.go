@@ -2,17 +2,117 @@ package api
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/security"
 )
+
+const sessionCookieName = "buildx-session"
+
+// AuthHandler serves login and logout endpoints.
+type AuthHandler struct {
+	Security securityService
+}
+
+type loginRequest struct {
+	UserName   string `json:"userName"`
+	Password   string `json:"password"`
+	RememberMe bool   `json:"rememberMe"`
+}
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "AuthHandler.Login")
+
+	var req loginRequest
+	if err := decodeJSON(r, &req); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid json", err)
+		return
+	}
+	op.With("userName", req.UserName, "rememberMe", req.RememberMe)
+
+	if req.UserName == "" || req.Password == "" {
+		op.Fail(errors.New("missing credentials"), http.StatusBadRequest)
+		writeError(w, r, security.ErrInvalidCredentials)
+		return
+	}
+
+	user, err := h.Security.Authenticate(r.Context(), req.UserName, req.Password)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	session, err := h.Security.CreateSession(r.Context(), user.ID, req.RememberMe)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+
+	// Set session cookie. HttpOnly prevents JS access; SameSite=Lax allows
+	// cross-tab sharing while blocking cross-site requests.
+	maxAge := 0 // session cookie (deleted when browser closes)
+	if req.RememberMe {
+		maxAge = int(session.ExpireDate.Sub(time.Now()).Seconds())
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    session.Token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	op.OK(http.StatusOK, "user_id", user.ID, "user_name", user.Name)
+	writeJSON(w, r, http.StatusOK, map[string]any{
+		"id":       user.ID,
+		"name":     user.Name,
+		"fullName": user.FullName,
+	})
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	op := StartOp(r, "AuthHandler.Logout")
+
+	// Clear the session cookie.
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie != nil {
+		if err := h.Security.DeleteSession(r.Context(), cookie.Value); err != nil {
+			slog.Warn("failed to delete session", "error", err)
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	op.OK(http.StatusOK)
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
+}
 
 // ProjectsHandler serves OneDev-compatible /~api/projects endpoints.
 type ProjectsHandler struct {
 	Projects projectService
 	Security securityService
+}
+
+// projectListItem enriches a Project with aggregate git stats for the
+// project list page.
+type projectListItem struct {
+	model.Project
+	Stats *git.ProjectStats `json:"stats,omitempty"`
 }
 
 func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -31,11 +131,17 @@ func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, r, err)
 		return
 	}
-	if projects == nil {
-		projects = []*project.Project{}
+
+	result := make([]projectListItem, 0, len(projects))
+	for _, p := range projects {
+		item := projectListItem{Project: *p}
+		if stats, err := h.Projects.Stats(r.Context(), p.ID); err == nil && stats != nil {
+			item.Stats = stats
+		}
+		result = append(result, item)
 	}
-	op.OK(http.StatusOK, "count", len(projects))
-	writeJSON(w, r, http.StatusOK, projects)
+	op.OK(http.StatusOK, "count", len(result))
+	writeJSON(w, r, http.StatusOK, result)
 }
 
 func (h *ProjectsHandler) Get(w http.ResponseWriter, r *http.Request, id int64) {
@@ -185,6 +291,11 @@ func (h *ProjectsHandler) Setup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProjectsHandler) authenticate(r *http.Request) (*security.User, error) {
+	// Check context first (populated by CookieAuth middleware).
+	if u := security.UserFromContext(r.Context()); u != nil {
+		return u, nil
+	}
+	// Fall back to explicit auth headers for CLI/API clients.
 	if user, pass, ok := r.BasicAuth(); ok {
 		return h.Security.Authenticate(r.Context(), user, pass)
 	}
@@ -288,6 +399,11 @@ func (h *UsersHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UsersHandler) authenticate(r *http.Request) (*security.User, error) {
+	// Check context first (populated by CookieAuth middleware).
+	if u := security.UserFromContext(r.Context()); u != nil {
+		return u, nil
+	}
+	// Fall back to explicit auth headers for CLI/API clients.
 	if user, pass, ok := r.BasicAuth(); ok {
 		return h.Security.Authenticate(r.Context(), user, pass)
 	}

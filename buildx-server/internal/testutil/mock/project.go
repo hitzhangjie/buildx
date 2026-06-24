@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 )
 
@@ -20,6 +21,7 @@ type ProjectService struct {
 	DeleteFunc     func(ctx context.Context, id int64) error
 	ProjectDirFunc func(projectID int64) string
 	GitDirFunc     func(projectID int64) string
+	StatsFunc      func(ctx context.Context, projectID int64) (*git.ProjectStats, error)
 }
 
 func (m *ProjectService) Get(ctx context.Context, id int64) (*model.Project, error) {
@@ -76,4 +78,11 @@ func (m *ProjectService) GitDir(projectID int64) string {
 		panic(fmt.Sprintf("mock.ProjectService.GitDirFunc not set (projectID=%d)", projectID))
 	}
 	return m.GitDirFunc(projectID)
+}
+
+func (m *ProjectService) Stats(ctx context.Context, projectID int64) (*git.ProjectStats, error) {
+	if m.StatsFunc == nil {
+		return nil, nil // no stats is not an error — tests that don't set this get nil stats
+	}
+	return m.StatsFunc(ctx, projectID)
 }
