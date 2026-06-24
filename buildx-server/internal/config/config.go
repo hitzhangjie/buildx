@@ -20,6 +20,9 @@ type Config struct {
 	WebDir string
 	// Dev enables development mode (verbose logging, hot reload hooks).
 	Dev bool
+	// LogLevel controls the minimum log level (trace, debug, info, warn, error).
+	// Defaults to "debug" when Dev is true, otherwise "info".
+	LogLevel string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -30,6 +33,7 @@ func Load() (*Config, error) {
 		DataDir:  envOr("BUILDX_DATA_DIR", "./data"),
 		WebDir:   envOr("BUILDX_WEB_DIR", ""),
 		Dev:      envBool("BUILDX_DEV", false),
+		LogLevel: envOr("BUILDX_LOG_LEVEL", ""),
 	}
 	return cfg, cfg.normalizeAndPrepare()
 }

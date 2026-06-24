@@ -82,7 +82,7 @@ func (r *Repository) advertiseUploadRefs(w io.Writer) error {
 			break
 		}
 		if err := ar.AddReference(ref); err != nil {
-			slog.Warn("skip reference", "ref", ref.Name(), "error", err)
+			slog.Debug("skip reference", "ref", ref.Name(), "error", err)
 		}
 	}
 

@@ -134,7 +134,7 @@ func writeNotFound(w http.ResponseWriter, r *http.Request, resource string, attr
 		"path", r.URL.Path,
 		"resource", resource,
 	}, attrs...)
-	slog.InfoContext(r.Context(), "resource not found", a...)
+	slog.DebugContext(r.Context(), "resource not found", a...)
 	http.NotFound(w, r)
 }
 

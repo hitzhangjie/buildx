@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/logging"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/server"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/version"
 	"github.com/spf13/cobra"
@@ -72,9 +73,13 @@ func newRootCmd() *cobra.Command {
 				}
 				cfg.Dev = dev
 			}
-			if cfg.Dev {
-				slog.SetLogLoggerLevel(slog.LevelDebug)
+			// Configure structured logging.
+			// Default: debug when Dev=true, info otherwise. BUILDX_LOG_LEVEL overrides both.
+			level := logging.ParseLevel(cfg.LogLevel)
+			if cfg.LogLevel == "" && cfg.Dev {
+				level = slog.LevelDebug
 			}
+			logging.Setup(level)
 
 			watch, _ := strconv.ParseBool(os.Getenv("BUILDX_HOTRELOAD"))
 			var (
