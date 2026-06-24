@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
 import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
-import { QueryToolbar, queryToolbarCount } from "../../components/onedev/panels/QueryToolbar";
 import { InlineDropdown } from "../../components/onedev/DropdownMenu";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
@@ -156,32 +155,37 @@ export function ProjectCommitsPage() {
 
                 {error && <div className="alert alert-light-danger">{error}</div>}
 
-                {/* Toolbar: saved query actions + filter dropdown + count */}
-                <QueryToolbar
-                  actions={savedQueries.toolbarActions}
-                  trailing={
-                    <span className="float-right">
-                      <InlineDropdown
-                        label={<><Icon name="filter" /> Filter</>}
-                        className="text-gray mr-4 mb-2 text-nowrap"
-                      >
-                        {({ close }) => (
-                          <div className="card" style={{ padding: 0 }}>
-                            <CommitFilterPanel
-                              value={EMPTY_FILTER}
-                              onChange={(state) => {
-                                handleFilterChange(state);
-                                close();
-                              }}
-                              projectId={projectId ?? 0}
-                            />
-                          </div>
-                        )}
-                      </InlineDropdown>
-                      {queryToolbarCount(`${commits.length} commits`)}
-                    </span>
-                  }
-                />
+                {/* Toolbar: saved query actions + filter dropdown (left) + count (right) */}
+                <div className="operations mb-5">
+                  {savedQueries.toolbarActions.map((action) => (
+                    <a
+                      key={action.label}
+                      href={action.href ?? "#"}
+                      className={`text-gray d-inline-block mr-4 mb-2 text-nowrap ${action.className ?? ""}`}
+                      onClick={(e) => {
+                        if (!action.href) e.preventDefault();
+                        action.onClick?.();
+                      }}
+                    >
+                      <Icon name={action.icon} /> {action.label}
+                    </a>
+                  ))}
+                  <InlineDropdown
+                    label={<><Icon name="filter" /> Filter</>}
+                    className="text-gray d-inline-block mr-4 mb-2 text-nowrap"
+                  >
+                    {() => (
+                      <div className="card" style={{ padding: 0 }}>
+                        <CommitFilterPanel
+                          value={EMPTY_FILTER}
+                          onChange={handleFilterChange}
+                          projectId={projectId ?? 0}
+                        />
+                      </div>
+                    )}
+                  </InlineDropdown>
+                  <span className="float-right text-gray">{commits.length} commits</span>
+                </div>
 
                 {/* Commit list / graph */}
                 <div className="body">
