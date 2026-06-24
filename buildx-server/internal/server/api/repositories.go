@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -146,6 +147,14 @@ func (h *RepositoryHandler) GetBranch(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, r, "branch name required", nil)
 		return
 	}
+	// chi uses r.URL.RawPath for routing, which preserves URL-encoded characters
+	// (e.g. %2F for /). Decode so branch names with slashes resolve correctly.
+	branchName, err := url.PathUnescape(branchName)
+	if err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid branch name", err)
+		return
+	}
 	op.With("branch", branchName)
 
 	detail, err := repo.BranchDetail(branchName)
@@ -189,6 +198,14 @@ func (h *RepositoryHandler) GetTag(w http.ResponseWriter, r *http.Request) {
 	if tagName == "" {
 		op.Fail(nil, http.StatusBadRequest)
 		writeBadRequest(w, r, "tag name required", nil)
+		return
+	}
+	// chi uses r.URL.RawPath for routing, which preserves URL-encoded characters
+	// (e.g. %2F for /). Decode so tag names with special characters resolve correctly.
+	tagName, err := url.PathUnescape(tagName)
+	if err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid tag name", err)
 		return
 	}
 	op.With("tag", tagName)
