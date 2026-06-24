@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -194,5 +195,59 @@ func TestRepositoryHandlerGetBranch_success(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+}
+
+func TestRepositoryHandlerCompare_success(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+	bareDir, workDir, _ := testutil.SetupBareWithCommit(t)
+	testutil.CommitFile(t, workDir, "feature.txt", "feature\n", "feature commit")
+	testutil.Push(t, workDir, bareDir, "HEAD:refs/heads/feature")
+
+	proj := &mock.ProjectService{
+		GetFunc: func(ctx context.Context, id int64) (*model.Project, error) {
+			return &model.Project{ID: id, Name: "test", Path: "test"}, nil
+		},
+		GitDirFunc: func(projectID int64) string {
+			return bareDir
+		},
+	}
+	sec := &mock.SecurityService{
+		AuthenticateFunc: func(ctx context.Context, username, password string) (*model.User, error) {
+			return makeTestUser(1), nil
+		},
+		HasProjectAccessFunc: func(ctx context.Context, userID, projectID int64) (bool, error) {
+			return true, nil
+		},
+	}
+
+	h := &api.RepositoryHandler{Projects: proj, Security: sec}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/~api/repositories/1/compare?left=main&right=feature&include-commits=true&include-diffs=true", nil)
+	r.SetBasicAuth("testuser", "pass")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("projectId", "1")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+
+	var result api.CompareResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if result.MergeBase == nil {
+		t.Fatal("expected merge base")
+	}
+	if len(result.Commits) == 0 {
+		t.Error("expected commits in compare result")
+	}
+	if len(result.Diffs) == 0 {
+		t.Error("expected diffs in compare result")
 	}
 }

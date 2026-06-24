@@ -4,12 +4,19 @@ import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
 import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
 
-export default function PullRequestSettingPage() {
+const MERGE_STRATEGY_OPTIONS = [
+  { value: "CREATE_MERGE_COMMIT", label: "Create merge commit" },
+  { value: "CREATE_MERGE_COMMIT_IF_NECESSARY", label: "Create merge commit if necessary" },
+  { value: "SQUASH_SOURCE_BRANCH_COMMITS", label: "Squash source branch commits" },
+  { value: "REBASE_SOURCE_BRANCH_COMMITS", label: "Rebase source branch commits" },
+] as const;
+
+export function PullRequestSettingPage() {
   const { projectPath } = useProject();
 
   const [requiredApprovals, setRequiredApprovals] = useState("1");
   const [defaultTargetBranch, setDefaultTargetBranch] = useState("main");
-  const [mergeStrategy, setMergeStrategy] = useState("merge-commit");
+  const [mergeStrategy, setMergeStrategy] = useState("CREATE_MERGE_COMMIT_IF_NECESSARY");
   const [feedback, setFeedback] = useState<{
     type: "info" | "danger";
     message: string;
@@ -17,7 +24,7 @@ export default function PullRequestSettingPage() {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setFeedback({ type: "info", message: "Pull request settings saved." });
+    setFeedback({ type: "info", message: "Pull request settings saved (local UI only — server persistence pending)." });
   };
 
   return (
@@ -67,10 +74,11 @@ export default function PullRequestSettingPage() {
                 value={mergeStrategy}
                 onChange={(e) => setMergeStrategy(e.target.value)}
               >
-                <option value="merge-commit">Merge Commit</option>
-                <option value="squash">Squash</option>
-                <option value="rebase">Rebase</option>
-                <option value="fast-forward">Fast Forward</option>
+                {MERGE_STRATEGY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
               <div className="form-text">
                 Strategy used when merging pull requests.

@@ -12,6 +12,8 @@ type BlobAddEditPanelProps = {
   initialContent: string;
   /** The revision/branch being committed to. */
   revision: string;
+  /** Create or edit mode — affects default commit message. */
+  mode?: "add" | "edit";
   /** Called when the user clicks Cancel. */
   onCancel: () => void;
   /** Called when the user commits (with commit message). */
@@ -30,6 +32,7 @@ export function BlobAddEditPanel({
   filePath,
   initialContent,
   revision: _revision,
+  mode = "add",
   onCancel,
   onCommit,
 }: BlobAddEditPanelProps) {
@@ -115,6 +118,7 @@ export function BlobAddEditPanel({
         <div className={activeTab === "save" ? "commit-options flex-grow-1 d-flex flex-column autofit" : "d-none"}>
           <CommitOptionPanel
             fileName={fileName}
+            action={mode}
             onCommit={handleCommit}
             onCancel={onCancel}
           />

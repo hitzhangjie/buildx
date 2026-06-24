@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createUser } from "../../api/users";
 import { FormFeedbackPanel } from "../../components/onedev/FormFeedbackPanel";
 import { Icon } from "../../components/onedev/Icon";
 import { Layout } from "../../layout/Layout";
@@ -22,7 +23,12 @@ export function NewUserPage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      // TODO: wire to API
+      await createUser({
+        name: name.trim(),
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+      });
       navigate("/~administration/users");
     } catch (err) {
       setErrors([(err as { message?: string }).message ?? "Failed to create user"]);

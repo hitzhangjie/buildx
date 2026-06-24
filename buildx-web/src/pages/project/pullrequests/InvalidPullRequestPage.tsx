@@ -9,10 +9,10 @@ import { ProjectLayout } from "../../../layout/ProjectLayout";
  */
 export function InvalidPullRequestPage() {
   const { projectPath } = useProject();
-  const { number } = useParams<{ number: string }>();
+  const { request } = useParams<{ request: string }>();
 
   return (
-    <ProjectLayout projectPath={projectPath} pageTitle={`Pull Request #${number}`}>
+    <ProjectLayout projectPath={projectPath} pageTitle={`Pull Request #${request}`}>
       <div className="card m-3">
         <div className="card-body">
           <div className="alert alert-warning d-flex align-items-center">
@@ -20,7 +20,7 @@ export function InvalidPullRequestPage() {
             <div className="ml-3">
               <strong>This pull request is invalid or has been deleted</strong>
               <div className="mt-1 font-size-sm">
-                Pull Request #{number} could not be found or is no longer available.
+                Pull Request #{request} could not be found or is no longer available.
               </div>
             </div>
           </div>

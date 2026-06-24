@@ -7,36 +7,16 @@ import (
 )
 
 func TestIssueStateConstants(t *testing.T) {
-	tests := []struct {
-		name string
-		got  issue.State
-		want issue.State
-	}{
-		{"Open", issue.StateOpen, "open"},
-		{"InProgress", issue.StateInProgress, "in_progress"},
-		{"Closed", issue.StateClosed, "closed"},
+	if issue.StateOpen != "Open" {
+		t.Fatalf("StateOpen = %q", issue.StateOpen)
 	}
-	for _, tc := range tests {
-		if tc.got != tc.want {
-			t.Errorf("%s = %q, want %q", tc.name, tc.got, tc.want)
-		}
+	if issue.DefaultState != issue.StateOpen {
+		t.Fatalf("DefaultState = %q", issue.DefaultState)
 	}
 }
 
-func TestIssueStruct(t *testing.T) {
-	assignee := int64(5)
-	i := issue.Issue{
-		ID:        1,
-		ProjectID: 2,
-		Number:    42,
-		Title:     "Fix bug",
-		State:     issue.StateOpen,
-		Assignee:  &assignee,
-	}
-	if i.State != issue.StateOpen {
-		t.Error("State should be open")
-	}
-	if *i.Assignee != 5 {
-		t.Errorf("Assignee = %d", *i.Assignee)
+func TestStateOrdinal(t *testing.T) {
+	if issue.StateOrdinal(issue.StateOpen) >= issue.StateOrdinal(issue.StateClosed) {
+		t.Fatal("Open should sort before Closed")
 	}
 }

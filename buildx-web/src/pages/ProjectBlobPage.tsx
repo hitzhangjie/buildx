@@ -1,8 +1,18 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { fetchBlob, createFile, type BlobContent, type BlobEntry } from "../api/blob";
-import { createCodeComment, fetchCodeComments, type CodeComment } from "../api/codeComments";
+import { fetchBlob, createFile, updateFile, deleteFile, blobDownloadUrl, type BlobContent, type BlobEntry } from "../api/blob";
+import {
+  createCodeComment,
+  createCodeCommentReply,
+  deleteCodeComment,
+  fetchCodeCommentReplies,
+  fetchCodeComments,
+  setCodeCommentResolved,
+  type CodeComment,
+  type CodeCommentReply,
+} from "../api/codeComments";
 import { fetchProjects } from "../api/projects";
+import { fetchBranches } from "../api/repositories";
 import type { SearchFileHit, SearchTextHit, SearchSymbolHit } from "../api/search";
 import { NoCommitsPanel } from "../components/onedev/panels/NoCommitsPanel";
 import { useProjectContext } from "../context/ProjectContext";
@@ -24,6 +34,7 @@ import { MarkdownContent } from "../components/onedev/MarkdownContent";
 import { useAuth } from "../context/AuthContext";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
+import { CommitOptionPanel } from "./project/blob/CommitOptionPanel";
 import { InlineDropdown } from "../components/onedev/DropdownMenu";
 import { CloneDialog } from "../components/onedev/panels/CloneDialog";
 import { QuickSearchPanel } from "../components/search/QuickSearchPanel";
@@ -33,6 +44,20 @@ import { bindBlobSearchShortcuts } from "../util/blobSearchShortcuts";
 
 function isMarkdownFile(path: string) {
   return /\.(md|markdown)$/i.test(path);
+}
+
+function isCommitHash(revision: string) {
+  return /^[0-9a-f]{40}$/i.test(revision);
+}
+
+function formatByteSize(size: number) {
+  if (size < 1024) {
+    return `${size} bytes`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +285,22 @@ function FolderView({
   );
 }
 
+function commentsMatchMark(
+  comment: CodeComment,
+  commitHash: string,
+  path: string,
+): boolean {
+  if (comment.mark.path !== path) {
+    return false;
+  }
+  const stored = comment.mark.commitHash;
+  return (
+    stored === commitHash ||
+    stored.startsWith(commitHash) ||
+    commitHash.startsWith(stored)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // FileView
 // ---------------------------------------------------------------------------
@@ -271,6 +312,9 @@ function FileView({
   blob,
   position,
   commentId,
+  canModify,
+  onEdit,
+  onDelete,
   onPositionChange,
   onCommentChange,
 }: {
@@ -280,6 +324,9 @@ function FileView({
   blob: BlobContent;
   position: string | null;
   commentId: string | null;
+  canModify: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
   onPositionChange: (position: string | null) => void;
   onCommentChange: (commentId: string | null) => void;
 }) {
@@ -288,28 +335,81 @@ function FileView({
   const [comments, setComments] = useState<CodeComment[]>([]);
   const [draftRange, setDraftRange] = useState<PlanarRange | null>(null);
   const [draftContent, setDraftContent] = useState("");
+  const [activeComment, setActiveComment] = useState<CodeComment | null>(null);
+  const [replies, setReplies] = useState<CodeCommentReply[]>([]);
+  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [replying, setReplying] = useState(false);
+  const [replyContent, setReplyContent] = useState("");
+  const [savingReply, setSavingReply] = useState(false);
+  const [updatingComment, setUpdatingComment] = useState(false);
   const [savingComment, setSavingComment] = useState(false);
+  const [resolvingProjectId, setResolvingProjectId] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [commentPanelVisible, setCommentPanelVisible] = useState(true);
+
+  const onCommentChangeRef = useRef(onCommentChange);
+  onCommentChangeRef.current = onCommentChange;
+  const onPositionChangeRef = useRef(onPositionChange);
+  onPositionChangeRef.current = onPositionChange;
 
   const markPosition = parseSourcePosition(position);
   const loginHref = `/~login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   const isMarkdown = isMarkdownFile(path);
+  const fileName = path.split("/").pop() ?? path;
+  const downloadUrl = blobDownloadUrl(projectPath, revision, path);
+  const editTitle = revision ? `Edit on branch ${revision}` : "Edit file";
+  const deleteTitle = revision ? `Delete from branch ${revision}` : "Delete file";
+
+  const resolveProjectId = useCallback(async () => {
+    setResolvingProjectId(true);
+    try {
+      const projects = await fetchProjects();
+      const id = projects.find((p) => p.path === projectPath)?.id ?? null;
+      setProjectId(id);
+      return id;
+    } catch {
+      setProjectId(null);
+      return null;
+    } finally {
+      setResolvingProjectId(false);
+    }
+  }, [projectPath]);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchProjects().then((projects) => {
-      if (!cancelled) {
-        setProjectId(projects.find((p) => p.path === projectPath)?.id ?? null);
+    void (async () => {
+      setResolvingProjectId(true);
+      try {
+        const projects = await fetchProjects();
+        if (!cancelled) {
+          setProjectId(projects.find((p) => p.path === projectPath)?.id ?? null);
+        }
+      } catch {
+        if (!cancelled) {
+          setProjectId(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setResolvingProjectId(false);
+        }
       }
-    });
+    })();
     return () => {
       cancelled = true;
     };
   }, [projectPath]);
 
   useEffect(() => {
-    if (!blob.commitHash || !projectPath) {
-      setComments([]);
+    setComments([]);
+    setActiveComment(null);
+    setReplies([]);
+    setReplying(false);
+    setReplyContent("");
+    setDraftRange(null);
+    setDraftContent("");
+    setCommentPanelVisible(true);
+
+    if (!blob.commitHash || !projectPath || !path.trim()) {
       return;
     }
     let cancelled = false;
@@ -329,22 +429,72 @@ function FileView({
     };
   }, [projectPath, blob.commitHash, path]);
 
+  const fileComments = useMemo(
+    () =>
+      blob.commitHash
+        ? comments.filter((c) => commentsMatchMark(c, blob.commitHash!, path))
+        : [],
+    [comments, blob.commitHash, path],
+  );
+
   useEffect(() => {
     if (!commentId) {
       return;
     }
-    const open = comments.find((c) => String(c.id) === commentId);
-    if (open?.mark.range) {
-      setDraftRange(open.mark.range);
-      setDraftContent(open.content);
+    const open = fileComments.find((c) => String(c.id) === commentId);
+    if (open) {
+      setActiveComment(open);
+      setDraftRange(null);
+      setDraftContent("");
+      setCommentPanelVisible(true);
+      if (open.mark.range) {
+        onPositionChangeRef.current(sourcePositionFromRange(open.mark.range));
+      }
+      return;
     }
-  }, [commentId, comments]);
+    if (fileComments.length > 0) {
+      onCommentChangeRef.current(null);
+      onPositionChangeRef.current(null);
+    }
+  }, [commentId, fileComments]);
+
+  useEffect(() => {
+    if (!activeComment) {
+      return;
+    }
+    let cancelled = false;
+    setLoadingReplies(true);
+    void fetchCodeCommentReplies(activeComment.id)
+      .then((items) => {
+        if (!cancelled) {
+          setReplies(items);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setReplies([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingReplies(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeComment]);
 
   const handleAddComment = useCallback(
     (range: PlanarRange) => {
       setDraftRange(range);
       setDraftContent("");
+      setActiveComment(null);
+      setReplies([]);
+      setReplying(false);
+      setReplyContent("");
       setCommentError(null);
+      setCommentPanelVisible(true);
       onCommentChange(null);
       onPositionChange(sourcePositionFromRange(range));
     },
@@ -352,14 +502,22 @@ function FileView({
   );
 
   const handleSaveComment = useCallback(async () => {
-    if (!projectId || !blob.commitHash || !draftRange || !draftContent.trim()) {
+    if (!blob.commitHash || !draftRange || !draftContent.trim()) {
+      return;
+    }
+    let targetProjectId = projectId;
+    if (!targetProjectId) {
+      targetProjectId = await resolveProjectId();
+    }
+    if (!targetProjectId) {
+      setCommentError("Unable to resolve project for this file. Please refresh and try again.");
       return;
     }
     setSavingComment(true);
     setCommentError(null);
     try {
       const created = await createCodeComment({
-        projectId,
+        projectId: targetProjectId,
         content: draftContent.trim(),
         mark: {
           commitHash: blob.commitHash,
@@ -370,6 +528,8 @@ function FileView({
       setComments((prev) => [...prev, created]);
       setDraftRange(null);
       setDraftContent("");
+      setActiveComment(created);
+      setCommentPanelVisible(true);
       onCommentChange(String(created.id));
       onPositionChange(sourcePositionFromRange(created.mark.range));
     } catch (err) {
@@ -385,77 +545,235 @@ function FileView({
     path,
     onCommentChange,
     onPositionChange,
+    resolveProjectId,
   ]);
 
   const handleCancelComment = useCallback(() => {
     setDraftRange(null);
     setDraftContent("");
+    setActiveComment(null);
+    setReplies([]);
+    setReplying(false);
+    setReplyContent("");
     setCommentError(null);
+    setCommentPanelVisible(true);
+    onPositionChange(null);
     onCommentChange(null);
-  }, [onCommentChange]);
+  }, [onCommentChange, onPositionChange]);
+
+  const handleHideCommentPanel = useCallback(() => {
+    setCommentPanelVisible(false);
+    setReplying(false);
+    setReplyContent("");
+    onPositionChange(null);
+    onCommentChange(null);
+  }, [onCommentChange, onPositionChange]);
 
   const handleOpenComment = useCallback(
     (comment: CodeComment) => {
       if (!comment.mark.range) {
         return;
       }
-      setDraftRange(comment.mark.range);
-      setDraftContent(comment.content);
+      const positionValue = sourcePositionFromRange(comment.mark.range);
+      if (activeComment?.id === comment.id) {
+        if (commentPanelVisible) {
+          return;
+        }
+        setReplying(false);
+        setReplyContent("");
+        setCommentPanelVisible(true);
+        onCommentChange(String(comment.id));
+        onPositionChange(positionValue);
+        return;
+      }
+      setDraftRange(null);
+      setDraftContent("");
+      setActiveComment(comment);
+      setReplying(false);
+      setReplyContent("");
+      setCommentPanelVisible(true);
       onCommentChange(String(comment.id));
-      onPositionChange(sourcePositionFromRange(comment.mark.range));
+      onPositionChange(positionValue);
     },
-    [onCommentChange, onPositionChange],
+    [activeComment, commentPanelVisible, onCommentChange, onPositionChange],
   );
 
+  const handleCreateReply = useCallback(async () => {
+    if (!activeComment || !replyContent.trim()) {
+      return;
+    }
+    setSavingReply(true);
+    setCommentError(null);
+    try {
+      const created = await createCodeCommentReply(activeComment.id, replyContent.trim());
+      setReplies((prev) => [...prev, created]);
+      setReplyContent("");
+      setReplying(false);
+      setComments((prev) =>
+        prev.map((c) => (c.id === activeComment.id ? { ...c, replyCount: c.replyCount + 1 } : c)),
+      );
+      setActiveComment((prev) => (prev ? { ...prev, replyCount: prev.replyCount + 1 } : prev));
+    } catch (err) {
+      setCommentError((err as Error).message || "Failed to reply");
+    } finally {
+      setSavingReply(false);
+    }
+  }, [activeComment, replyContent]);
+
+  const handleToggleResolved = useCallback(async () => {
+    if (!activeComment) {
+      return;
+    }
+    setUpdatingComment(true);
+    setCommentError(null);
+    try {
+      const updated = await setCodeCommentResolved(activeComment.id, !activeComment.resolved);
+      setActiveComment(updated);
+      setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    } catch (err) {
+      setCommentError((err as Error).message || "Failed to update resolved state");
+    } finally {
+      setUpdatingComment(false);
+    }
+  }, [activeComment]);
+
+  const handleDeleteComment = useCallback(async () => {
+    if (!activeComment) {
+      return;
+    }
+    if (!window.confirm("Delete this code comment thread?")) {
+      return;
+    }
+    setUpdatingComment(true);
+    setCommentError(null);
+    try {
+      await deleteCodeComment(activeComment.id);
+      setComments((prev) => prev.filter((c) => c.id !== activeComment.id));
+      setActiveComment(null);
+      setReplies([]);
+      setReplying(false);
+      setReplyContent("");
+      onCommentChange(null);
+      onPositionChange(null);
+    } catch (err) {
+      const apiErr = err as { status?: number; message?: string };
+      if (apiErr.status === 404) {
+        // Treat missing comment as already deleted to keep UI consistent.
+        setComments((prev) => prev.filter((c) => c.id !== activeComment.id));
+        setActiveComment(null);
+        setReplies([]);
+        setReplying(false);
+        setReplyContent("");
+        onCommentChange(null);
+        onPositionChange(null);
+        return;
+      }
+      setCommentError(apiErr.message || "Failed to delete comment");
+    } finally {
+      setUpdatingComment(false);
+    }
+  }, [activeComment, onCommentChange, onPositionChange]);
+
   return (
-    <>
-      <div className="border-bottom d-flex align-items-center px-3 py-2 justify-content-between">
-        <span className="text-gray font-size-sm">
-          {blob.size !== undefined ? `${blob.size} bytes` : ""}
-        </span>
-        <span>
-          <a
-            href="#"
-            className="btn btn-icon btn-xs btn-light btn-hover-primary ml-4"
-            title="Download"
-            onClick={(e) => e.preventDefault()}
-          >
-            <img src="/~icon/download.svg" alt="" className="icon" width={14} height={14} />
-          </a>
-        </span>
-      </div>
-      {commentError && <div className="alert alert-light-danger mx-3 mt-3 mb-0">{commentError}</div>}
-      {isMarkdown ? (
-        <div className="p-4">
-          <MarkdownContent content={blob.content ?? ""} />
+    <div className="blob-view d-flex flex-column flex-grow-1">
+      <div className="head d-flex align-items-center px-3 py-2 justify-content-between flex-shrink-0">
+        <div className="info d-none d-xl-block mr-4 text-gray">
+          {blob.size !== undefined ? <span>{formatByteSize(blob.size)}</span> : null}
         </div>
-      ) : (
-        <SourceView
-          filePath={path}
-          content={blob.content ?? ""}
-          position={markPosition}
-          selectionUrl={(range) =>
-            `${window.location.origin}${blobSelectionUrl(
-              projectPath,
-              revision,
-              path,
-              sourcePositionFromRange(range),
-            )}`
-          }
-          loggedIn={Boolean(user)}
-          loginHref={loginHref}
-          comments={comments}
-          draftRange={draftRange}
-          draftContent={draftContent}
-          onDraftContentChange={setDraftContent}
-          onAddComment={handleAddComment}
-          onSaveComment={() => void handleSaveComment()}
-          onCancelComment={handleCancelComment}
-          onOpenComment={handleOpenComment}
-          savingComment={savingComment}
-        />
-      )}
-    </>
+        <div className="tools d-flex align-items-center">
+          <div className="actions d-flex align-items-center">
+            {canModify && (
+              <>
+                <span title={editTitle}>
+                  <a
+                    href="#"
+                    className="btn btn-xs btn-light btn-hover-primary btn-icon"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onEdit();
+                    }}
+                  >
+                    <img src="/~icon/edit.svg" alt="" className="icon" width={14} height={14} />
+                  </a>
+                </span>
+                <span title={deleteTitle}>
+                  <a
+                    href="#"
+                    className="btn btn-xs btn-light btn-hover-danger btn-icon ml-1"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onDelete();
+                    }}
+                  >
+                    <img src="/~icon/trash.svg" alt="" className="icon" width={14} height={14} />
+                  </a>
+                </span>
+              </>
+            )}
+            <a
+              href={downloadUrl}
+              className="btn btn-xs btn-light btn-hover-primary btn-icon ml-1"
+              title="Download"
+              download={fileName}
+            >
+              <img src="/~icon/download2.svg" alt="" className="icon" width={14} height={14} />
+            </a>
+          </div>
+        </div>
+      </div>
+      <div className="body autofit flex-grow-1 d-flex flex-column">
+        {commentError && <div className="alert alert-light-danger mx-3 mt-3 mb-0">{commentError}</div>}
+        {isMarkdown ? (
+          <div className="p-4">
+            <MarkdownContent content={blob.content ?? ""} />
+          </div>
+        ) : (
+          <SourceView
+            filePath={path}
+            commitHash={blob.commitHash}
+            content={blob.content ?? ""}
+            position={markPosition}
+            selectionUrl={(range) =>
+              `${window.location.origin}${blobSelectionUrl(
+                projectPath,
+                revision,
+                path,
+                sourcePositionFromRange(range),
+              )}`
+            }
+            loggedIn={Boolean(user)}
+            loginHref={loginHref}
+            comments={fileComments}
+            draftRange={draftRange}
+            draftContent={draftContent}
+            onDraftContentChange={setDraftContent}
+            onAddComment={handleAddComment}
+            onSaveComment={() => void handleSaveComment()}
+            onCancelComment={handleCancelComment}
+            onHideCommentPanel={handleHideCommentPanel}
+            onOpenComment={handleOpenComment}
+            savingComment={savingComment || resolvingProjectId}
+            activeComment={activeComment}
+            commentPanelVisible={commentPanelVisible}
+            replies={replies}
+            loadingReplies={loadingReplies}
+            replying={replying}
+            replyDraft={replyContent}
+            savingReply={savingReply}
+            updatingComment={updatingComment}
+            onReplyDraftChange={setReplyContent}
+            onStartReply={() => setReplying(true)}
+            onCancelReply={() => {
+              setReplying(false);
+              setReplyContent("");
+            }}
+            onCreateReply={() => void handleCreateReply()}
+            onToggleResolved={() => void handleToggleResolved()}
+            onDeleteComment={() => void handleDeleteComment()}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -468,10 +786,12 @@ export function ProjectBlobPage() {
   const { revision, path } = parseBlobSegments(blobSegments ?? []);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Parse mode and extra params from URL
   const mode: BlobMode = (searchParams.get("mode") as BlobMode) || "view";
   const editMode = mode === "add" || mode === "edit";
+  const deleteMode = mode === "delete";
   const initialPath = searchParams.get("initialPath") || undefined;
   const position = searchParams.get("position");
   const commentId = searchParams.get("comment");
@@ -504,6 +824,7 @@ export function ProjectBlobPage() {
 
   // ADD/EDIT mode state
   const [newFileName, setNewFileName] = useState(initialPath ?? "");
+  const [branches, setBranches] = useState<string[]>([]);
 
   // Clone dialog state
   const [cloneDropdownOpen, setCloneDropdownOpen] = useState(false);
@@ -554,12 +875,42 @@ export function ProjectBlobPage() {
     };
   }, [projectPath, revision, path, forceEmpty]);
 
+  // Load branch names for edit/delete eligibility (branch-only modifications).
+  useEffect(() => {
+    if (!projectPath) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const projects = await fetchProjects();
+        const project = projects.find((p) => p.path === projectPath);
+        if (!project || cancelled) {
+          return;
+        }
+        const branchNames = await fetchBranches(project.id);
+        if (!cancelled) {
+          setBranches(branchNames);
+        }
+      } catch {
+        if (!cancelled) {
+          setBranches([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath]);
+
   // Clear edit state when mode changes to view
   useEffect(() => {
     if (mode === "view") {
       setNewFileName("");
+    } else if (mode === "edit" && path) {
+      setNewFileName(path.split("/").pop() ?? "");
     }
-  }, [mode]);
+  }, [mode, path]);
 
   // Keyboard shortcuts: t = quick search, v = advanced search (OneDev project-blob.js).
   const openQuickSearchRef = useRef(() => setSearchOpen("quick"));
@@ -586,6 +937,12 @@ export function ProjectBlobPage() {
     ? (directoryPath ? `${directoryPath}/${newFileName}` : newFileName)
     : "";
 
+  const activeRevision = displayRevision || revision;
+  const canModifyFile =
+    Boolean(user) &&
+    !isCommitHash(activeRevision) &&
+    (activeRevision === "" || branches.includes(activeRevision));
+
   // Enter ADD mode in the given directory
   const enterAddMode = useCallback((newFilePath?: string) => {
     const params = new URLSearchParams(searchParams);
@@ -597,20 +954,48 @@ export function ProjectBlobPage() {
     setNewFileName(newFilePath ?? "");
   }, [searchParams, setSearchParams]);
 
-  // Handle commit from BlobAddEditPanel
+  const enterEditMode = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set("mode", "edit");
+    params.delete("initialPath");
+    setSearchParams(params, { replace: false });
+    setNewFileName(path.split("/").pop() ?? "");
+  }, [searchParams, setSearchParams, path]);
+
+  const enterDeleteMode = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set("mode", "delete");
+    params.delete("initialPath");
+    setSearchParams(params, { replace: false });
+  }, [searchParams, setSearchParams]);
+
+  // Handle commit from BlobAddEditPanel or delete panel
   const handleCommit = useCallback(async (commitMessage: string, content: string) => {
-    const filePath = newFilePath;
-    if (!filePath) return;
+    const rev = displayRevision || revision;
 
     try {
-      const rev = displayRevision || revision;
-      await createFile(projectPath!, rev, filePath, content, commitMessage);
-      // Navigate to the newly created file in view mode
+      if (mode === "delete") {
+        await deleteFile(projectPath!, rev, path, commitMessage);
+        const parent = path.includes("/") ? path.split("/").slice(0, -1).join("/") : "";
+        navigate(blobUrl(projectPath!, rev, parent), { replace: true });
+        return;
+      }
+
+      const filePath = mode === "edit" ? path : newFilePath;
+      if (!filePath) {
+        return;
+      }
+
+      if (mode === "edit") {
+        await updateFile(projectPath!, rev, filePath, content, commitMessage);
+      } else {
+        await createFile(projectPath!, rev, filePath, content, commitMessage);
+      }
       navigate(blobUrl(projectPath!, rev, filePath), { replace: true });
     } catch (err) {
-      setError((err as { message?: string }).message ?? "Failed to create file");
+      setError((err as { message?: string }).message ?? "Failed to save changes");
     }
-  }, [projectPath, revision, displayRevision, newFilePath, navigate]);
+  }, [projectPath, revision, displayRevision, mode, path, newFilePath, navigate]);
 
   // Handle cancel from edit panels — go back to VIEW mode
   const handleCancelEdit = useCallback(() => {
@@ -653,14 +1038,25 @@ export function ProjectBlobPage() {
       const existingContent = mode === "edit" && blob?.type === "file" ? (blob.content ?? "") : "";
       content = (
         <BlobAddEditPanel
-          filePath={newFilePath}
+          filePath={mode === "edit" ? path : newFilePath}
           initialContent={existingContent}
           revision={displayRevision || revision}
+          mode={mode === "edit" ? "edit" : "add"}
           onCancel={handleCancelEdit}
           onCommit={handleCommit}
         />
       );
     }
+  } else if (deleteMode && blob?.type === "file") {
+    const fileName = path.split("/").pop() ?? "";
+    content = (
+      <CommitOptionPanel
+        fileName={fileName}
+        action="delete"
+        onCancel={handleCancelEdit}
+        onCommit={(commitMessage) => void handleCommit(commitMessage, "")}
+      />
+    );
   } else if (isEmpty && path === "") {
     content = <NoCommitsPanel projectPath={projectPath} />;
   } else if (loading && !forceEmpty) {
@@ -678,6 +1074,9 @@ export function ProjectBlobPage() {
         blob={blob}
         position={position}
         commentId={commentId}
+        canModify={canModifyFile}
+        onEdit={enterEditMode}
+        onDelete={enterDeleteMode}
         onPositionChange={(nextPosition) => updateBlobQuery({ position: nextPosition })}
         onCommentChange={(nextCommentId) => updateBlobQuery({ comment: nextCommentId })}
       />
@@ -729,7 +1128,7 @@ export function ProjectBlobPage() {
               />
             </span>
 
-            {!editMode && (
+            {!editMode && !deleteMode && (
               <InlineDropdown
                 wrapperClassName="mr-3"
                 className="text-nowrap"

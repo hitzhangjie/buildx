@@ -45,6 +45,12 @@ import { IssueDetailPage } from "../pages/project/issues/IssueDetailPage";
 import { IssueBoardsPage } from "../pages/project/issues/IssueBoardsPage";
 import { IterationListPage } from "../pages/project/issues/IterationListPage";
 import { NewIterationPage } from "../pages/project/issues/NewIterationPage";
+import { IterationIssuesPage } from "../pages/project/issues/IterationIssuesPage";
+import { IterationBurndownPage } from "../pages/project/issues/IterationBurndownPage";
+import { IterationEditPage } from "../pages/project/issues/IterationEditPage";
+import { IssueCommitsPage } from "../pages/project/issues/IssueCommitsPage";
+import { IssuePullRequestsPage } from "../pages/project/issues/IssuePullRequestsPage";
+import { IssueBuildsPage } from "../pages/project/issues/IssueBuildsPage";
 
 // --- Wave 4 project PR pages ---
 import { ProjectPullRequestsPage } from "../pages/project/pullrequests/ProjectPullRequestsPage";
@@ -52,6 +58,8 @@ import { NewPullRequestPage } from "../pages/project/pullrequests/NewPullRequest
 import { PullRequestActivitiesPage } from "../pages/project/pullrequests/PullRequestActivitiesPage";
 import { PullRequestChangesPage } from "../pages/project/pullrequests/PullRequestChangesPage";
 import { PullRequestCodeCommentsPage } from "../pages/project/pullrequests/PullRequestCodeCommentsPage";
+import { InvalidPullRequestPage } from "../pages/project/pullrequests/InvalidPullRequestPage";
+import { PullRequestSettingPage } from "../pages/project/settings/PullRequestSettingPage";
 
 // --- Wave 5 project build pages ---
 import { ProjectBuildsPage } from "../pages/project/builds/ProjectBuildsPage";
@@ -59,6 +67,8 @@ import { BuildDashboardPage } from "../pages/project/builds/BuildDashboardPage";
 import { BuildPipelinePage } from "../pages/project/builds/BuildPipelinePage";
 import { BuildLogPage } from "../pages/project/builds/BuildLogPage";
 import { BuildChangesPage } from "../pages/project/builds/BuildChangesPage";
+import { BuildArtifactsPage } from "../pages/project/builds/BuildArtifactsPage";
+import { FixedIssuesPage } from "../pages/project/builds/FixedIssuesPage";
 
 // --- Wave 8 my pages ---
 import { MyProfilePage } from "../pages/my/MyProfilePage";
@@ -71,6 +81,8 @@ import { MyAvatarPage } from "../pages/my/MyAvatarPage";
 // --- Wave 10 admin pages ---
 import { UserListPage } from "../pages/admin/UserListPage";
 import { NewUserPage } from "../pages/admin/NewUserPage";
+import { InvitationListPage } from "../pages/admin/InvitationListPage";
+import { NewInvitationPage } from "../pages/admin/NewInvitationPage";
 import { RoleListPage } from "../pages/admin/RoleListPage";
 import { GroupListPage } from "../pages/admin/GroupListPage";
 import { SystemSettingPage } from "../pages/admin/SystemSettingPage";
@@ -125,6 +137,8 @@ const GLOBAL_KNOWN: Partial<Record<NonNullable<RouteDefinition["known"]>, () => 
   // Wave 10 admin
   userList: () => <UserListPage />,
   newUser: () => <NewUserPage />,
+  invitationList: () => <InvitationListPage />,
+  newInvitation: () => <NewInvitationPage />,
   roleList: () => <RoleListPage />,
   groupList: () => <GroupListPage />,
   systemSetting: () => <SystemSettingPage />,
@@ -162,9 +176,15 @@ const PROJECT_KNOWN: Partial<Record<NonNullable<import("./types").ProjectRouteDe
   issueList: () => <ProjectIssueListPage />,
   newIssue: () => <NewIssuePage />,
   issueDetail: () => <IssueDetailPage />,
+  issueCommits: () => <IssueCommitsPage />,
+  issuePulls: () => <IssuePullRequestsPage />,
+  issueBuilds: () => <IssueBuildsPage />,
   boards: () => <IssueBoardsPage />,
   iterationList: () => <IterationListPage />,
   newIteration: () => <NewIterationPage />,
+  iterationDetail: () => <IterationIssuesPage />,
+  iterationBurndown: () => <IterationBurndownPage />,
+  iterationEdit: () => <IterationEditPage />,
 
   // Wave 4 PRs
   prList: () => <ProjectPullRequestsPage />,
@@ -172,6 +192,8 @@ const PROJECT_KNOWN: Partial<Record<NonNullable<import("./types").ProjectRouteDe
   prActivities: () => <PullRequestActivitiesPage />,
   prChanges: () => <PullRequestChangesPage />,
   prCodeComments: () => <PullRequestCodeCommentsPage />,
+  prInvalid: () => <InvalidPullRequestPage />,
+  pullRequestSetting: () => <PullRequestSettingPage />,
 
   // Wave 5 builds
   buildList: () => <ProjectBuildsPage />,
@@ -179,6 +201,8 @@ const PROJECT_KNOWN: Partial<Record<NonNullable<import("./types").ProjectRouteDe
   buildPipeline: () => <BuildPipelinePage />,
   buildLog: () => <BuildLogPage />,
   buildChanges: () => <BuildChangesPage />,
+  buildFixedIssues: () => <FixedIssuesPage />,
+  buildArtifacts: () => <BuildArtifactsPage />,
 };
 
 function GlobalRouteElement({ def }: { def: RouteDefinition }) {

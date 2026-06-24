@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchPacks, type Pack } from "../api/packs";
 import { EmptyListState } from "../components/global-list/EmptyListState";
 import { DEFAULT_QUERY_LINKS, ResourceListPanel } from "../components/global-list/ResourceListPanel";
 import { SideMainPage } from "../components/global-list/SideMainPage";
+import { buildProjectScopedHref } from "../data/queryPresets";
 import { useAsyncResource } from "../hooks/useAsyncResource";
 
 function PackRow({ pack }: { pack: Pack }) {
@@ -24,34 +26,48 @@ function PackRow({ pack }: { pack: Pack }) {
 }
 
 export function PackagesPage() {
+  const [query, setQuery] = useState("");
   const { data: packs, loading, error } = useAsyncResource(fetchPacks, []);
 
   return (
-    <SideMainPage title="Packages">
-      <ResourceListPanel
-        cardClass="pack-list"
-        queryPlaceholder="Query/order packages"
-        toolbarLinks={DEFAULT_QUERY_LINKS}
-        count={packs?.length}
-        loading={loading}
-        error={error}
-      >
-        {!packs?.length ? (
-          <EmptyListState message="No packages yet" />
-        ) : (
-          <table className="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Project</th>
-                <th>Version</th>
-                <th>Type</th>
-              </tr>
-            </thead>
-            <tbody>{packs.map((pack) => <PackRow key={pack.id} pack={pack} />)}</tbody>
-          </table>
-        )}
-      </ResourceListPanel>
+    <SideMainPage
+      title="Packages"
+      savedQueries={{
+        storageKey: "packages:global",
+        currentQuery: query,
+        onSelectQuery: setQuery,
+        buildHref: (q) => buildProjectScopedHref("/~packages", q),
+      }}
+    >
+      {(savedQueries) => (
+        <ResourceListPanel
+          cardClass="pack-list"
+          queryPlaceholder="Query/order packages"
+          toolbarLinks={DEFAULT_QUERY_LINKS}
+          savedQueryToolbar={savedQueries.toolbarActions}
+          query={query}
+          onQuery={setQuery}
+          count={packs?.length}
+          loading={loading}
+          error={error}
+        >
+          {!packs?.length ? (
+            <EmptyListState message="No packages yet" />
+          ) : (
+            <table className="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Project</th>
+                  <th>Version</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody>{packs.map((pack) => <PackRow key={pack.id} pack={pack} />)}</tbody>
+            </table>
+          )}
+        </ResourceListPanel>
+      )}
     </SideMainPage>
   );
 }

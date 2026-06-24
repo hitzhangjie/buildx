@@ -1,50 +1,16 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
+import {
+  IterationHeader,
+  IterationTabNav,
+} from "../../../components/onedev/panels/IterationDetailPanel";
+import {
+  fetchIteration,
+  fetchIterationBurndown,
+} from "../../../api/iterations";
 import { useProject } from "../../../context/ProjectContext";
+import { useAsyncResource } from "../../../hooks/useAsyncResource";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
-
-interface IterationDetail {
-  id: number;
-  name: string;
-  startDate: string;
-  dueDate: string;
-  status: string;
-}
-
-const MOCK_ITERATION: IterationDetail | null = null;
-
-const TABS = [
-  { id: "issues", label: "Issues", href: "" },
-  { id: "burndown", label: "Burndown", href: "/burndown" },
-  { id: "edit", label: "Edit", href: "/edit" },
-] as const;
-
-function TabNav({
-  activeTab,
-  projectPath,
-  iterationId,
-}: {
-  activeTab: string;
-  projectPath: string;
-  iterationId: number;
-}) {
-  const base = `/${projectPath}/~iterations/${iterationId}`;
-
-  return (
-    <ul className="nav nav-tabs mb-4">
-      {TABS.map((tab) => (
-        <li key={tab.id} className="nav-item">
-          <Link
-            to={base + tab.href}
-            className={`nav-link${activeTab === tab.id ? " active" : ""}`}
-          >
-            {tab.label}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * Mirrors OneDev IterationBurndownPage.
@@ -52,48 +18,113 @@ function TabNav({
  */
 export function IterationBurndownPage() {
   const { projectPath } = useProject();
-  const { iterationId } = useParams<{ iterationId: string }>();
-  const id = parseInt(iterationId ?? "0", 10);
+  const { iteration: iterationParam } = useParams<{ iteration: string }>();
+  const id = parseInt(iterationParam ?? "0", 10);
+
+  const { data: iteration, loading: iterLoading, error: iterError } = useAsyncResource(
+    () => fetchIteration(id),
+    [id],
+  );
+
+  const { data: burndown, loading: statsLoading, error: statsError } = useAsyncResource(
+    () => fetchIterationBurndown(id),
+    [id],
+  );
+
+  const progress =
+    burndown && burndown.total > 0
+      ? Math.round((burndown.closed / burndown.total) * 100)
+      : 0;
 
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={
-        MOCK_ITERATION ? `${MOCK_ITERATION.name} - Burndown` : "Iteration Burndown"
-      }
+      pageTitle={iteration ? `${iteration.name} - Burndown` : "Iteration Burndown"}
     >
       <div className="card m-3">
         <div className="card-body">
-          {/* Iteration Header */}
-          {MOCK_ITERATION && (
-            <>
-              <div className="d-flex align-items-center mb-3">
-                <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
-                <span className="badge badge-light-primary font-size-sm">
-                  {MOCK_ITERATION.status.charAt(0).toUpperCase() + MOCK_ITERATION.status.slice(1)}
-                </span>
-              </div>
-              <div className="text-muted font-size-sm mb-4">
-                <Icon name="calendar" />
-                <span className="ml-1">
-                  {MOCK_ITERATION.startDate} &rarr; {MOCK_ITERATION.dueDate}
-                </span>
-              </div>
-            </>
+          {iterLoading && <div className="text-muted mb-3">Loading iteration...</div>}
+          {iterError && (
+            <div className="alert alert-danger" role="alert">
+              {iterError}
+            </div>
+          )}
+          {iteration && <IterationHeader iteration={iteration} />}
+
+          <IterationTabNav activeTab="burndown" projectPath={projectPath} iterationId={id} />
+
+          {statsError && (
+            <div className="alert alert-danger" role="alert">
+              {statsError}
+            </div>
           )}
 
-          <TabNav activeTab="burndown" projectPath={projectPath} iterationId={id} />
-
-          {/* Burndown Chart Placeholder */}
           <div className="card">
-            <div className="card-body text-center py-5">
-              <div className="text-muted mb-3">
-                <Icon name="chart" width={48} height={48} />
-              </div>
-              <h5 className="text-muted">Burndown chart will be displayed here</h5>
-              <p className="text-muted font-size-sm mt-2">
-                Track progress of issue completion over the iteration timeline.
-              </p>
+            <div className="card-body">
+              {statsLoading && (
+                <div className="text-muted text-center py-4">Loading burndown...</div>
+              )}
+              {burndown && !statsLoading && (
+                <>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="font-weight-bold">Progress</span>
+                    <span className="text-muted">
+                      {burndown.closed} / {burndown.total} closed ({progress}%)
+                    </span>
+                  </div>
+                  <div className="progress mb-4" style={{ height: "1.5rem" }}>
+                    <div
+                      className="progress-bar bg-success"
+                      role="progressbar"
+                      style={{ width: `${progress}%` }}
+                      aria-valuenow={progress}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    />
+                  </div>
+                  <div className="row text-center">
+                    <div className="col-md-4 mb-3">
+                      <div className="text-muted font-size-sm">Total</div>
+                      <div className="h4 mb-0">{burndown.total}</div>
+                    </div>
+                    <div className="col-md-4 mb-3">
+                      <div className="text-muted font-size-sm">Open</div>
+                      <div className="h4 mb-0 text-warning">{burndown.open}</div>
+                    </div>
+                    <div className="col-md-4 mb-3">
+                      <div className="text-muted font-size-sm">Closed</div>
+                      <div className="h4 mb-0 text-success">{burndown.closed}</div>
+                    </div>
+                  </div>
+                  {Object.keys(burndown.byState).length > 0 && (
+                    <table className="table table-sm mt-3 mb-0">
+                      <thead>
+                        <tr>
+                          <th>State</th>
+                          <th className="text-right">Issues</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(burndown.byState).map(([state, count]) => (
+                          <tr key={state}>
+                            <td>{state}</td>
+                            <td className="text-right">{count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )}
+              {burndown && burndown.total === 0 && !statsLoading && (
+                <div className="text-center py-5 text-muted">
+                  <Icon name="chart" width={48} height={48} />
+                  <h5 className="mt-3">No scheduled issues</h5>
+                  <p className="font-size-sm">
+                    Schedule issues into this iteration to track burndown progress.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,9 +1,12 @@
 import { type FormEvent, type ReactNode, useState } from "react";
+import type { ListToolbarAction } from "../onedev/panels/ResourcefulListPanel";
 
 type QueryToolbarLink = {
   icon: string;
   label: string;
   href?: string;
+  onClick?: () => void;
+  className?: string;
 };
 
 type ResourceListPanelProps = {
@@ -12,12 +15,24 @@ type ResourceListPanelProps = {
   actionIcon?: string;
   actionTitle?: string;
   toolbarLinks?: QueryToolbarLink[];
+  savedQueryToolbar?: ListToolbarAction[];
   count?: number;
   loading?: boolean;
   error?: string | null;
   children: ReactNode;
+  query?: string;
   onQuery?: (query: string) => void;
 };
+
+function toToolbarLink(action: ListToolbarAction): QueryToolbarLink {
+  return {
+    icon: action.icon,
+    label: action.label,
+    href: action.href,
+    onClick: action.onClick,
+    className: action.className,
+  };
+}
 
 export function ResourceListPanel({
   cardClass,
@@ -25,18 +40,32 @@ export function ResourceListPanel({
   actionIcon = "plus",
   actionTitle = "Create",
   toolbarLinks = [],
+  savedQueryToolbar = [],
   count,
   loading,
   error,
   children,
+  query: controlledQuery,
   onQuery,
 }: ResourceListPanelProps) {
-  const [query, setQuery] = useState("");
+  const [internalQuery, setInternalQuery] = useState("");
+  const query = controlledQuery ?? internalQuery;
+  const setQuery = (value: string) => {
+    if (controlledQuery === undefined) {
+      setInternalQuery(value);
+    }
+    onQuery?.(value);
+  };
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     onQuery?.(query);
   }
+
+  const allToolbarLinks = [
+    ...savedQueryToolbar.map(toToolbarLink),
+    ...toolbarLinks,
+  ];
 
   return (
     <div className={`${cardClass} card no-autofocus`}>
@@ -74,12 +103,17 @@ export function ResourceListPanel({
         </div>
 
         <div className="mb-5">
-          {toolbarLinks.map((link) => (
+          {allToolbarLinks.map((link) => (
             <a
               key={link.label}
               href={link.href ?? "#"}
-              className="text-gray d-inline-block mr-4 mb-2 text-nowrap"
-              onClick={link.href ? undefined : (e) => e.preventDefault()}
+              className={`text-gray d-inline-block mr-4 mb-2 text-nowrap ${link.className ?? ""}`}
+              onClick={(e) => {
+                if (!link.href) {
+                  e.preventDefault();
+                }
+                link.onClick?.();
+              }}
             >
               <img src={`/~icon/${link.icon}.svg`} alt="" className="icon mr-1" width={14} height={14} />
               {link.label}
@@ -104,8 +138,6 @@ export function ResourceListPanel({
 }
 
 export const DEFAULT_QUERY_LINKS: QueryToolbarLink[] = [
-  { icon: "eye", label: "Show Saved Queries" },
-  { icon: "save", label: "Save Query" },
   { icon: "filter", label: "Filter" },
   { icon: "sort", label: "Order By" },
   { icon: "ellipsis-circle", label: "Operations" },

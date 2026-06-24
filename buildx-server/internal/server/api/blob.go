@@ -2,8 +2,11 @@ package api
 
 import (
 	"encoding/base64"
+	"mime"
 	"net/http"
 	"net/url"
+	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,7 +52,35 @@ func (h *BlobHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.CodeComments != nil && strings.HasSuffix(rest, "/code-comments") {
-		h.CodeComments.ListByFile(w, r, strings.TrimSuffix(rest, "/code-comments"))
+		h.CodeComments.List(w, r, strings.TrimSuffix(rest, "/code-comments"))
+		return
+	}
+
+	if strings.HasSuffix(rest, "/raw") {
+		projectPath := strings.TrimSuffix(rest, "/raw")
+		if projectPath == "" || projectPath == "/" {
+			writeNotFound(w, r, "project_path")
+			return
+		}
+		if !strings.Contains(projectPath, "/") {
+			if r.URL.RawPath != "" {
+				rawPrefix := "/~api/projects/"
+				rawSuffix := "/raw"
+				rawPath := r.URL.RawPath
+				if idx := strings.Index(rawPath, rawPrefix); idx >= 0 {
+					start := idx + len(rawPrefix)
+					if end := strings.LastIndex(rawPath, rawSuffix); end > start {
+						decoded, err := url.PathUnescape(rawPath[start:end])
+						if err == nil {
+							projectPath = decoded
+						}
+					}
+				}
+			}
+		}
+		revision := r.URL.Query().Get("revision")
+		filePath := r.URL.Query().Get("path")
+		h.RawBlob(w, r, projectPath, revision, filePath)
 		return
 	}
 
@@ -136,11 +167,12 @@ func (h *BlobHandler) Blob(w http.ResponseWriter, r *http.Request, projectPath, 
 // Files POST — create/update file
 // ---------------------------------------------------------------------------
 
-// fileEditRequest is the JSON body for file create/update requests.
-// Matches OneDev's FileCreateOrUpdateRequest.
+// fileEditRequest is the JSON body for file create/update/delete requests.
+// Matches OneDev's FileEditRequest / FileCreateOrUpdateRequest.
+// When Base64Content is nil the file is deleted; when non-nil it is created or updated.
 type fileEditRequest struct {
-	CommitMessage string `json:"commitMessage"`
-	Base64Content string `json:"base64Content"`
+	CommitMessage string  `json:"commitMessage"`
+	Base64Content *string `json:"base64Content"`
 }
 
 // FilesPost handles POST /~api/projects/{projectPath}/files/{revision}/{path}.
@@ -202,12 +234,15 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 	}
 	op.With("commit_message", req.CommitMessage)
 
-	// Decode base64 content.
-	content, err := base64.StdEncoding.DecodeString(req.Base64Content)
-	if err != nil {
-		op.Fail(err, http.StatusBadRequest)
-		writeBadRequest(w, r, "invalid base64 content", err)
-		return
+	var content []byte
+	if req.Base64Content != nil {
+		var err error
+		content, err = base64.StdEncoding.DecodeString(*req.Base64Content)
+		if err != nil {
+			op.Fail(err, http.StatusBadRequest)
+			writeBadRequest(w, r, "invalid base64 content", err)
+			return
+		}
 	}
 
 	// Look up project.
@@ -259,8 +294,13 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 		When:  time.Now(),
 	}
 
-	// Commit the file.
-	commitHash, err := repo.CommitFile(r.Context(), revision, filePath, string(content), author, req.CommitMessage)
+	// Commit the file change.
+	var commitHash string
+	if req.Base64Content == nil {
+		commitHash, err = repo.DeleteFile(r.Context(), revision, filePath, author, req.CommitMessage)
+	} else {
+		commitHash, err = repo.CommitFile(r.Context(), revision, filePath, string(content), author, req.CommitMessage)
+	}
 	if err != nil {
 		op.Fail(err, http.StatusInternalServerError)
 		writeInternalError(w, r, err)
@@ -271,6 +311,72 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, http.StatusOK, map[string]string{
 		"commitHash": commitHash,
 	})
+}
+
+// RawBlob serves raw file bytes for download or inline display.
+// GET /~api/projects/{projectPath}/raw?revision=main&path=foo.txt&disposition=attachment
+func (h *BlobHandler) RawBlob(w http.ResponseWriter, r *http.Request, projectPath, revision, filePath string) {
+	op := StartOp(r, "BlobHandler.RawBlob",
+		"project_path", projectPath,
+		"revision", revision,
+		"path", filePath,
+	)
+
+	if filePath == "" {
+		op.OK(http.StatusBadRequest, "reason", "missing path")
+		writeBadRequest(w, r, "path is required", nil)
+		return
+	}
+
+	proj, err := h.Projects.GetByPath(r.Context(), projectPath)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if proj == nil {
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "project", "project_path", projectPath)
+		return
+	}
+	op.With("project_id", proj.ID)
+
+	gitDir := h.Projects.GitDir(proj.ID)
+	repo, err := git.Open(gitDir)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError, "git_dir", gitDir)
+		writeInternalError(w, r, err)
+		return
+	}
+
+	content, size, err := repo.ReadFileBytes(revision, filePath)
+	if err != nil {
+		op.OK(http.StatusNotFound, "found", false)
+		writeNotFound(w, r, "blob", "revision", revision, "path", filePath)
+		return
+	}
+
+	fileName := path.Base(filePath)
+	contentType := mime.TypeByExtension(path.Ext(fileName))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+
+	disposition := r.URL.Query().Get("disposition")
+	if strings.EqualFold(disposition, "attachment") {
+		w.Header().Set("Content-Disposition", `attachment; filename="`+fileName+`"`)
+	} else {
+		w.Header().Set("Content-Disposition", `inline; filename="`+fileName+`"`)
+	}
+
+	op.OK(http.StatusOK, "size", size)
+	if _, err := w.Write(content); err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+	}
 }
 
 func (h *BlobHandler) authenticate(r *http.Request) (*model.User, error) {

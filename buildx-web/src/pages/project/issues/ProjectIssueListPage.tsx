@@ -1,30 +1,24 @@
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
+import { QueryListLayout } from "../../../components/onedev/panels/QueryListLayout";
+import type { ListToolbarAction } from "../../../components/onedev/panels/ResourcefulListPanel";
 import {
-  SavedQueriesPanel,
-  type SavedQuery,
-} from "../../../components/onedev/panels/SavedQueriesPanel";
+  fetchProjectIssues,
+  formatIssueDate,
+  stateBadgeColor,
+  type Issue,
+} from "../../../api/issues";
+import { buildProjectScopedHref } from "../../../data/queryPresets";
 import { useProject } from "../../../context/ProjectContext";
+import { useAsyncResource } from "../../../hooks/useAsyncResource";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 
-interface IssueItem {
-  id: number;
-  number: number;
-  title: string;
-  state: string;
-  stateColor: "light-warning" | "light-primary" | "light-success";
-  votes: number;
-  comments: number;
-  submitter: string;
-  date: string;
-}
-
-const MOCK_ISSUES: IssueItem[] = [];
-
-const MOCK_PERSONAL_QUERIES: SavedQuery[] = [];
-
-const MOCK_COMMON_QUERIES: SavedQuery[] = [];
+const DEFAULT_TOOLBAR: ListToolbarAction[] = [
+  { icon: "filter", label: "Filter", className: "opacity-50" },
+  { icon: "sort", label: "Order By", className: "opacity-50" },
+  { icon: "cog", label: "Operations", className: "opacity-50" },
+];
 
 /**
  * Mirrors OneDev ProjectIssueListPage.
@@ -36,153 +30,153 @@ export function ProjectIssueListPage() {
   const query = searchParams.get("query") ?? "";
   const [queryInput, setQueryInput] = useState(query);
 
-  function handleQuerySubmit(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    setQueryInput(query);
+  }, [query]);
+
+  const { data: issues, loading, error } = useAsyncResource(
+    () => fetchProjectIssues(projectPath, query),
+    [projectPath, query],
+  );
+
+  function handleQueryChange(nextQuery: string) {
+    setQueryInput(nextQuery);
     const next = new URLSearchParams(searchParams);
-    if (queryInput.trim()) {
-      next.set("query", queryInput.trim());
+    if (nextQuery.trim()) {
+      next.set("query", nextQuery.trim());
     } else {
       next.delete("query");
     }
     setSearchParams(next, { replace: true });
   }
 
-  const filtered = MOCK_ISSUES.filter(
-    (issue) =>
-      !query ||
-      issue.title.toLowerCase().includes(query.toLowerCase()) ||
-      issue.state.toLowerCase().includes(query.toLowerCase()),
-  );
+  function handleQuerySubmit(e: FormEvent) {
+    e.preventDefault();
+    handleQueryChange(queryInput);
+  }
+
+  const filtered = issues ?? [];
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Issues">
-      <div className="d-flex flex-grow-1">
-        <SavedQueriesPanel
-          personalQueries={MOCK_PERSONAL_QUERIES}
-          commonQueries={MOCK_COMMON_QUERIES}
+      <div className="d-flex flex-grow-1 p-2 p-sm-3">
+        <QueryListLayout
+          className="side-main side-main-wrap flex-grow-1"
+          storageKey={`issues:project:${projectPath}`}
           currentQuery={query}
-        />
-        <div className="flex-grow-1 p-3">
-          <div className="card">
-            <div className="card-body">
-              <div className="d-flex mb-4">
-                <form
-                  className="clearable-wrapper flex-grow-1"
-                  onSubmit={handleQuerySubmit}
-                >
-                  <div className="input-group">
-                    <input
-                      spellCheck={false}
-                      className="form-control"
-                      placeholder="Query/order issues"
-                      value={queryInput}
-                      onChange={(e) => setQueryInput(e.target.value)}
-                    />
-                    <span className="input-group-append">
-                      <button
-                        type="submit"
-                        className="btn btn-outline-secondary btn-icon"
-                        title="Query"
-                      >
-                        <Icon name="magnify" />
-                      </button>
-                    </span>
-                  </div>
-                </form>
-                <Link
-                  to={`/${projectPath}/~issues/new`}
-                  className="btn btn-primary ml-3 font-weight-bold"
-                >
-                  <Icon name="plus" /> Create new issue
-                </Link>
-              </div>
-              <div className="d-flex align-items-center mb-3">
-                <div className="text-muted font-size-sm mr-3">
-                  {filtered.length} issue
-                  {filtered.length !== 1 ? "s" : ""}
-                </div>
-                <div className="btn-group btn-group-sm">
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    title="Show Saved Queries"
+          onSelectQuery={handleQueryChange}
+          buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~issues`, q)}
+        >
+          {(savedQueries) => (
+            <div className="card">
+              <div className="card-body">
+                <div className="d-flex mb-4">
+                  <form
+                    className="clearable-wrapper flex-grow-1"
+                    onSubmit={handleQuerySubmit}
                   >
-                    <Icon name="eye" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    title="Save Query"
-                  >
-                    <Icon name="save" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    title="Filter"
-                  >
-                    <Icon name="filter" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    title="Order By"
-                  >
-                    <Icon name="sort" />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    title="Operations"
-                  >
-                    <Icon name="cog" />
-                  </button>
-                </div>
-              </div>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Issue</th>
-                    <th>State</th>
-                    <th>Votes</th>
-                    <th>Comments</th>
-                    <th>Submitter</th>
-                    <th>Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((issue) => (
-                    <tr key={issue.id}>
-                      <td>
-                        <Link
-                          to={`/${projectPath}/~issues/${issue.number}`}
-                          className="font-weight-bold"
+                    <div className="input-group">
+                      <input
+                        spellCheck={false}
+                        className="form-control"
+                        placeholder="Query/order issues"
+                        value={queryInput}
+                        onChange={(e) => setQueryInput(e.target.value)}
+                      />
+                      <span className="input-group-append">
+                        <button
+                          type="submit"
+                          className="btn btn-outline-secondary btn-icon"
+                          title="Query"
                         >
-                          #{issue.number} {issue.title}
-                        </Link>
-                      </td>
-                      <td>
-                        <span className={`badge badge-${issue.stateColor}`}>
-                          {issue.state}
-                        </span>
-                      </td>
-                      <td className="text-muted">{issue.votes}</td>
-                      <td className="text-muted">{issue.comments}</td>
-                      <td className="text-muted">{issue.submitter}</td>
-                      <td className="text-muted">{issue.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filtered.length === 0 && (
-                <div className="text-muted text-center py-4">
-                  No issues match your query.
+                          <Icon name="magnify" />
+                        </button>
+                      </span>
+                    </div>
+                  </form>
+                  <Link
+                    to={`/${projectPath}/~issues/new`}
+                    className="btn btn-primary ml-3 font-weight-bold"
+                  >
+                    <Icon name="plus" /> Create new issue
+                  </Link>
                 </div>
-              )}
+                {error && (
+                  <div className="alert alert-danger" role="alert">
+                    {error}
+                  </div>
+                )}
+                <div className="operations mb-5">
+                  {[...savedQueries.toolbarActions, ...DEFAULT_TOOLBAR].map((action) => (
+                    <a
+                      key={action.label}
+                      href={action.href ?? "#"}
+                      className={`text-gray d-inline-block mr-4 mb-2 text-nowrap ${action.className ?? ""}`}
+                      onClick={(e) => {
+                        if (!action.href) {
+                          e.preventDefault();
+                        }
+                        action.onClick?.();
+                      }}
+                    >
+                      <Icon name={action.icon} /> {action.label}
+                    </a>
+                  ))}
+                  <span className="float-right text-gray">
+                    {loading ? "…" : filtered.length}
+                  </span>
+                </div>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Issue</th>
+                      <th>State</th>
+                      <th>Votes</th>
+                      <th>Comments</th>
+                      <th>Submitter</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((issue) => (
+                      <IssueRow key={issue.id} issue={issue} projectPath={projectPath} />
+                    ))}
+                  </tbody>
+                </table>
+                {!loading && filtered.length === 0 && (
+                  <div className="text-muted text-center py-4">
+                    No issues match your query.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </QueryListLayout>
       </div>
     </ProjectLayout>
+  );
+}
+
+function IssueRow({ issue, projectPath }: { issue: Issue; projectPath: string }) {
+  return (
+    <tr>
+      <td>
+        <Link
+          to={`/${projectPath}/~issues/${issue.number}`}
+          className="font-weight-bold"
+        >
+          #{issue.number} {issue.title}
+        </Link>
+      </td>
+      <td>
+        <span className={`badge badge-${stateBadgeColor(issue.state)}`}>
+          {issue.state}
+        </span>
+      </td>
+      <td className="text-muted">{issue.voteCount}</td>
+      <td className="text-muted">{issue.commentCount}</td>
+      <td className="text-muted">{issue.submitter?.name ?? "—"}</td>
+      <td className="text-muted">{formatIssueDate(issue.submitDate)}</td>
+    </tr>
   );
 }

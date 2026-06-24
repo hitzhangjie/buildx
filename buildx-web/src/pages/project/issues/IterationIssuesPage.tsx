@@ -1,61 +1,16 @@
 import { Link, useParams } from "react-router-dom";
-import { Icon } from "../../../components/onedev/Icon";
+import {
+  IterationHeader,
+  IterationTabNav,
+} from "../../../components/onedev/panels/IterationDetailPanel";
+import {
+  fetchIteration,
+  fetchIterationIssues,
+} from "../../../api/iterations";
+import { stateBadgeColor } from "../../../api/issues";
 import { useProject } from "../../../context/ProjectContext";
+import { useAsyncResource } from "../../../hooks/useAsyncResource";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
-
-interface MockIssue {
-  id: number;
-  number: number;
-  title: string;
-  state: string;
-  stateColor: string;
-  assignee: string;
-}
-
-interface IterationDetail {
-  id: number;
-  name: string;
-  startDate: string;
-  dueDate: string;
-  status: string;
-}
-
-const MOCK_ITERATION: IterationDetail | null = null;
-
-const MOCK_ISSUES: MockIssue[] = [];
-
-const TABS = [
-  { id: "issues", label: "Issues", href: "" },
-  { id: "burndown", label: "Burndown", href: "/burndown" },
-  { id: "edit", label: "Edit", href: "/edit" },
-] as const;
-
-function TabNav({
-  activeTab,
-  projectPath,
-  iterationId,
-}: {
-  activeTab: string;
-  projectPath: string;
-  iterationId: number;
-}) {
-  const base = `/${projectPath}/~iterations/${iterationId}`;
-
-  return (
-    <ul className="nav nav-tabs mb-4">
-      {TABS.map((tab) => (
-        <li key={tab.id} className="nav-item">
-          <Link
-            to={base + tab.href}
-            className={`nav-link${activeTab === tab.id ? " active" : ""}`}
-          >
-            {tab.label}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * Mirrors OneDev IterationIssuesPage.
@@ -63,55 +18,53 @@ function TabNav({
  */
 export function IterationIssuesPage() {
   const { projectPath } = useProject();
-  const { iterationId } = useParams<{ iterationId: string }>();
-  const id = parseInt(iterationId ?? "0", 10);
+  const { iteration: iterationParam } = useParams<{ iteration: string }>();
+  const id = parseInt(iterationParam ?? "0", 10);
+
+  const { data: iteration, loading: iterLoading, error: iterError } = useAsyncResource(
+    () => fetchIteration(id),
+    [id],
+  );
+
+  const { data: issues, loading: issuesLoading, error: issuesError } = useAsyncResource(
+    () => fetchIterationIssues(id),
+    [id],
+  );
 
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={
-        MOCK_ITERATION ? `${MOCK_ITERATION.name} - Issues` : "Iteration Issues"
-      }
+      pageTitle={iteration ? `${iteration.name} - Issues` : "Iteration Issues"}
     >
       <div className="card m-3">
         <div className="card-body">
-          {/* Iteration Header */}
-          {MOCK_ITERATION && (
-            <>
-              <div className="d-flex align-items-center mb-3">
-                <h4 className="mb-0 mr-3">{MOCK_ITERATION.name}</h4>
-                <span className="badge badge-light-primary font-size-sm">
-                  {MOCK_ITERATION.status.charAt(0).toUpperCase() + MOCK_ITERATION.status.slice(1)}
-                </span>
-              </div>
-              <div className="text-muted font-size-sm mb-4 d-flex align-items-center flex-wrap">
-                <Icon name="calendar" />
-                <span className="ml-1 mr-3">
-                  {MOCK_ITERATION.startDate} &rarr; {MOCK_ITERATION.dueDate}
-                </span>
-                <span className="mx-1">|</span>
-                <Link
-                  to={`/${projectPath}/~iterations/${id}/burndown`}
-                  className="ml-1 text-muted"
-                >
-                  <Icon name="chart" /> Burndown
-                </Link>
-              </div>
-            </>
+          {iterLoading && <div className="text-muted mb-3">Loading iteration...</div>}
+          {iterError && (
+            <div className="alert alert-danger" role="alert">
+              {iterError}
+            </div>
           )}
+          {iteration && <IterationHeader iteration={iteration} />}
 
-          <TabNav activeTab="issues" projectPath={projectPath} iterationId={id} />
+          <IterationTabNav activeTab="issues" projectPath={projectPath} iterationId={id} />
+
+          {issuesError && (
+            <div className="alert alert-danger" role="alert">
+              {issuesError}
+            </div>
+          )}
+          {issuesLoading && <div className="text-muted mb-3">Loading issues...</div>}
 
           <table className="table">
             <thead>
               <tr>
                 <th>Issue</th>
                 <th>State</th>
-                <th>Assignee</th>
+                <th>Submitter</th>
               </tr>
             </thead>
             <tbody>
-              {MOCK_ISSUES.map((issue) => (
+              {(issues ?? []).map((issue) => (
                 <tr key={issue.id}>
                   <td>
                     <Link
@@ -122,16 +75,14 @@ export function IterationIssuesPage() {
                     </Link>
                   </td>
                   <td>
-                    <span className={`badge badge-sm font-size-xs ${issue.stateColor}`}>
+                    <span className={`badge badge-${stateBadgeColor(issue.state)} font-size-sm`}>
                       {issue.state}
                     </span>
                   </td>
-                  <td className="text-muted">
-                    <Icon name="user" /> {issue.assignee}
-                  </td>
+                  <td className="text-muted">{issue.submitter?.name ?? "—"}</td>
                 </tr>
               ))}
-              {MOCK_ISSUES.length === 0 && (
+              {!issuesLoading && (issues ?? []).length === 0 && (
                 <tr>
                   <td colSpan={3} className="text-center text-muted py-5">
                     No issues in this iteration

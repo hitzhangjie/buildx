@@ -1,22 +1,49 @@
 /* Layout shell overrides — menu structure/styling comes from onedev/css/layout.css */
 
-.main {
+.LayoutPage > .main {
   margin-left: 0;
   padding-top: var(--topbar-height);
   min-height: 100vh;
   transition: margin-left var(--transition-duration) ease;
 }
-.main.sidebar-docked {
+.LayoutPage > .main.sidebar-docked {
   margin-left: var(--sidebar-width);
 }
 @media (max-width: 991.98px) {
-  .main.sidebar-docked {
+  .LayoutPage > .main.sidebar-docked {
     margin-left: 0;
   }
 }
 
+/* OneDev side-main: inner .main is the list panel column, not the page shell */
+.side-main > .main {
+  padding-top: 0;
+  margin-left: 0;
+  min-height: 0;
+}
+
 .page-content {
   padding: 1.5rem 2rem;
+}
+
+/*
+ * Keep long sidebar menus scrollable while preserving footer visibility.
+ * min-height: 0 is required for overflow to work inside a flex column.
+ */
+.sidebar {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
 }
 
 /*

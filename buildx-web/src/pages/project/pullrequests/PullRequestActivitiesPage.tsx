@@ -1,116 +1,182 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
+import { PullRequestDetailShell } from "../../../components/onedev/panels/PullRequestDetailShell";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
-
-interface MockComment {
-  id: number;
-  author: string;
-  date: string;
-  content: string;
-}
-
-const MOCK_COMMENTS: MockComment[] = [];
-
-const STATUS_BADGE_CLASS: Record<string, string> = {
-  Open: "badge-light-warning",
-  Merged: "badge-light-success",
-  Discarded: "badge-light-danger",
-};
+import { usePullRequestDetail } from "../../../hooks/usePullRequestDetail";
+import {
+  addPullRequestReviewer,
+  createPullRequestComment,
+  discardPullRequest,
+  fetchPullRequestComments,
+  mergePullRequest,
+  removePullRequestReviewer,
+  reopenPullRequest,
+  reviewPullRequest,
+  updatePullRequestMergeStrategy,
+  type PullRequestComment,
+} from "../../../api/pullRequests";
+import { fetchUsers } from "../../../api/users";
+import { formatWhenISO } from "../../../util/time";
 
 export function PullRequestActivitiesPage() {
   const { projectPath } = useProject();
-  const { number } = useParams<{ number: string }>();
-  const [comments] = useState<MockComment[]>(MOCK_COMMENTS);
+  const { request } = useParams<{ request: string }>();
+  const { pr, reviews, mergePreview, loading, error, reload, setError } = usePullRequestDetail(projectPath);
+  const [comments, setComments] = useState<PullRequestComment[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [actionPending, setActionPending] = useState(false);
+  const [reviewerQuery, setReviewerQuery] = useState("");
+  const [reviewerOptions, setReviewerOptions] = useState<Array<{ id: number; name: string }>>([]);
 
-  // TODO: Fetch PR detail from API
-  const prTitle = "";
-  const prStatus = "";
-  const sourceBranch = "";
-  const targetBranch = "";
-  const submitter = "";
-  const createdAt = "";
+  useEffect(() => {
+    if (!pr) {
+      setComments([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchPullRequestComments(pr.id).then((list) => {
+      if (!cancelled) {
+        setComments(list);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [pr]);
 
-  function handleAddComment() {
-    if (!newComment.trim()) return;
-    // Mock — in real app this would call the API
-    setNewComment("");
+  async function runAction(action: () => Promise<void>) {
+    setActionPending(true);
+    try {
+      await action();
+      await reload();
+      if (pr) {
+        setComments(await fetchPullRequestComments(pr.id));
+      }
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Action failed");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleAddComment() {
+    if (!pr || !newComment.trim()) return;
+    setActionPending(true);
+    try {
+      const created = await createPullRequestComment(pr.id, newComment.trim());
+      setComments((prev) => [...prev, created]);
+      setNewComment("");
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Failed to add comment");
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function searchReviewers(q: string) {
+    setReviewerQuery(q);
+    if (!q.trim()) {
+      setReviewerOptions([]);
+      return;
+    }
+    const users = await fetchUsers(q);
+    const existing = new Set(reviews.map((r) => r.user?.id));
+    setReviewerOptions(
+      users.filter((u) => !existing.has(u.id) && u.id !== pr?.submitter?.id).map((u) => ({ id: u.id, name: u.name })),
+    );
   }
 
   return (
-    <ProjectLayout projectPath={projectPath} pageTitle={`Pull Request #${number}`}>
-      <div className="card m-3">
-        <div className="card-body">
-          {/* PR Header */}
-          <div className="mb-4">
-            <div className="d-flex align-items-center flex-wrap mb-2">
-              <h4 className="mb-0 mr-3">{prTitle}</h4>
-              <span className={`badge font-size-sm mr-2 ${STATUS_BADGE_CLASS[prStatus]}`}>
-                {prStatus}
-              </span>
-              <span className="text-muted">#{number}</span>
-            </div>
-            <div className="text-muted font-size-sm d-flex align-items-center flex-wrap">
-              <Icon name="branch" />
-              <span className="mx-1">{sourceBranch}</span>
-              <span className="mx-1">&rarr;</span>
-              <span className="mx-1">{targetBranch}</span>
-              <span className="mx-2">|</span>
-              <Icon name="user" />
-              <span className="ml-1">{submitter}</span>
-              <span className="mx-2">|</span>
-              <Icon name="calendar" />
-              <span className="ml-1">{createdAt}</span>
-            </div>
-          </div>
-
-          {/* Tab Navigation */}
-          <ul className="nav nav-tabs mb-4">
-            <li className="nav-item">
-              <Link
-                to={`/${projectPath}/~pulls/${number}`}
-                className="nav-link active"
-              >
-                Activities
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link
-                to={`/${projectPath}/~pulls/${number}/changes`}
-                className="nav-link"
-              >
-                Changes
-              </Link>
-            </li>
-            <li className="nav-item">
-              <Link
-                to={`/${projectPath}/~pulls/${number}/code-comments`}
-                className="nav-link"
-              >
-                Code Comments
-              </Link>
-            </li>
-          </ul>
-
-          {/* Comments / Activities */}
-          <div className="activities-list">
-            {comments.map((comment) => (
-              <div key={comment.id} className="card card-sm mb-3">
-                <div className="card-body">
-                  <div className="d-flex align-items-center mb-2">
-                    <Icon name="user" />
-                    <strong className="ml-1 mr-2">{comment.author}</strong>
-                    <span className="text-muted font-size-sm">{comment.date}</span>
-                  </div>
-                  <div className="comment-content">{comment.content}</div>
+    <ProjectLayout projectPath={projectPath} pageTitle={`Pull Request #${request}`}>
+      <PullRequestDetailShell
+        projectPath={projectPath}
+        requestNumber={request ?? ""}
+        pr={pr}
+        reviews={reviews}
+        activeTab="activities"
+        mergePreview={mergePreview}
+        loading={loading}
+        error={error}
+        actionPending={actionPending}
+        onMerge={pr?.status === "OPEN" ? () => runAction(() => mergePullRequest(pr.id)) : undefined}
+        onDiscard={pr?.status === "OPEN" ? () => runAction(() => discardPullRequest(pr.id)) : undefined}
+        onReopen={pr?.status === "DISCARDED" ? () => runAction(() => reopenPullRequest(pr.id)) : undefined}
+        onApprove={pr?.status === "OPEN" ? () => runAction(() => reviewPullRequest(pr.id, "APPROVED")) : undefined}
+        onRequestChanges={
+          pr?.status === "OPEN"
+            ? () => runAction(() => reviewPullRequest(pr.id, "REQUESTED_FOR_CHANGES"))
+            : undefined
+        }
+        onRemoveReviewer={
+          pr?.status === "OPEN"
+            ? (userId) => runAction(() => removePullRequestReviewer(pr.id, userId))
+            : undefined
+        }
+        onRequestReviewAgain={
+          pr?.status === "OPEN"
+            ? (userId) => runAction(() => addPullRequestReviewer(pr.id, userId))
+            : undefined
+        }
+        onMergeStrategyChange={
+          pr?.status === "OPEN"
+            ? (strategy) => runAction(() => updatePullRequestMergeStrategy(pr.id, strategy))
+            : undefined
+        }
+        addReviewerSlot={
+          pr?.status === "OPEN" ? (
+            <div>
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                placeholder="Add reviewer"
+                value={reviewerQuery}
+                onChange={(e) => void searchReviewers(e.target.value)}
+              />
+              {reviewerOptions.length > 0 && (
+                <div className="list-group mt-1">
+                  {reviewerOptions.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      className="list-group-item list-group-item-action py-1"
+                      onClick={() =>
+                        void runAction(async () => {
+                          await addPullRequestReviewer(pr.id, u.id);
+                          setReviewerQuery("");
+                          setReviewerOptions([]);
+                        })
+                      }
+                    >
+                      {u.name}
+                    </button>
+                  ))}
                 </div>
+              )}
+            </div>
+          ) : undefined
+        }
+      >
+        <div className="activities-list">
+          {comments.map((comment) => (
+            <div key={comment.id} className="card card-sm mb-3">
+              <div className="card-body">
+                <div className="d-flex align-items-center mb-2">
+                  <Icon name="user" />
+                  <strong className="ml-1 mr-2">{comment.user?.name ?? "Unknown"}</strong>
+                  <span className="text-muted font-size-sm">{formatWhenISO(comment.createDate)}</span>
+                </div>
+                <div className="comment-content">{comment.content}</div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+          {!comments.length && !loading && (
+            <div className="text-muted text-center py-4">No activities yet</div>
+          )}
+        </div>
 
-          {/* New Comment */}
+        {pr?.status === "OPEN" && (
           <div className="mt-4">
             <label className="form-label" htmlFor="newComment">
               Add a comment
@@ -127,13 +193,13 @@ export function PullRequestActivitiesPage() {
               type="button"
               className="btn btn-primary"
               onClick={handleAddComment}
-              disabled={!newComment.trim()}
+              disabled={!newComment.trim() || actionPending}
             >
               <Icon name="comment" /> Comment
             </button>
           </div>
-        </div>
-      </div>
+        )}
+      </PullRequestDetailShell>
     </ProjectLayout>
   );
 }

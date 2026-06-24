@@ -3,31 +3,29 @@
 // Maps to OneDev: io.onedev.server.service.IssueService, IssueScheduleService
 package issue
 
-import "context"
-
-// State represents an issue workflow state.
-type State string
-
+// OneDev default workflow state names.
 const (
-	StateOpen       State = "open"
-	StateInProgress State = "in_progress"
-	StateClosed     State = "closed"
+	StateOpen       = "Open"
+	StateInProgress = "In Progress"
+	StateInReview   = "In Review"
+	StateClosed     = "Closed"
 )
 
-// Issue is a work item linked to code, builds, and pull requests.
-type Issue struct {
-	ID        int64
-	ProjectID int64
-	Number    int
-	Title     string
-	State     State
-	Assignee  *int64
-}
+// DefaultState is assigned to newly created issues.
+const DefaultState = StateOpen
 
-// Service manages issues and their cross-entity links.
-type Service interface {
-	Get(ctx context.Context, projectID int64, number int) (*Issue, error)
-	Query(ctx context.Context, projectID int64, q string) ([]*Issue, error)
-	Create(ctx context.Context, issue *Issue) (*Issue, error)
-	Update(ctx context.Context, issue *Issue) (*Issue, error)
+// StateOrdinal returns the sort order for a workflow state name.
+func StateOrdinal(state string) int {
+	switch state {
+	case StateOpen:
+		return 0
+	case StateInProgress:
+		return 1
+	case StateInReview:
+		return 2
+	case StateClosed:
+		return 3
+	default:
+		return 99
+	}
 }

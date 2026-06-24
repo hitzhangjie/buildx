@@ -24,6 +24,8 @@ Reference submodules under `references/` are **read-only** — use them for comp
 | [buildx-web-design.md](buildx-web-design.md) | Web UI OneDev visual parity principles |
 | [buildx-web-migration.md](buildx-web-migration.md) | **Full UI page migration checklist (223 pages, UI-first)** |
 | [buildx-server-api-migration.md](buildx-server-api-migration.md) | REST `/~api` backfill tracking (after UI) |
+| [pull-request-migration.md](pull-request-migration.md) | **PR 专项任务书**（端点/页面/推荐批次 A–E） |
+| [code-compare-migration.md](code-compare-migration.md) | Code Compare 专项（PR Changes 内联 diff 依赖） |
 
 ## Changelog
 

@@ -11,19 +11,22 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   const response = await fetch(path, { ...init, headers });
+  const text = await response.text();
   if (!response.ok) {
     let message = response.statusText;
-    try {
-      const body = (await response.json()) as { error?: string; message?: string };
-      message = body.error ?? body.message ?? message;
-    } catch {
-      /* ignore */
+    if (text) {
+      try {
+        const body = JSON.parse(text) as { error?: string; message?: string };
+        message = body.error ?? body.message ?? message;
+      } catch {
+        message = text;
+      }
     }
     const err: ApiError = { status: response.status, message };
     throw err;
   }
-  if (response.status === 204) {
+  if (response.status === 204 || text === "") {
     return undefined as T;
   }
-  return (await response.json()) as T;
+  return JSON.parse(text) as T;
 }

@@ -117,6 +117,67 @@ func (s *DBStore) ListByMark(ctx context.Context, projectID int64, commitHash, p
 	return comments, rows.Err()
 }
 
+func (s *DBStore) ListByCommitHashes(ctx context.Context, projectID int64, commitHashes []string) ([]*model.CodeComment, error) {
+	if len(commitHashes) == 0 {
+		return []*model.CodeComment{}, nil
+	}
+	placeholders := make([]string, len(commitHashes))
+	args := make([]any, 0, len(commitHashes)+1)
+	args = append(args, projectID)
+	for i, hash := range commitHashes {
+		placeholders[i] = "?"
+		args = append(args, hash)
+	}
+	query := fmt.Sprintf(`
+		SELECT c.o_id, c.o_project_id, c.o_content, c.o_createDate, c.o_replyCount, c.o_resolved, c.o_uuid,
+			c.o_commitHash, c.o_path, c.o_fromRow, c.o_fromColumn, c.o_toRow, c.o_toColumn, c.o_tabWidth,
+			u.o_id, u.o_name, u.o_fullName, u.o_type, u.o_disabled
+		FROM o_CodeComment c
+		JOIN o_User u ON u.o_id = c.o_user_id
+		WHERE c.o_project_id = ? AND c.o_commitHash IN (%s)
+		ORDER BY c.o_createDate DESC`, strings.Join(placeholders, ","))
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []*model.CodeComment
+	for rows.Next() {
+		comment, err := scanComment(rows)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+	return comments, rows.Err()
+}
+
+func (s *DBStore) ListByProject(ctx context.Context, projectID int64) ([]*model.CodeComment, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT c.o_id, c.o_project_id, c.o_content, c.o_createDate, c.o_replyCount, c.o_resolved, c.o_uuid,
+			c.o_commitHash, c.o_path, c.o_fromRow, c.o_fromColumn, c.o_toRow, c.o_toColumn, c.o_tabWidth,
+			u.o_id, u.o_name, u.o_fullName, u.o_type, u.o_disabled
+		FROM o_CodeComment c
+		JOIN o_User u ON u.o_id = c.o_user_id
+		WHERE c.o_project_id = ?
+		ORDER BY c.o_id DESC`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var comments []*model.CodeComment
+	for rows.Next() {
+		comment, err := scanComment(rows)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+	return comments, rows.Err()
+}
+
 func (s *DBStore) Delete(ctx context.Context, id int64) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM o_CodeComment WHERE o_id = ?`, id)
 	if err != nil {
@@ -130,6 +191,96 @@ func (s *DBStore) Delete(ctx context.Context, id int64) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *DBStore) SetResolved(ctx context.Context, id int64, resolved bool) error {
+	resolvedInt := 0
+	if resolved {
+		resolvedInt = 1
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE o_CodeComment SET o_resolved = ? WHERE o_id = ?`, resolvedInt, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *DBStore) CreateReply(ctx context.Context, commentID int64, reply *model.CodeCommentReply) (*model.CodeCommentReply, error) {
+	if reply == nil {
+		return nil, errors.New("reply is nil")
+	}
+	if strings.TrimSpace(reply.Content) == "" {
+		return nil, errors.New("content is required")
+	}
+	if len(reply.Content) > model.CodeCommentMaxContentLen {
+		return nil, fmt.Errorf("content exceeds %d characters", model.CodeCommentMaxContentLen)
+	}
+	if reply.User == nil || reply.User.ID == 0 {
+		return nil, errors.New("reply user is required")
+	}
+	if _, err := s.Get(ctx, commentID); err != nil {
+		return nil, err
+	}
+	if reply.CreateDate.IsZero() {
+		reply.CreateDate = time.Now().UTC()
+	}
+
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO o_CodeCommentReply (o_comment_id, o_user_id, o_content, o_createDate)
+		VALUES (?, ?, ?, ?)`,
+		commentID,
+		reply.User.ID,
+		reply.Content,
+		reply.CreateDate.Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return nil, err
+	}
+	replyID, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	reply.ID = replyID
+	reply.CommentID = commentID
+	if _, err := s.db.ExecContext(ctx, `UPDATE o_CodeComment SET o_replyCount = o_replyCount + 1 WHERE o_id = ?`, commentID); err != nil {
+		return nil, err
+	}
+	return reply, nil
+}
+
+func (s *DBStore) ListReplies(ctx context.Context, commentID int64) ([]*model.CodeCommentReply, error) {
+	if _, err := s.Get(ctx, commentID); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT r.o_id, r.o_comment_id, r.o_content, r.o_createDate,
+			u.o_id, u.o_name, u.o_fullName, u.o_type, u.o_disabled
+		FROM o_CodeCommentReply r
+		JOIN o_User u ON u.o_id = r.o_user_id
+		WHERE r.o_comment_id = ?
+		ORDER BY r.o_id`, commentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var replies []*model.CodeCommentReply
+	for rows.Next() {
+		reply, err := scanReply(rows)
+		if err != nil {
+			return nil, err
+		}
+		replies = append(replies, reply)
+	}
+	return replies, rows.Err()
 }
 
 type rowScanner interface {
@@ -192,4 +343,46 @@ func scanComment(row rowScanner) (*model.CodeComment, error) {
 		Disabled: userDisabled != 0,
 	}
 	return &comment, nil
+}
+
+func scanReply(row rowScanner) (*model.CodeCommentReply, error) {
+	var (
+		reply        model.CodeCommentReply
+		createDate   string
+		userID       int64
+		userName     string
+		userFullName string
+		userType     string
+		userDisabled int
+	)
+	err := row.Scan(
+		&reply.ID,
+		&reply.CommentID,
+		&reply.Content,
+		&createDate,
+		&userID,
+		&userName,
+		&userFullName,
+		&userType,
+		&userDisabled,
+	)
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, createDate)
+	if err != nil {
+		return nil, err
+	}
+	reply.CreateDate = parsed
+	reply.User = &model.User{
+		ID:       userID,
+		Name:     userName,
+		FullName: userFullName,
+		Type:     model.UserType(userType),
+		Disabled: userDisabled != 0,
+	}
+	return &reply, nil
 }

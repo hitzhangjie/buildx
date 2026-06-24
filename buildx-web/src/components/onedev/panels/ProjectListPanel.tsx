@@ -8,6 +8,7 @@ import { ConfirmModal } from "../ConfirmModal";
 import { InlineDropdown } from "../DropdownMenu";
 import { FormFeedbackPanel } from "../FormFeedbackPanel";
 import { Icon } from "../Icon";
+import type { ListToolbarAction } from "./ResourcefulListPanel";
 
 type ProjectListPanelProps = {
   projects: Project[];
@@ -16,6 +17,7 @@ type ProjectListPanelProps = {
   query?: string;
   onQueryChange?: (query: string) => void;
   onRefresh?: () => void;
+  savedQueryToolbar?: ListToolbarAction[];
 };
 
 type OperationStatus = {
@@ -34,6 +36,7 @@ export function ProjectListPanel({
   query = "",
   onQueryChange,
   onRefresh,
+  savedQueryToolbar = [],
 }: ProjectListPanelProps) {
   const { user } = useAuth();
   const [inputQuery, setInputQuery] = useState(query);
@@ -216,12 +219,21 @@ export function ProjectListPanel({
         </div>
 
         <div className="operations mb-4">
-          <a href="#saved-queries" className="show-saved-queries text-gray d-inline-block mb-2 mr-4">
-            <Icon name="eye" /> Show Saved Queries
-          </a>
-          <span className="save-query text-gray d-inline-block mb-2 mr-4 opacity-50">
-            <Icon name="save" /> Save Query
-          </span>
+          {savedQueryToolbar.map((action) => (
+            <a
+              key={action.label}
+              href={action.href ?? "#"}
+              className={`${action.className ?? ""} text-gray d-inline-block mb-2 mr-4`}
+              onClick={(e) => {
+                if (!action.href) {
+                  e.preventDefault();
+                }
+                action.onClick?.();
+              }}
+            >
+              <Icon name={action.icon} /> {action.label}
+            </a>
+          ))}
           <span className="filter text-gray mr-4 mb-2 d-inline-block text-nowrap opacity-50">
             <Icon name="filter" /> Filter
           </span>

@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fetchProjects, type Project } from "../../api/projects";
 import { ProjectListPanel } from "../../components/onedev/panels/ProjectListPanel";
-import { SavedQueriesPanel } from "../../components/onedev/panels/SavedQueriesPanel";
+import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
+import { PROJECT_COMMON_QUERIES } from "../../data/queryPresets";
 import { Layout } from "../../layout/Layout";
 
-const DEFAULT_COMMON_QUERIES = [
-  { name: "All", query: "", href: "/~projects" },
-  { name: "Roots", query: "roots", href: "/~projects?query=roots" },
-];
+const DEFAULT_COMMON_QUERIES = PROJECT_COMMON_QUERIES;
 
 /**
  * Mirrors OneDev ProjectListPage.html + ProjectListPage.java.
@@ -71,18 +69,29 @@ export function ProjectsPage() {
 
   return (
     <Layout title="Projects" topbarTitle="Projects">
-      <div className="side-main side-main-wrap p-2 p-sm-5">
-        <SavedQueriesPanel commonQueries={DEFAULT_COMMON_QUERIES} currentQuery={query} />
-        <div className="main">
-          <ProjectListPanel
-            projects={projects}
-            loading={loading}
-            errors={error ? [error] : []}
-            query={query}
-            onQueryChange={handleQueryChange}
-            onRefresh={handleRefresh}
-          />
-        </div>
+      <div className="p-2 p-sm-5">
+        <QueryListLayout
+          className="side-main side-main-wrap"
+          storageKey="projects:global"
+          commonQueries={DEFAULT_COMMON_QUERIES}
+          currentQuery={query}
+          onSelectQuery={handleQueryChange}
+          buildHref={(q) =>
+            q ? `/~projects?query=${encodeURIComponent(q)}` : "/~projects"
+          }
+        >
+          {(savedQueries) => (
+            <ProjectListPanel
+              projects={projects}
+              loading={loading}
+              errors={error ? [error] : []}
+              query={query}
+              onQueryChange={handleQueryChange}
+              onRefresh={handleRefresh}
+              savedQueryToolbar={savedQueries.toolbarActions}
+            />
+          )}
+        </QueryListLayout>
       </div>
     </Layout>
   );

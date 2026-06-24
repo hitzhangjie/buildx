@@ -1,51 +1,20 @@
-import { type FormEvent, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { type FormEvent, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import {
+  IterationHeader,
+  IterationTabNav,
+} from "../../../components/onedev/panels/IterationDetailPanel";
+import {
+  deleteIteration,
+  fetchIteration,
+  formatIterationDay,
+  isoDateToEpochDay,
+  updateIteration,
+} from "../../../api/iterations";
 import { useProject } from "../../../context/ProjectContext";
+import { useAsyncResource } from "../../../hooks/useAsyncResource";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
-
-interface IterationDetail {
-  id: number;
-  name: string;
-  startDate: string;
-  dueDate: string;
-  description: string;
-}
-
-const MOCK_ITERATION: IterationDetail | null = null;
-
-const TABS = [
-  { id: "issues", label: "Issues", href: "" },
-  { id: "burndown", label: "Burndown", href: "/burndown" },
-  { id: "edit", label: "Edit", href: "/edit" },
-] as const;
-
-function TabNav({
-  activeTab,
-  projectPath,
-  iterationId,
-}: {
-  activeTab: string;
-  projectPath: string;
-  iterationId: number;
-}) {
-  const base = `/${projectPath}/~iterations/${iterationId}`;
-
-  return (
-    <ul className="nav nav-tabs mb-4">
-      {TABS.map((tab) => (
-        <li key={tab.id} className="nav-item">
-          <Link
-            to={base + tab.href}
-            className={`nav-link${activeTab === tab.id ? " active" : ""}`}
-          >
-            {tab.label}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * Mirrors OneDev IterationEditPage.
@@ -53,30 +22,49 @@ function TabNav({
  */
 export function IterationEditPage() {
   const { projectPath } = useProject();
-  const { iterationId } = useParams<{ iterationId: string }>();
-  const id = parseInt(iterationId ?? "0", 10);
+  const navigate = useNavigate();
+  const { iteration: iterationParam } = useParams<{ iteration: string }>();
+  const id = parseInt(iterationParam ?? "0", 10);
 
-  const [name, setName] = useState(MOCK_ITERATION?.name ?? "");
-  const [startDate, setStartDate] = useState(MOCK_ITERATION?.startDate ?? "");
-  const [dueDate, setDueDate] = useState(MOCK_ITERATION?.dueDate ?? "");
-  const [description, setDescription] = useState(MOCK_ITERATION?.description ?? "");
+  const { data: iteration, loading, error } = useAsyncResource(
+    () => fetchIteration(id),
+    [id],
+  );
+
+  const [name, setName] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [description, setDescription] = useState("");
+  const [closed, setClosed] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!iteration) {
+      return;
+    }
+    setName(iteration.name);
+    setDescription(iteration.description ?? "");
+    setClosed(iteration.closed);
+    setStartDate(
+      iteration.startDay != null ? formatIterationDay(iteration.startDay) : "",
+    );
+    setDueDate(iteration.dueDay != null ? formatIterationDay(iteration.dueDay) : "");
+  }, [iteration]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErrors([]);
+    if (!iteration) {
+      return;
+    }
 
     if (!name.trim()) {
       setErrors(["Name is required."]);
       return;
     }
-    if (!startDate) {
-      setErrors(["Start date is required."]);
-      return;
-    }
-    if (!dueDate) {
-      setErrors(["Due date is required."]);
+    if (!startDate || !dueDate) {
+      setErrors(["Start and due dates are required."]);
       return;
     }
     if (new Date(dueDate) <= new Date(startDate)) {
@@ -86,11 +74,15 @@ export function IterationEditPage() {
 
     setSubmitting(true);
     try {
-      // TODO: call actual update iteration API
-      // await fetch(`/~api/projects/${projectPath}/iterations/${id}`, {
-      //   method: "PUT",
-      //   body: JSON.stringify({ name, startDate, dueDate, description }),
-      // });
+      await updateIteration(id, {
+        projectId: iteration.project?.id ?? 0,
+        name: name.trim(),
+        description,
+        startDay: isoDateToEpochDay(startDate),
+        dueDay: isoDateToEpochDay(dueDate),
+        closed,
+      });
+      navigate(`/${projectPath}/~iterations/${id}`, { replace: true });
     } catch (err) {
       setErrors([
         (err as { message?: string }).message ?? "Failed to update iteration.",
@@ -100,20 +92,36 @@ export function IterationEditPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!window.confirm("Delete this iteration?")) {
+      return;
+    }
+    try {
+      await deleteIteration(id);
+      navigate(`/${projectPath}/~iterations`, { replace: true });
+    } catch (err) {
+      setErrors([
+        (err as { message?: string }).message ?? "Failed to delete iteration.",
+      ]);
+    }
+  }
+
   return (
     <ProjectLayout
       projectPath={projectPath}
-      pageTitle={
-        MOCK_ITERATION ? `${MOCK_ITERATION.name} - Edit` : "Edit Iteration"
-      }
+      pageTitle={iteration ? `${iteration.name} - Edit` : "Edit Iteration"}
     >
       <div className="card m-3">
         <div className="card-body">
-          <div className="d-flex align-items-center mb-3">
-            <h4 className="mb-0 mr-3">{MOCK_ITERATION?.name}</h4>
-          </div>
+          {loading && <div className="text-muted mb-3">Loading...</div>}
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              {error}
+            </div>
+          )}
+          {iteration && <IterationHeader iteration={iteration} />}
 
-          <TabNav activeTab="edit" projectPath={projectPath} iterationId={id} />
+          <IterationTabNav activeTab="edit" projectPath={projectPath} iterationId={id} />
 
           <form method="post" onSubmit={handleSubmit}>
             <FormFeedbackPanel messages={errors} />
@@ -122,7 +130,6 @@ export function IterationEditPage() {
               <input
                 type="text"
                 className="form-control"
-                placeholder="Iteration name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -153,25 +160,43 @@ export function IterationEditPage() {
               <textarea
                 className="form-control"
                 rows={4}
-                placeholder="Iteration description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
+            </div>
+            <div className="form-group form-check">
+              <input
+                type="checkbox"
+                className="form-check-input"
+                id="iteration-closed"
+                checked={closed}
+                onChange={(e) => setClosed(e.target.checked)}
+              />
+              <label className="form-check-label font-weight-bold" htmlFor="iteration-closed">
+                Closed
+              </label>
             </div>
             <div className="d-flex align-items-center">
               <button
                 className="btn btn-primary font-weight-bold mr-3"
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !iteration}
               >
                 {submitting ? "Saving..." : "Save"}
               </button>
               <Link
-                to={`/${projectPath}/~iterations`}
-                className="btn btn-light font-weight-bold"
+                to={`/${projectPath}/~iterations/${id}`}
+                className="btn btn-light font-weight-bold mr-3"
               >
                 Cancel
               </Link>
+              <button
+                type="button"
+                className="btn btn-outline-danger font-weight-bold ml-auto"
+                onClick={() => void handleDelete()}
+              >
+                Delete
+              </button>
             </div>
           </form>
         </div>

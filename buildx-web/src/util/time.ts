@@ -15,3 +15,12 @@ export function formatWhen(ts: number): string {
   const years = Math.floor(days / 365);
   return years === 1 ? "1 year ago" : `${years} years ago`;
 }
+
+/** Relative time from an ISO-8601 date string. */
+export function formatWhenISO(iso: string): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) {
+    return iso;
+  }
+  return formatWhen(ts);
+}

@@ -233,6 +233,41 @@ func TestCommitFile_UpdateExisting(t *testing.T) {
 	}
 }
 
+func TestDeleteFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitBare(dir); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	author := object.Signature{
+		Name:  "Test User",
+		Email: "test@example.com",
+		When:  time.Now(),
+	}
+
+	_, err = repo.CommitFile(t.Context(), "main", "remove-me.txt", "bye\n", author, "add")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = repo.DeleteFile(t.Context(), "main", "remove-me.txt", author, "delete")
+	if err != nil {
+		t.Fatalf("DeleteFile failed: %v", err)
+	}
+
+	blob, err := repo.Blob(t.Context(), "main", "remove-me.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if blob != nil {
+		t.Fatalf("expected file to be deleted, got %#v", blob)
+	}
+}
+
 func TestCommitFile_NestedDirectories(t *testing.T) {
 	dir := t.TempDir()
 	if err := InitBare(dir); err != nil {

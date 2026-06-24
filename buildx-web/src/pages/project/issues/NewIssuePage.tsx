@@ -1,7 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { createProjectIssue } from "../../../api/issues";
+import { fetchProjectIterations } from "../../../api/iterations";
 import { useProject } from "../../../context/ProjectContext";
+import { useAsyncResource } from "../../../hooks/useAsyncResource";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 
 /**
@@ -14,9 +17,20 @@ export function NewIssuePage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assignee, setAssignee] = useState("");
+  const [selectedIterationIds, setSelectedIterationIds] = useState<number[]>([]);
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const { data: iterations } = useAsyncResource(
+    () => fetchProjectIterations(projectPath),
+    [projectPath],
+  );
+
+  function toggleIteration(id: number) {
+    setSelectedIterationIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -29,12 +43,10 @@ export function NewIssuePage() {
 
     setSubmitting(true);
     try {
-      // TODO: call actual create issue API
-      // await fetch(`/~api/projects/${projectPath}/issues`, {
-      //   method: "POST",
-      //   body: JSON.stringify({ title, description, assignee }),
-      // });
-      navigate(`/${projectPath}/~issues`, { replace: true });
+      const created = await createProjectIssue(projectPath, title.trim(), description, {
+        iterationIds: selectedIterationIds.length > 0 ? selectedIterationIds : undefined,
+      });
+      navigate(`/${projectPath}/~issues/${created.number}`, { replace: true });
     } catch (err) {
       setErrors([
         (err as { message?: string }).message ?? "Failed to create issue.",
@@ -71,16 +83,27 @@ export function NewIssuePage() {
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
-            <div className="form-group">
-              <label className="font-weight-bold">Assignee</label>
-              <input
-                type="text"
-                className="form-control"
-                placeholder="Assignee login name"
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value)}
-              />
-            </div>
+            {(iterations?.length ?? 0) > 0 && (
+              <div className="form-group">
+                <label className="font-weight-bold">Iterations</label>
+                <div className="d-flex flex-wrap">
+                  {iterations!.map((iter) => (
+                    <label
+                      key={iter.id}
+                      className="btn btn-sm btn-outline-secondary mr-2 mb-2"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mr-1"
+                        checked={selectedIterationIds.includes(iter.id)}
+                        onChange={() => toggleIteration(iter.id)}
+                      />
+                      {iter.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="d-flex align-items-center">
               <button
                 className="btn btn-primary font-weight-bold mr-3"

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
+import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 import { fetchProjects } from "../../api/projects";
 import { fetchBranch, fetchBranches, fetchDefaultBranch } from "../../api/repositories";
+import { buildProjectScopedHref } from "../../data/queryPresets";
 import { blobUrl } from "../../util/blobPath";
 
 interface Branch {
@@ -81,28 +83,54 @@ export function ProjectBranchesPage() {
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Branches">
-      <div className="card m-3">
-        <div className="card-body">
-          <div className="d-flex mb-4">
-            <form className="clearable-wrapper flex-grow-1" onSubmit={(e) => e.preventDefault()}>
-              <div className="input-group">
-                <input
-                  spellCheck={false}
-                  className="form-control"
-                  placeholder="Query/order branches"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <span className="input-group-append">
-                  <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
-                    <Icon name="magnify" />
-                  </button>
-                </span>
-              </div>
-            </form>
-          </div>
-          {error && <div className="alert alert-light-danger">{error}</div>}
-          <table className="table">
+      <div className="p-2 p-sm-3">
+        <QueryListLayout
+          className="side-main side-main-wrap"
+          storageKey={`branches:project:${projectPath}`}
+          currentQuery={query}
+          onSelectQuery={setQuery}
+          buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~branches`, q)}
+        >
+          {(savedQueries) => (
+            <div className="card">
+              <div className="card-body">
+                <div className="d-flex mb-4">
+                  <form className="clearable-wrapper flex-grow-1" onSubmit={(e) => e.preventDefault()}>
+                    <div className="input-group">
+                      <input
+                        spellCheck={false}
+                        className="form-control"
+                        placeholder="Query/order branches"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                      <span className="input-group-append">
+                        <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
+                          <Icon name="magnify" />
+                        </button>
+                      </span>
+                    </div>
+                  </form>
+                </div>
+                {error && <div className="alert alert-light-danger">{error}</div>}
+                <div className="operations mb-4">
+                  {savedQueries.toolbarActions.map((action) => (
+                    <a
+                      key={action.label}
+                      href={action.href ?? "#"}
+                      className={`text-gray d-inline-block mr-4 mb-2 text-nowrap ${action.className ?? ""}`}
+                      onClick={(e) => {
+                        if (!action.href) {
+                          e.preventDefault();
+                        }
+                        action.onClick?.();
+                      }}
+                    >
+                      <Icon name={action.icon} /> {action.label}
+                    </a>
+                  ))}
+                </div>
+                <table className="table">
             <thead>
               <tr>
                 <th>Branch</th>
@@ -142,8 +170,11 @@ export function ProjectBranchesPage() {
                 </tr>
               )}
             </tbody>
-          </table>
-        </div>
+                </table>
+              </div>
+            </div>
+          )}
+        </QueryListLayout>
       </div>
     </ProjectLayout>
   );

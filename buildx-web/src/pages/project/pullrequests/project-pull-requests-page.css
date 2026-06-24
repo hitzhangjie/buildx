@@ -1,0 +1,12 @@
+.pull-request-list .title {
+  color: inherit;
+}
+
+.pull-request-list .secondary .branches {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pull-request-detail .status.badge {
+  font-size: 0.85rem;
+}

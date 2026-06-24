@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
+import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
+import { QueryToolbar, queryToolbarCount } from "../../components/onedev/panels/QueryToolbar";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 import { fetchProjects } from "../../api/projects";
 import { fetchCommits, type RepositoryCommit } from "../../api/repositories";
+import { buildProjectScopedHref } from "../../data/queryPresets";
 import { formatWhen } from "../../util/time";
 
 function formatCommitWhen(commit: RepositoryCommit): string {
@@ -71,35 +74,45 @@ export function ProjectCommitsPage() {
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Commits">
-      <div className="card commit-list no-autofocus m-3">
-        <div className="card-body">
-          <div className="d-flex mb-4">
-            <form className="clearable-wrapper flex-grow-1" onSubmit={(e) => e.preventDefault()}>
-              <div className="input-group">
-                <input
-                  spellCheck={false}
-                  autoComplete="off"
-                  className="form-control"
-                  placeholder="Query/order commits"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+      <div className="p-2 p-sm-3">
+        <QueryListLayout
+          className="side-main side-main-wrap"
+          storageKey={`commits:project:${projectPath}`}
+          currentQuery={query}
+          onSelectQuery={setQuery}
+          buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~commits`, q)}
+        >
+          {(savedQueries) => (
+            <div className="card commit-list no-autofocus">
+              <div className="card-body">
+                <div className="d-flex mb-4">
+                  <form className="clearable-wrapper flex-grow-1" onSubmit={(e) => e.preventDefault()}>
+                    <div className="input-group">
+                      <input
+                        spellCheck={false}
+                        autoComplete="off"
+                        className="form-control"
+                        placeholder="Query/order commits"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                      <span className="input-group-append">
+                        <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
+                          <Icon name="magnify" />
+                        </button>
+                      </span>
+                    </div>
+                  </form>
+                </div>
+                {error && <div className="alert alert-light-danger">{error}</div>}
+                <QueryToolbar
+                  actions={[
+                    ...savedQueries.toolbarActions,
+                    { icon: "filter", label: "Filter", className: "opacity-50" },
+                  ]}
+                  trailing={queryToolbarCount(`${filtered.length} commits`)}
                 />
-                <span className="input-group-append">
-                  <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
-                    <Icon name="magnify" />
-                  </button>
-                </span>
-              </div>
-            </form>
-          </div>
-          {error && <div className="alert alert-light-danger">{error}</div>}
-          <div className="mb-4">
-            <a href="#" className="text-gray d-inline-block mr-4 mb-2 text-nowrap" onClick={(e) => e.preventDefault()}>
-              <Icon name="filter" /> Filter
-            </a>
-            <span className="float-right text-gray">{filtered.length} commits</span>
-          </div>
-          <div className="body">
+                <div className="body">
             <table className="table">
               <tbody>
                 {loading && (
@@ -135,9 +148,12 @@ export function ProjectCommitsPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
-          </div>
-        </div>
+                </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </QueryListLayout>
       </div>
     </ProjectLayout>
   );

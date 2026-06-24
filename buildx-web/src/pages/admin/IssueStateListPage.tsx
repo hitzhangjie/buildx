@@ -1,28 +1,16 @@
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
+import { fetchIssueSetting } from "../../api/issueSettings";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Layout } from "../../layout/Layout";
-
-type IssueState = {
-  id: number;
-  name: string;
-  color: string;
-  description: string;
-};
-
-const MOCK_STATES: IssueState[] = [
-  { id: 1, name: "Open", color: "#28a745", description: "Issue is open and being worked on" },
-  { id: 2, name: "In Progress", color: "#007bff", description: "Work on this issue has started" },
-  { id: 3, name: "Resolved", color: "#ffc107", description: "Issue has been resolved" },
-  { id: 4, name: "Closed", color: "#6c757d", description: "Issue is closed" },
-  { id: 5, name: "Reopened", color: "#dc3545", description: "Issue was previously closed and reopened" },
-];
 
 /**
  * Mirrors OneDev IssueStateListPage.html.
  * Reference: references/onedev/.../web/page/admin/issuestate/IssueStateListPage.html
  */
 export function IssueStateListPage() {
-  const states = MOCK_STATES;
+  const { data: setting, loading, error } = useAsyncResource(() => fetchIssueSetting(), []);
+  const states = setting?.stateSpecs ?? [];
 
   return (
     <Layout title="Issue States">
@@ -36,38 +24,51 @@ export function IssueStateListPage() {
             </Link>
           </div>
           <div className="card-body">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Color</th>
-                  <th>Description</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {states.map((state) => (
-                  <tr key={state.id}>
-                    <td>{state.name}</td>
-                    <td>
-                      <span className="badge" style={{ backgroundColor: state.color, color: "#fff" }}>
-                        {state.color}
-                      </span>
-                    </td>
-                    <td>{state.description}</td>
-                    <td>
-                      <Link
-                        to={`/~administration/settings/issue-states/${state.id}`}
-                        className="btn btn-link btn-sm"
-                      >
-                        <Icon name="pencil" className="icon mr-1" width={14} height={14} />
-                        Edit
-                      </Link>
-                    </td>
+            {loading && <div className="text-muted">Loading states...</div>}
+            {error && (
+              <div className="alert alert-danger" role="alert">
+                {error}
+              </div>
+            )}
+            {!loading && !error && (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Color</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {states.map((state, index) => (
+                    <tr key={state.name}>
+                      <td>{state.name}</td>
+                      <td>
+                        {state.color ? (
+                          <span
+                            className="badge"
+                            style={{ backgroundColor: state.color, color: "#fff" }}
+                          >
+                            {state.color}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <Link
+                          to={`/~administration/settings/issue-states/${index + 1}`}
+                          className="btn btn-link btn-sm"
+                        >
+                          <Icon name="edit" className="icon mr-1" width={14} height={14} />
+                          Edit
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

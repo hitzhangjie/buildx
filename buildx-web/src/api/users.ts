@@ -5,7 +5,37 @@ export type User = {
   id: number;
   name: string;
   fullName: string;
+  email?: string;
+  disabled?: boolean;
 };
+
+const MOCK_USERS: User[] = [
+  { id: 1, name: "admin", fullName: "Administrator", email: "admin@example.com" },
+  { id: 2, name: "dev1", fullName: "Developer One", email: "dev1@example.com" },
+  { id: 3, name: "dev2", fullName: "Developer Two", email: "dev2@example.com" },
+];
+
+export async function fetchUsers(query?: string): Promise<User[]> {
+  if (USE_MOCK) {
+    const keyword = query?.trim().toLowerCase();
+    if (!keyword) {
+      return MOCK_USERS;
+    }
+    return MOCK_USERS.filter((user) =>
+      [user.name, user.fullName, user.email ?? ""].some((field) =>
+        field.toLowerCase().includes(keyword),
+      ),
+    );
+  }
+
+  const params = new URLSearchParams();
+  if (query?.trim()) {
+    params.set("query", query.trim());
+  }
+  const url = params.size > 0 ? `/~api/users?${params.toString()}` : "/~api/users";
+  const data = await apiFetch<User[] | null>(url);
+  return Array.isArray(data) ? data : [];
+}
 
 export async function fetchCurrentUser(): Promise<User | null> {
   if (USE_MOCK) {
@@ -49,7 +79,7 @@ export type SignUpRequest = {
   password: string;
 };
 
-export async function signUp(req: SignUpRequest): Promise<void> {
+export async function createUser(req: SignUpRequest): Promise<void> {
   if (USE_MOCK) {
     return;
   }
@@ -57,4 +87,8 @@ export async function signUp(req: SignUpRequest): Promise<void> {
     method: "POST",
     body: JSON.stringify(req),
   });
+}
+
+export async function signUp(req: SignUpRequest): Promise<void> {
+  await createUser(req);
 }

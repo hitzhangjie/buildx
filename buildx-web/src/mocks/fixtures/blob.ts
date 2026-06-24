@@ -228,3 +228,30 @@ export function updateMockFile(
     when: "just now",
   };
 }
+
+/**
+ * Delete a file from the in-memory mock tree.
+ */
+export function deleteMockFile(_revision: string, filePath: string, commitMessage: string): void {
+  if (!filePath) return;
+  const parts = filePath.split("/");
+  const fileName = parts.pop()!;
+
+  let parent = mockTree;
+  for (const part of parts) {
+    if (!parent.children?.[part]) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    parent = parent.children[part];
+  }
+
+  if (!parent.children?.[fileName] || parent.children[fileName].type !== "file") {
+    throw new Error(`File not found: ${filePath}`);
+  }
+  delete parent.children[fileName];
+  parent.lastCommit = {
+    author: "admin",
+    message: commitMessage,
+    when: "just now",
+  };
+}

@@ -24,6 +24,8 @@ cp "$ONEDEV_WEB/page/project/blob/navigator/blob-navigator.css" "$PUBLIC/onedev/
 cp "$ONEDEV_WEB/page/project/blob/render/folder/folder-view.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/project/blob/render/nocommits/no-commits.css" "$PUBLIC/onedev/css/"
 cp "$ONEDEV_WEB/page/project/blob/render/source/source-view.css" "$PUBLIC/onedev/css/"
+cp "$ONEDEV_WEB/page/project/compare/revision-compare.css" "$PUBLIC/onedev/css/"
+cp "$ONEDEV_WEB/asset/revisioncompare/revision-compare.css" "$PUBLIC/onedev/css/revision-compare-layout.css"
 cp "$ONEDEV_WEB/asset/selectionpopover/jquery.selectionpopover.css" "$PUBLIC/onedev/css/selection-popover.css"
 SELECT2_RES="$ONEDEV_WEB/component/select2/res"
 cp "$SELECT2_RES/select2.css" "$SELECT2_RES/select2-bootstrap.css" "$PUBLIC/onedev/css/"

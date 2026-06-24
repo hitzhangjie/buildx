@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { createIteration } from "../../../api/iterations";
 import { useProject } from "../../../context/ProjectContext";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 
@@ -41,11 +42,7 @@ export function NewIterationPage() {
 
     setSubmitting(true);
     try {
-      // TODO: call actual create iteration API
-      // await fetch(`/~api/projects/${projectPath}/iterations`, {
-      //   method: "POST",
-      //   body: JSON.stringify({ name, startDate, dueDate }),
-      // });
+      await createIteration(projectPath, name.trim(), startDate, dueDate);
       navigate(`/${projectPath}/~iterations`, { replace: true });
     } catch (err) {
       setErrors([

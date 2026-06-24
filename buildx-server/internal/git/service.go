@@ -1061,22 +1061,7 @@ func (r *Repository) commitDiffs(obj *object.Commit) ([]FileDiff, error) {
 			path = from.Path()
 		}
 
-		adds, dels := 0, 0
-		for _, chunk := range fp.Chunks() {
-			s := chunk.Content()
-			switch chunk.Type() {
-			case fdiff.Add:
-				adds += strings.Count(s, "\n")
-				if len(s) > 0 && s[len(s)-1] != '\n' {
-					adds++
-				}
-			case fdiff.Delete:
-				dels += strings.Count(s, "\n")
-				if len(s) > 0 && s[len(s)-1] != '\n' {
-					dels++
-				}
-			}
-		}
+		adds, dels := countChunkLines(fp)
 
 		var buf bytes.Buffer
 		enc := fdiff.NewUnifiedEncoder(&buf, fdiff.DefaultContextLines)
@@ -1176,6 +1161,90 @@ func (r *Repository) CommitFile(ctx context.Context, branch, filePath, content s
 	}
 
 	return commitHash.String(), nil
+}
+
+// DeleteFile removes a file from a branch and returns the new commit hash.
+func (r *Repository) DeleteFile(ctx context.Context, branch, filePath string, author object.Signature, commitMessage string) (string, error) {
+	refName := plumbing.NewBranchReferenceName(branch)
+	ref, err := r.inner.Reference(refName, true)
+	if err != nil {
+		return "", fmt.Errorf("lookup branch %q: %w", branch, err)
+	}
+
+	oldCommitHash := ref.Hash()
+	oldCommit, err := r.inner.CommitObject(oldCommitHash)
+	if err != nil {
+		return "", fmt.Errorf("load commit: %w", err)
+	}
+	oldTree, err := oldCommit.Tree()
+	if err != nil {
+		return "", fmt.Errorf("load tree: %w", err)
+	}
+
+	newTreeHash, err := r.removeTreeEntry(oldTree, strings.Split(filePath, "/"))
+	if err != nil {
+		return "", err
+	}
+
+	newCommit := &object.Commit{
+		Author:       author,
+		Committer:    author,
+		Message:      commitMessage,
+		TreeHash:     newTreeHash,
+		ParentHashes: []plumbing.Hash{oldCommitHash},
+	}
+
+	commitHash, err := r.storeCommit(newCommit)
+	if err != nil {
+		return "", fmt.Errorf("store commit: %w", err)
+	}
+
+	newRef := plumbing.NewHashReference(refName, commitHash)
+	if err := r.inner.Storer.SetReference(newRef); err != nil {
+		return "", fmt.Errorf("update ref: %w", err)
+	}
+
+	return commitHash.String(), nil
+}
+
+// ReadFileBytes returns the raw bytes and size of a file at revision:path.
+func (r *Repository) ReadFileBytes(revision, path string) ([]byte, int64, error) {
+	if revision == "" {
+		revision = r.DefaultRevision()
+	}
+
+	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	commit, err := r.inner.CommitObject(*hash)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	file, err := tree.File(path)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	reader, err := file.Blob.Reader()
+	if err != nil {
+		return nil, 0, err
+	}
+	defer reader.Close()
+
+	content, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return content, file.Blob.Size, nil
 }
 
 // storeBlob writes content as a blob object and returns its hash.
@@ -1297,6 +1366,66 @@ func (r *Repository) setTreeEntry(tree *object.Tree, pathParts []string, blobHas
 		}
 		return entries[i].Name < entries[j].Name
 	})
+
+	return r.storeTree(entries)
+}
+
+// removeTreeEntry returns a new tree hash with the entry at pathParts removed.
+func (r *Repository) removeTreeEntry(tree *object.Tree, pathParts []string) (plumbing.Hash, error) {
+	name := pathParts[0]
+
+	if len(pathParts) == 1 {
+		entries := make([]object.TreeEntry, 0, len(tree.Entries))
+		found := false
+		for _, e := range tree.Entries {
+			if e.Name == name {
+				found = true
+				continue
+			}
+			entries = append(entries, e)
+		}
+		if !found {
+			return plumbing.ZeroHash, fmt.Errorf("file not found: %s", strings.Join(pathParts, "/"))
+		}
+		return r.storeTree(entries)
+	}
+
+	var subTree *object.Tree
+	for _, e := range tree.Entries {
+		if e.Name == name && e.Mode == filemode.Dir {
+			subObj, objErr := r.inner.Storer.EncodedObject(plumbing.TreeObject, e.Hash)
+			if objErr != nil {
+				return plumbing.ZeroHash, objErr
+			}
+			subTree = &object.Tree{}
+			if decErr := subTree.Decode(subObj); decErr != nil {
+				return plumbing.ZeroHash, decErr
+			}
+			break
+		}
+	}
+	if subTree == nil {
+		return plumbing.ZeroHash, fmt.Errorf("file not found: %s", strings.Join(pathParts, "/"))
+	}
+
+	subHash, err := r.removeTreeEntry(subTree, pathParts[1:])
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+
+	entries := make([]object.TreeEntry, 0, len(tree.Entries))
+	replaced := false
+	for _, e := range tree.Entries {
+		if e.Name == name {
+			entries = append(entries, object.TreeEntry{Name: name, Mode: filemode.Dir, Hash: subHash})
+			replaced = true
+		} else {
+			entries = append(entries, e)
+		}
+	}
+	if !replaced {
+		return plumbing.ZeroHash, fmt.Errorf("file not found: %s", strings.Join(pathParts, "/"))
+	}
 
 	return r.storeTree(entries)
 }

@@ -1,47 +1,71 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
+import { QueryListLayout } from "../../../components/onedev/panels/QueryListLayout";
+import type { ListToolbarAction } from "../../../components/onedev/panels/ResourcefulListPanel";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
+import {
+  fetchProjectPullRequests,
+  pullRequestStatusBadge,
+  pullRequestStatusLabel,
+  type PullRequest,
+} from "../../../api/pullRequests";
+import { buildProjectScopedHref } from "../../../data/queryPresets";
+import { formatWhenISO } from "../../../util/time";
+import "./project-pull-requests-page.css";
 
-interface MockPullRequest {
-  number: number;
-  title: string;
-  status: "Open" | "Merged" | "Discarded";
-  sourceBranch: string;
-  targetBranch: string;
-  comments: number;
-  submitter: string;
-  date: string;
-}
-
-const MOCK_PRS: MockPullRequest[] = [];
-
-const STATUS_BADGE_CLASS: Record<string, string> = {
-  Open: "badge-light-warning",
-  Merged: "badge-light-success",
-  Discarded: "badge-light-danger",
-};
+const DEFAULT_TOOLBAR: ListToolbarAction[] = [
+  { icon: "filter", label: "Filter", className: "opacity-50" },
+  { icon: "sort", label: "Order By", className: "opacity-50" },
+  { icon: "ellipsis-circle", label: "Operations", className: "opacity-50" },
+];
 
 export function ProjectPullRequestsPage() {
   const { projectPath } = useProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("query") ?? "";
   const [localQuery, setLocalQuery] = useState(query);
+  const [pulls, setPulls] = useState<PullRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = MOCK_PRS.filter(
-    (pr) =>
-      !query ||
-      pr.title.toLowerCase().includes(query.toLowerCase()) ||
-      `#${pr.number}` === query,
-  );
+  useEffect(() => {
+    setLocalQuery(query);
+  }, [query]);
 
-  function handleQuerySubmit(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void fetchProjectPullRequests(projectPath, query)
+      .then((items) => {
+        if (!cancelled) {
+          setPulls(items);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setPulls([]);
+          setError((err as { message?: string }).message ?? "Failed to load pull requests");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectPath, query]);
+
+  function handleQueryChange(nextQuery: string) {
+    setLocalQuery(nextQuery);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      if (localQuery) {
-        next.set("query", localQuery);
+      if (nextQuery.trim()) {
+        next.set("query", nextQuery.trim());
       } else {
         next.delete("query");
       }
@@ -49,97 +73,125 @@ export function ProjectPullRequestsPage() {
     }, { replace: true });
   }
 
+  function handleQuerySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    handleQueryChange(localQuery);
+  }
+
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Pull Requests">
-      <div className="card m-3">
-        <div className="card-body">
-          <div className="d-flex mb-4">
-            <form className="clearable-wrapper flex-grow-1" onSubmit={handleQuerySubmit}>
-              <div className="input-group">
-                <input
-                  spellCheck={false}
-                  autoComplete="off"
-                  className="form-control"
-                  placeholder="Query/order pull requests"
-                  value={localQuery}
-                  onChange={(e) => setLocalQuery(e.target.value)}
-                />
-                <span className="input-group-append">
-                  <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
-                    <Icon name="magnify" />
-                  </button>
-                </span>
+      <div className="p-2 p-sm-3">
+        <QueryListLayout
+          className="side-main side-main-wrap"
+          storageKey={`pulls:project:${projectPath}`}
+          currentQuery={query}
+          onSelectQuery={handleQueryChange}
+          buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~pulls`, q)}
+        >
+          {(savedQueries) => (
+            <div className="pull-request-list card no-autofocus">
+              <div className="card-body">
+                <div className="d-flex mb-4">
+                  <form className="clearable-wrapper flex-grow-1" onSubmit={handleQuerySubmit}>
+                    <div className="input-group">
+                      <input
+                        spellCheck={false}
+                        autoComplete="off"
+                        className="form-control"
+                        placeholder="Query/order pull requests"
+                        value={localQuery}
+                        onChange={(e) => setLocalQuery(e.target.value)}
+                      />
+                      <span className="input-group-append">
+                        <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
+                          <Icon name="magnify" />
+                        </button>
+                      </span>
+                    </div>
+                  </form>
+                  <Link
+                    to={`/${projectPath}/~pulls/new`}
+                    className="btn btn-primary flex-shrink-0 ml-3"
+                    title="New Pull Request"
+                  >
+                    <Icon name="plus" /> New Pull Request
+                  </Link>
+                </div>
+                <div className="operations mb-5">
+                  {[...savedQueries.toolbarActions, ...DEFAULT_TOOLBAR].map((action) => (
+                    <a
+                      key={action.label}
+                      href={action.href ?? "#"}
+                      className={`text-gray d-inline-block mb-2 mr-4 ${action.className ?? ""}`}
+                      onClick={(e) => {
+                        if (!action.href) {
+                          e.preventDefault();
+                        }
+                        action.onClick?.();
+                      }}
+                    >
+                      <Icon name={action.icon} /> {action.label}
+                    </a>
+                  ))}
+                  <span className="float-right text-gray">{pulls.length}</span>
+                </div>
+                {error && <div className="alert alert-danger">{error}</div>}
+                <div className="body">
+                  {loading ? (
+                    <div className="text-center text-muted py-5">Loading…</div>
+                  ) : (
+                    <table className="table">
+                      <tbody>
+                        {pulls.map((pr) => (
+                          <tr key={pr.id}>
+                            <td>
+                              <div className="primary d-flex mb-3">
+                                <div className="mr-4 flex-grow-1 d-flex flex-wrap row-gap-2">
+                                  <span className="mr-2">
+                                    <Link
+                                      to={`/${projectPath}/~pulls/${pr.number}`}
+                                      className="font-weight-bold title"
+                                    >
+                                      {pr.title}
+                                    </Link>
+                                    <span className="number ml-1 text-muted">#{pr.number}</span>
+                                  </span>
+                                  <span className={`badge badge-sm font-size-xs mr-2 status ${pullRequestStatusBadge(pr.status)}`}>
+                                    {pullRequestStatusLabel(pr.status)}
+                                  </span>
+                                </div>
+                                <div className="flex-shrink-0 d-none d-lg-block text-muted comments">
+                                  <Icon name="comments" /> {pr.commentCount}
+                                </div>
+                              </div>
+                              <div className="secondary d-flex flex-wrap row-gap-3 text-muted font-size-sm">
+                                <div className="branches flex-shrink-0 text-nowrap mr-3">
+                                  <Icon name="branch" />
+                                  <span className="mx-1">{pr.targetBranch}</span>
+                                  <span className="mx-1">&larr;</span>
+                                  <span className="mx-1">{pr.sourceBranch}</span>
+                                </div>
+                                <div className="last-update ml-auto">
+                                  <span>{pr.submitter?.name}</span>
+                                  <span className="ml-2">{formatWhenISO(pr.submitDate)}</span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {!pulls.length && !loading && (
+                          <tr>
+                            <td className="text-center text-muted py-5">No pull requests found</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
-            </form>
-            <Link
-              to={`/${projectPath}/~pulls/new`}
-              className="btn btn-primary flex-shrink-0 ml-3"
-              title="New Pull Request"
-            >
-              <Icon name="plus" /> New Pull Request
-            </Link>
-          </div>
-          <div className="operations mb-4">
-            <a href="#saved-queries" className="show-saved-queries text-gray d-inline-block mb-2 mr-4">
-              <Icon name="eye" /> Show Saved Queries
-            </a>
-            <span className="save-query text-gray d-inline-block mb-2 mr-4 opacity-50">
-              <Icon name="save" /> Save Query
-            </span>
-            <span className="filter text-gray mr-4 mb-2 d-inline-block text-nowrap opacity-50">
-              <Icon name="filter" /> Filter
-            </span>
-            <span className="order-by text-gray d-inline-block mb-2 mr-4 opacity-50">
-              <Icon name="sort" /> Order By
-            </span>
-            <span className="operations d-inline-block mb-2 mr-4 text-gray opacity-50">
-              <Icon name="ellipsis-circle" /> Operations
-            </span>
-            <span className="float-right text-gray">{filtered.length}</span>
-          </div>
-          <div className="body">
-            <table className="table">
-              <tbody>
-                {filtered.map((pr) => (
-                  <tr key={pr.number}>
-                    <td>
-                      <div className="d-flex flex-wrap align-items-center">
-                        <Link
-                          to={`/${projectPath}/~pulls/${pr.number}`}
-                          className="font-weight-bold mr-2"
-                        >
-                          {pr.title}
-                        </Link>
-                        <span className="text-muted mr-2">#{pr.number}</span>
-                        <span className={`badge badge-sm font-size-xs mr-2 ${STATUS_BADGE_CLASS[pr.status]}`}>
-                          {pr.status}
-                        </span>
-                      </div>
-                      <div className="text-muted font-size-sm mt-1 d-flex align-items-center flex-wrap">
-                        <Icon name="branch" />
-                        <span className="mx-1">{pr.sourceBranch}</span>
-                        <span className="mx-1 text-muted">&rarr;</span>
-                        <span className="mx-1">{pr.targetBranch}</span>
-                        <span className="mx-2">|</span>
-                        <Icon name="comment" />
-                        <span className="ml-1">{pr.comments}</span>
-                        <span className="mx-2">|</span>
-                        <Icon name="user" />
-                        <span className="ml-1">{pr.submitter}</span>
-                        <span className="ml-2">{pr.date}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td className="text-center text-muted py-5">No pull requests found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            </div>
+          )}
+        </QueryListLayout>
       </div>
     </ProjectLayout>
   );

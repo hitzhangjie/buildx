@@ -30,6 +30,8 @@ export type KnownPage =
   // Wave 10 admin
   | "userList"
   | "newUser"
+  | "invitationList"
+  | "newInvitation"
   | "roleList"
   | "groupList"
   | "systemSetting"
@@ -60,21 +62,31 @@ export type KnownProjectPage =
   | "issueList"
   | "newIssue"
   | "issueDetail"
+  | "issueCommits"
+  | "issuePulls"
+  | "issueBuilds"
   | "boards"
   | "iterationList"
   | "newIteration"
+  | "iterationDetail"
+  | "iterationBurndown"
+  | "iterationEdit"
   // Wave 4 PRs
   | "prList"
   | "newPullRequest"
   | "prActivities"
   | "prChanges"
   | "prCodeComments"
+  | "prInvalid"
+  | "pullRequestSetting"
   // Wave 5 builds
   | "buildList"
   | "buildDashboard"
   | "buildPipeline"
   | "buildLog"
-  | "buildChanges";
+  | "buildChanges"
+  | "buildFixedIssues"
+  | "buildArtifacts";
 
 export type RouteDefinition = {
   path: string;

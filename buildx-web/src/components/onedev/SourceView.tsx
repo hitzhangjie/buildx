@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
+import { Compartment, EditorState, RangeSet, StateEffect, StateField, type Text } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
+  GutterMarker,
   drawSelection,
+  gutter,
   highlightActiveLine,
   highlightActiveLineGutter,
   highlightSpecialChars,
@@ -36,8 +38,25 @@ import {
   rangeToPositions,
   sourcePositionFromRange,
 } from "../../util/planarRange";
-import type { CodeComment } from "../../api/codeComments";
+import type { CodeComment, CodeCommentReply } from "../../api/codeComments";
+import { formatWhen } from "../../util/time";
 import "./SourceView.css";
+
+function commentMatchesMark(
+  comment: CodeComment,
+  commitHash: string,
+  path: string,
+): boolean {
+  if (comment.mark.path !== path) {
+    return false;
+  }
+  const stored = comment.mark.commitHash;
+  return (
+    stored === commitHash ||
+    stored.startsWith(commitHash) ||
+    commitHash.startsWith(stored)
+  );
+}
 
 function langExtensionForPath(filePath: string | undefined) {
   if (!filePath) return [];
@@ -107,8 +126,112 @@ const markField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+const setCommentGutterEffect = StateEffect.define<RangeSet<GutterMarker>>();
+
+const commentGutterMarkersField = StateField.define<RangeSet<GutterMarker>>({
+  create() {
+    return RangeSet.empty;
+  },
+  update(markers, tr) {
+    markers = markers.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setCommentGutterEffect)) {
+        return effect.value;
+      }
+    }
+    return markers;
+  },
+});
+
+const commentGutter = gutter({
+  class: "cm-comment-gutter",
+  markers: (view) => view.state.field(commentGutterMarkersField),
+});
+
+class CommentGutterMarker extends GutterMarker {
+  constructor(
+    private readonly commentId: number,
+    private readonly active: boolean,
+    private readonly onClick: () => void,
+  ) {
+    super();
+  }
+
+  eq(other: GutterMarker) {
+    return (
+      other instanceof CommentGutterMarker &&
+      other.commentId === this.commentId &&
+      other.active === this.active
+    );
+  }
+
+  toDOM() {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    const classes = ["comment-indicator", "comment-trigger", "cm-comment-gutter-marker"];
+    if (this.active) {
+      classes.push("active");
+    }
+    btn.className = classes.join(" ");
+    btn.title = "Show comment";
+    const icon = document.createElement("img");
+    icon.src = "/~icon/comment.svg";
+    icon.alt = "";
+    icon.width = 14;
+    icon.height = 14;
+    icon.className = "icon";
+    btn.appendChild(icon);
+    btn.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.onClick();
+    });
+    return btn;
+  }
+}
+
+function buildCommentGutterMarkers(
+  doc: Text,
+  comments: CodeComment[],
+  commitHash: string | undefined,
+  filePath: string,
+  activeCommentId: number | null,
+  panelVisible: boolean,
+  onCommentClick: (comment: CodeComment) => void,
+): RangeSet<GutterMarker> {
+  const markers: { from: number; to: number; value: GutterMarker }[] = [];
+  for (const comment of comments) {
+    if (!comment.mark.range) {
+      continue;
+    }
+    if (commitHash && !commentMatchesMark(comment, commitHash, filePath)) {
+      continue;
+    }
+    const lineNumber = comment.mark.range.fromRow + 1;
+    if (lineNumber < 1 || lineNumber > doc.lines) {
+      continue;
+    }
+    const from = doc.line(lineNumber).from;
+    markers.push({
+      from,
+      to: from,
+      value: new CommentGutterMarker(
+        comment.id,
+        activeCommentId === comment.id && panelVisible,
+        () => onCommentClick(comment),
+      ),
+    });
+  }
+  return RangeSet.of(markers, true);
+}
+
 type SourceViewProps = {
   filePath: string;
+  commitHash?: string;
   content: string;
   position?: PlanarRange | null;
   selectionUrl: (range: PlanarRange) => string;
@@ -121,12 +244,28 @@ type SourceViewProps = {
   onAddComment?: (range: PlanarRange) => void;
   onSaveComment?: () => void;
   onCancelComment?: () => void;
+  onHideCommentPanel?: () => void;
   onOpenComment?: (comment: CodeComment) => void;
   savingComment?: boolean;
+  activeComment?: CodeComment | null;
+  commentPanelVisible?: boolean;
+  replies?: CodeCommentReply[];
+  loadingReplies?: boolean;
+  replying?: boolean;
+  replyDraft?: string;
+  savingReply?: boolean;
+  updatingComment?: boolean;
+  onReplyDraftChange?: (value: string) => void;
+  onStartReply?: () => void;
+  onCancelReply?: () => void;
+  onCreateReply?: () => void;
+  onToggleResolved?: () => void;
+  onDeleteComment?: () => void;
 };
 
 export function SourceView({
   filePath,
+  commitHash,
   content,
   position,
   selectionUrl,
@@ -139,12 +278,30 @@ export function SourceView({
   onAddComment,
   onSaveComment,
   onCancelComment,
+  onHideCommentPanel,
   onOpenComment,
   savingComment,
+  activeComment,
+  commentPanelVisible = true,
+  replies = [],
+  loadingReplies,
+  replying,
+  replyDraft = "",
+  savingReply,
+  updatingComment,
+  onReplyDraftChange,
+  onStartReply,
+  onCancelReply,
+  onCreateReply,
+  onToggleResolved,
+  onDeleteComment,
 }: SourceViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const readOnlyCompartment = useRef(new Compartment());
+  const onOpenCommentRef = useRef(onOpenComment);
+  onOpenCommentRef.current = onOpenComment;
+  const [editorEpoch, setEditorEpoch] = useState(0);
   const [popover, setPopover] = useState<{
     position: { top: number; left: number };
     range: PlanarRange;
@@ -154,6 +311,26 @@ export function SourceView({
   const isMouseSelecting = useRef(false);
 
   const closePopover = useCallback(() => setPopover(null), []);
+
+  const handleCommentGutterClick = useCallback((comment: CodeComment) => {
+    onOpenCommentRef.current?.(comment);
+  }, []);
+
+  const isSelectionInsideEditor = useCallback((view: EditorView) => {
+    const sel = document.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      return false;
+    }
+    const editorRoot = view.dom;
+    const anchorNode = sel.anchorNode;
+    const focusNode = sel.focusNode;
+    return Boolean(
+      anchorNode &&
+        focusNode &&
+        editorRoot.contains(anchorNode instanceof Element ? anchorNode : anchorNode.parentElement) &&
+        editorRoot.contains(focusNode instanceof Element ? focusNode : focusNode.parentElement),
+    );
+  }, []);
 
   const copySelection = useCallback(async (range: PlanarRange) => {
     const view = viewRef.current;
@@ -199,6 +376,10 @@ export function SourceView({
 
   const updatePopoverFromCurrentSelection = useCallback(
     (view: EditorView, fallbackMouse?: { top: number; left: number }) => {
+      if (!isSelectionInsideEditor(view)) {
+        closePopover();
+        return;
+      }
       const { anchor, head } = view.state.selection.main;
       const range = rangeFromSelection(view.state.doc, anchor, head);
       if (!range) {
@@ -217,7 +398,7 @@ export function SourceView({
           : (anchorCoords?.left ?? headCoords?.left)) ?? 0);
       showPopoverForSelection(view, { top: Number.isFinite(top) ? top : 0, left });
     },
-    [closePopover, showPopoverForSelection],
+    [closePopover, isSelectionInsideEditor, showPopoverForSelection],
   );
 
   useEffect(() => {
@@ -229,6 +410,8 @@ export function SourceView({
     const state = EditorState.create({
       doc: content,
       extensions: [
+        commentGutterMarkersField,
+        commentGutter,
         lineNumbers(),
         highlightActiveLineGutter(),
         highlightSpecialChars(),
@@ -254,6 +437,11 @@ export function SourceView({
         readOnlyCompartment.current.of(EditorState.readOnly.of(true)),
         EditorView.domEventHandlers({
           mouseup(event, view) {
+            const target = event.target;
+            if (!(target instanceof Node) || !view.dom.contains(target)) {
+              closePopover();
+              return false;
+            }
             setTimeout(() => {
               updatePopoverFromCurrentSelection(view, { top: event.clientY, left: event.clientX });
             }, 100);
@@ -274,6 +462,7 @@ export function SourceView({
 
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
+    setEditorEpoch((epoch) => epoch + 1);
     const onDocumentMouseDown = () => {
       isMouseSelecting.current = true;
     };
@@ -281,12 +470,21 @@ export function SourceView({
       isMouseSelecting.current = false;
       // Mouse can be released outside editor during drag-select; still update popover.
       setTimeout(() => {
+        const target = event.target;
+        if (!(target instanceof Node) || !view.dom.contains(target)) {
+          closePopover();
+          return;
+        }
         updatePopoverFromCurrentSelection(view, { top: event.clientY, left: event.clientX });
       }, 100);
     };
     const onSelectionChange = () => {
       // Ignore transient selection updates while user is still dragging.
       if (isMouseSelecting.current) {
+        return;
+      }
+      if (!isSelectionInsideEditor(view)) {
+        closePopover();
         return;
       }
       // Keep popover state synced for keyboard/native selection changes.
@@ -306,7 +504,7 @@ export function SourceView({
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, updatePopoverFromCurrentSelection]);
+  }, [closePopover, filePath, isSelectionInsideEditor, updatePopoverFromCurrentSelection]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -326,7 +524,7 @@ export function SourceView({
     if (!view) {
       return;
     }
-    const mark = draftRange ?? position ?? null;
+    const mark = draftRange ?? (commentPanelVisible ? position ?? null : null);
     view.dispatch({
       effects: setMarkEffect.of(mark),
       selection: mark
@@ -337,7 +535,24 @@ export function SourceView({
         : undefined,
       scrollIntoView: true,
     });
-  }, [position, draftRange, content]);
+  }, [position, draftRange, content, commentPanelVisible]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    const markers = buildCommentGutterMarkers(
+      view.state.doc,
+      comments,
+      commitHash,
+      filePath,
+      activeComment?.id ?? null,
+      commentPanelVisible,
+      handleCommentGutterClick,
+    );
+    view.dispatch({ effects: setCommentGutterEffect.of(markers) });
+  }, [comments, commitHash, filePath, activeComment?.id, commentPanelVisible, handleCommentGutterClick, content, editorEpoch]);
 
   const popoverActions: SelectionPopoverAction[] = popover
     ? [
@@ -372,59 +587,177 @@ export function SourceView({
       ]
     : [];
 
-  const showCommentPanel = Boolean(draftRange && onSaveComment && onCancelComment);
+  const showCommentComposer = Boolean(draftRange && onSaveComment && onCancelComment && !activeComment);
+  const showThreadPanel = Boolean(activeComment);
+  const hasCommentPanelContent = showCommentComposer || showThreadPanel;
+  const showCommentPanel = commentPanelVisible && hasCommentPanelContent;
+
+  useEffect(() => {
+    if (showCommentPanel) {
+      window.dispatchEvent(new Event("resize"));
+    }
+  }, [showCommentPanel]);
 
   return (
     <div className="source-view flex-grow-1 d-flex">
       {showCommentPanel && (
-        <div className="comment need-width d-flex overflow-hidden flex-shrink-0">
-          <div className="content flex-grow-1 overflow-hidden d-flex flex-column" style={{ width: 360 }}>
-            <div className="head d-flex align-items-center px-3 py-2 flex-shrink-0 border-bottom">
+        <div className="source-comment-panel need-width d-flex overflow-hidden flex-shrink-0">
+          <div className="source-comment-panel-content flex-grow-1 overflow-hidden d-flex flex-column" style={{ width: 360 }}>
+            <div className="source-comment-panel-head d-flex align-items-center px-3 py-2 flex-shrink-0 border-bottom">
               <h6 className="mr-2 mb-0">Code Comment</h6>
               <button
                 type="button"
                 className="ml-auto btn btn-icon btn-xs btn-light border-0"
-                title="Hide comment"
-                onClick={onCancelComment}
+                title={showThreadPanel ? "Hide comment" : "Cancel"}
+                onClick={() => (showThreadPanel ? onHideCommentPanel?.() : onCancelComment?.())}
               >
                 <Icon name="times" width={14} height={14} />
               </button>
             </div>
-            <div className="body overflow-auto flex-grow-1 p-3">
-              <form
-                className="new-comment leave-confirm"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  onSaveComment?.();
-                }}
-              >
-                <div className="form-group mb-3">
-                  <textarea
-                    className="form-control font-size-sm"
-                    rows={8}
-                    value={draftContent}
-                    onChange={(e) => onDraftContentChange?.(e.target.value)}
-                    required
-                    autoFocus
-                  />
+            {showCommentComposer && (
+              <div className="source-comment-panel-body overflow-auto flex-grow-1 p-3">
+                <form
+                  className="new-comment leave-confirm"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    onSaveComment?.();
+                  }}
+                >
+                  <div className="form-group mb-3">
+                    <textarea
+                      className="form-control font-size-sm"
+                      rows={8}
+                      value={draftContent}
+                      onChange={(e) => onDraftContentChange?.(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="btn btn-sm btn-primary dirty-aware mr-1"
+                    disabled={savingComment || !draftContent.trim()}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    onClick={onCancelComment}
+                    disabled={savingComment}
+                  >
+                    Cancel
+                  </button>
+                </form>
+              </div>
+            )}
+            {showThreadPanel && activeComment && (
+              <div className="source-comment-panel-body overflow-auto flex-grow-1 p-3 font-size-sm">
+                <div className="code-comment-thread-item mb-3">
+                  <div className="d-flex">
+                    <div className="source-comment-avatar flex-shrink-0 mr-2">
+                      {(activeComment.user?.name?.[0] ?? "U").toUpperCase()}
+                    </div>
+                    <div className="min-width-0 flex-grow-1">
+                      <div className="text-muted mb-2">
+                        <span className="font-weight-bold">{activeComment.user?.name ?? "Unknown"}</span>
+                        <span className="ml-1">commented {formatWhen(new Date(activeComment.createDate).getTime())}</span>
+                      </div>
+                      <div className="mb-2 pre-wrap">{activeComment.content}</div>
+                      <div className="source-comment-inline-actions mb-2">
+                        <button type="button" className="btn btn-link btn-sm p-0 mr-2" onClick={(e) => e.preventDefault()}>
+                          Edit
+                        </button>
+                        <button type="button" className="btn btn-link btn-sm p-0" onClick={(e) => e.preventDefault()}>
+                          Quote
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="submit"
-                  className="btn btn-sm btn-primary dirty-aware mr-1"
-                  disabled={savingComment || !draftContent.trim()}
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary"
-                  onClick={onCancelComment}
-                  disabled={savingComment}
-                >
-                  Cancel
-                </button>
-              </form>
-            </div>
+                {loadingReplies ? (
+                  <div className="text-muted mb-3">Loading replies...</div>
+                ) : (
+                  replies.map((reply) => (
+                    <div key={reply.id} className="code-comment-thread-item mb-3">
+                      <div className="d-flex">
+                        <div className="source-comment-avatar flex-shrink-0 mr-2">
+                          {(reply.user?.name?.[0] ?? "U").toUpperCase()}
+                        </div>
+                        <div className="min-width-0 flex-grow-1">
+                          <div className="text-muted mb-1">
+                            <span className="font-weight-bold">{reply.user?.name ?? "Unknown"}</span>
+                            <span className="ml-1">replied {formatWhen(new Date(reply.createDate).getTime())}</span>
+                          </div>
+                          <div className="pre-wrap">{reply.content}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {replying && (
+                  <form
+                    className="new-comment leave-confirm mb-3"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      onCreateReply?.();
+                    }}
+                  >
+                    <div className="form-group mb-2">
+                      <textarea
+                        className="form-control font-size-sm"
+                        rows={5}
+                        value={replyDraft}
+                        onChange={(e) => onReplyDraftChange?.(e.target.value)}
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn btn-sm btn-primary mr-1"
+                      disabled={savingReply || !replyDraft.trim()}
+                    >
+                      Reply
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      onClick={onCancelReply}
+                      disabled={savingReply}
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                )}
+                <div className="d-flex align-items-center flex-wrap">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary mr-2 mb-2"
+                    onClick={onStartReply}
+                    disabled={replying || savingReply || updatingComment}
+                  >
+                    Reply
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary mr-2 mb-2"
+                    onClick={onToggleResolved}
+                    disabled={savingReply || updatingComment}
+                  >
+                    {activeComment.resolved ? "Set Unresolved" : "Set Resolved"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger mb-2 ml-auto"
+                    onClick={onDeleteComment}
+                    disabled={savingReply || updatingComment}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div className="ui-resizable-handle ui-resizable-e flex-shrink-0" />
         </div>
@@ -432,21 +765,6 @@ export function SourceView({
 
       <div className="code flex-grow-1 autofit overflow-hidden d-flex flex-column resize-aware">
         <div ref={containerRef} className="flex-grow-1" style={{ minHeight: 0 }} />
-        {comments.length > 0 && (
-          <div className="px-3 py-2 border-top font-size-sm">
-            {comments.map((comment) => (
-              <button
-                key={comment.id}
-                type="button"
-                className="btn btn-link btn-sm p-0 mr-3"
-                onClick={() => onOpenComment?.(comment)}
-              >
-                <Icon name="comment" className="icon mr-1" width={14} height={14} />
-                #{comment.id}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {popover && (

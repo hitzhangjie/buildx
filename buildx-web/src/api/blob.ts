@@ -1,6 +1,12 @@
 import { apiFetch } from "./client";
 import { USE_MOCK } from "../mocks/config";
-import { getMockBlob, createMockFile, updateMockFile, type BlobContent } from "../mocks/fixtures/blob";
+import {
+  getMockBlob,
+  createMockFile,
+  updateMockFile,
+  deleteMockFile,
+  type BlobContent,
+} from "../mocks/fixtures/blob";
 
 export type { BlobContent, BlobEntry, BlobCommitInfo } from "../mocks/fixtures/blob";
 
@@ -75,4 +81,38 @@ export async function updateFile(
       base64Content: btoa(binary),
     }),
   });
+}
+
+/**
+ * Delete a file from the repository.
+ * Matches OneDev's RepositoryResource.editFile with commit message only.
+ */
+export async function deleteFile(
+  projectPath: string,
+  revision: string,
+  path: string,
+  commitMessage: string,
+): Promise<void> {
+  if (USE_MOCK) {
+    deleteMockFile(revision, path, commitMessage);
+    return;
+  }
+  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${revision}/${encodeURIComponent(path)}`, {
+    method: "POST",
+    body: JSON.stringify({ commitMessage }),
+  });
+}
+
+/** URL to download a file as an attachment. */
+export function blobDownloadUrl(
+  projectPath: string,
+  revision: string,
+  path: string,
+): string {
+  const query = new URLSearchParams({
+    revision,
+    path,
+    disposition: "attachment",
+  });
+  return `/~api/projects/${encodeURIComponent(projectPath)}/raw?${query}`;
 }

@@ -374,6 +374,7 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, r, err)
 		return
 	}
+	query := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("query")))
 	type userView struct {
 		ID       int64  `json:"id"`
 		Name     string `json:"name"`
@@ -381,6 +382,13 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	views := make([]userView, 0, len(users))
 	for _, u := range users {
+		if query != "" {
+			name := strings.ToLower(u.Name)
+			fullName := strings.ToLower(u.FullName)
+			if !strings.Contains(name, query) && !strings.Contains(fullName, query) {
+				continue
+			}
+		}
 		views = append(views, userView{ID: u.ID, Name: u.Name, FullName: u.FullName})
 	}
 	if views == nil {

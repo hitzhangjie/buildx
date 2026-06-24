@@ -211,3 +211,115 @@ func TestBlobHandler_CreateFile(t *testing.T) {
 	})
 
 }
+
+func TestBlobHandler_DeleteFile(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+	bareDir, _, _ := testutil.SetupBareWithCommit(t)
+
+	authUser := &model.User{ID: 1, Name: "admin", FullName: "Admin"}
+	sec := &mock.SecurityService{
+		AuthenticateFunc: func(ctx context.Context, username, password string) (*model.User, error) {
+			return authUser, nil
+		},
+		IsProjectOwnerFunc: func(ctx context.Context, userID, projectID int64) (bool, error) {
+			return true, nil
+		},
+	}
+
+	proj := &mock.ProjectService{
+		GetByPathFunc: func(ctx context.Context, path string) (*model.Project, error) {
+			return &model.Project{ID: 1, Name: "demo", Path: "demo"}, nil
+		},
+		GitDirFunc: func(projectID int64) string {
+			return bareDir
+		},
+	}
+	h := &api.BlobHandler{Projects: proj, Security: sec}
+
+	// Create a file to delete.
+	{
+		body := `{"commitMessage":"add temp","base64Content":"` +
+			base64.StdEncoding.EncodeToString([]byte("temp\n")) + `"}`
+		r := httptest.NewRequest(http.MethodPost, "/~api/projects/demo/files/main/temp.txt",
+			strings.NewReader(body))
+		r.SetBasicAuth("admin", "pass")
+		r.Header.Set("Content-Type", "application/json")
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("*", "demo/files/main/temp.txt")
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		h.FilesPost(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("create status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+		}
+	}
+
+	// Delete the file.
+	{
+		r := httptest.NewRequest(http.MethodPost, "/~api/projects/demo/files/main/temp.txt",
+			strings.NewReader(`{"commitMessage":"delete temp"}`))
+		r.SetBasicAuth("admin", "pass")
+		r.Header.Set("Content-Type", "application/json")
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add("*", "demo/files/main/temp.txt")
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+		w := httptest.NewRecorder()
+		h.FilesPost(w, r)
+		if w.Code != http.StatusOK {
+			t.Fatalf("delete status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+		}
+	}
+
+	// Verify the file is gone.
+	{
+		w2 := httptest.NewRecorder()
+		r2 := httptest.NewRequest(http.MethodGet, "/~api/projects/demo/blob?revision=main&path=temp.txt", nil)
+		rctx2 := chi.NewRouteContext()
+		rctx2.URLParams.Add("*", "demo/blob")
+		r2 = r2.WithContext(context.WithValue(r2.Context(), chi.RouteCtxKey, rctx2))
+
+		h.ServeHTTP(w2, r2)
+		if w2.Code != http.StatusNotFound {
+			t.Fatalf("blob read status = %d, want 404", w2.Code)
+		}
+	}
+}
+
+func TestBlobHandler_RawBlob(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found")
+	}
+	bareDir, _, _ := testutil.SetupBareWithCommit(t)
+
+	proj := &mock.ProjectService{
+		GetByPathFunc: func(ctx context.Context, path string) (*model.Project, error) {
+			return &model.Project{ID: 1, Name: "demo", Path: "demo"}, nil
+		},
+		GitDirFunc: func(projectID int64) string {
+			return bareDir
+		},
+	}
+	h := &api.BlobHandler{Projects: proj}
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/~api/projects/demo/raw?revision=main&path=README.md&disposition=attachment", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("*", "demo/raw")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+
+	h.ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Header().Get("Content-Disposition"), "attachment") {
+		t.Fatalf("Content-Disposition = %q, want attachment", w.Header().Get("Content-Disposition"))
+	}
+	if !strings.Contains(w.Body.String(), "#") {
+		t.Errorf("body does not contain file content: %s", w.Body.String())
+	}
+}

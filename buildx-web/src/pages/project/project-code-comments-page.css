@@ -1,0 +1,75 @@
+.project-code-comments-page {
+  min-height: 0;
+}
+
+.project-code-comments-page .saved-queries-column {
+  width: 170px;
+  flex: 0 0 170px;
+}
+
+.project-code-comments-page .saved-query-buttons .btn {
+  font-size: 12px;
+  border-color: var(--light-gray);
+}
+
+.project-code-comments-page .saved-query-buttons .btn.active {
+  background: var(--light-primary);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.project-code-comments-page .comments-main .query-toolbar {
+  padding: 0.75rem;
+}
+
+.project-code-comments-page .toolbar-links a {
+  color: var(--gray);
+}
+
+.project-code-comments-page .toolbar-links a:hover {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.project-code-comments-page .code-comment-list-item:first-child {
+  border-top: none !important;
+}
+
+.project-code-comments-page .code-comment-list-item {
+  display: flex;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+}
+
+.project-code-comments-page .code-comment-list-item:hover,
+.project-code-comments-page .code-comment-list-item:focus {
+  background: var(--light);
+  outline: none;
+  text-decoration: none;
+  color: inherit;
+}
+
+.project-code-comments-page .comment-state-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: 0 0 10px;
+}
+
+.project-code-comments-page .comment-state-dot.open {
+  background: #f5c22b;
+}
+
+.project-code-comments-page .comment-state-dot.resolved {
+  background: #1bc5bd;
+}
+
+.dark-mode .project-code-comments-page .saved-query-buttons .btn {
+  border-color: var(--dark-mode-lighter-dark);
+}
+
+.dark-mode .project-code-comments-page .code-comment-list-item:hover,
+.dark-mode .project-code-comments-page .code-comment-list-item:focus {
+  background: var(--dark-mode-lighter-dark);
+}

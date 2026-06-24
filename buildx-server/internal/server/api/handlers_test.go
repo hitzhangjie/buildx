@@ -210,6 +210,41 @@ func TestUsersHandlerList_success(t *testing.T) {
 	}
 }
 
+func TestUsersHandlerList_queryFilter(t *testing.T) {
+	sec := &mock.SecurityService{
+		AuthenticateFunc: func(ctx context.Context, username, password string) (*model.User, error) {
+			return makeTestUser(1), nil
+		},
+		ListUsersFunc: func(ctx context.Context) ([]*model.User, error) {
+			return []*model.User{
+				{ID: 1, Name: "alice", FullName: "Alice Smith"},
+				{ID: 2, Name: "bob", FullName: "Bob Johnson"},
+			}, nil
+		},
+	}
+
+	h := newUsersHandler(sec)
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/~api/users?query=ali", nil)
+	r.SetBasicAuth("alice", "pass")
+
+	h.List(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0]["name"] != "alice" {
+		t.Fatalf("name = %v, want alice", got[0]["name"])
+	}
+}
+
 func TestUsersHandlerList_unauthorized(t *testing.T) {
 	sec := &mock.SecurityService{
 		AuthenticateFunc: func(ctx context.Context, username, password string) (*model.User, error) {

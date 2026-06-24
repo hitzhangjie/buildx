@@ -58,8 +58,8 @@ export const GLOBAL_ROUTES: RouteDefinition[] = [
 
   { path: "/~administration/users", page: "UserListPage", title: "Users", ref: "web/page/admin/usermanagement/UserListPage", layout: "main", known: "userList" },
   { path: "/~administration/users/new", page: "NewUserPage", title: "New User", ref: "web/page/admin/usermanagement/NewUserPage", layout: "main", known: "newUser" },
-  { path: "/~administration/invitations", page: "InvitationListPage", title: "Invitations", ref: "web/page/admin/usermanagement/InvitationListPage", layout: "main" },
-  { path: "/~administration/invitations/new", page: "NewInvitationPage", title: "New Invitation", ref: "web/page/admin/usermanagement/NewInvitationPage", layout: "main" },
+  { path: "/~administration/invitations", page: "InvitationListPage", title: "Invitations", ref: "web/page/admin/usermanagement/InvitationListPage", layout: "main", known: "invitationList" },
+  { path: "/~administration/invitations/new", page: "NewInvitationPage", title: "New Invitation", ref: "web/page/admin/usermanagement/NewInvitationPage", layout: "main", known: "newInvitation" },
   { path: "/~administration/roles", page: "RoleListPage", title: "Roles", ref: "web/page/admin/rolemanagement/RoleListPage", layout: "main", known: "roleList" },
   { path: "/~administration/roles/new", page: "NewRolePage", title: "New Role", ref: "web/page/admin/rolemanagement/NewRolePage", layout: "main" },
   { path: "/~administration/roles/:role", page: "RoleDetailPage", title: "Role", ref: "web/page/admin/rolemanagement/RoleDetailPage", layout: "main" },

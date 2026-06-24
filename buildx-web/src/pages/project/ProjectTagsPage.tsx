@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
+import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
+import { QueryToolbar, queryToolbarCount } from "../../components/onedev/panels/QueryToolbar";
 import { ProjectLayout } from "../../layout/ProjectLayout";
 import { useProject } from "../../context/ProjectContext";
 import { fetchProjects } from "../../api/projects";
 import { fetchTag, fetchTags } from "../../api/repositories";
+import { buildProjectScopedHref } from "../../data/queryPresets";
 
 interface Tag {
   name: string;
@@ -77,31 +80,45 @@ export function ProjectTagsPage() {
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Tags">
-      <div className="card m-3">
-        <div className="card-body">
-          <div className="d-flex mb-4">
-            <form className="clearable-wrapper flex-grow-1" onSubmit={(e) => e.preventDefault()}>
-              <div className="input-group">
-                <input
-                  spellCheck={false}
-                  className="form-control"
-                  placeholder="Query/order tags"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                <span className="input-group-append">
-                  <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
-                    <Icon name="magnify" />
+      <div className="p-2 p-sm-3">
+        <QueryListLayout
+          className="side-main side-main-wrap"
+          storageKey={`tags:project:${projectPath}`}
+          currentQuery={query}
+          onSelectQuery={setQuery}
+          buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~tags`, q)}
+        >
+          {(savedQueries) => (
+            <div className="card">
+              <div className="card-body">
+                <div className="d-flex mb-4">
+                  <form className="clearable-wrapper flex-grow-1" onSubmit={(e) => e.preventDefault()}>
+                    <div className="input-group">
+                      <input
+                        spellCheck={false}
+                        className="form-control"
+                        placeholder="Query/order tags"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                      <span className="input-group-append">
+                        <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
+                          <Icon name="magnify" />
+                        </button>
+                      </span>
+                    </div>
+                  </form>
+                  <button className="btn btn-primary btn-icon flex-shrink-0 ml-3" title="Create tag" disabled>
+                    <Icon name="plus" />
                   </button>
-                </span>
-              </div>
-            </form>
-            <button className="btn btn-primary btn-icon flex-shrink-0 ml-3" title="Create tag" disabled>
-              <Icon name="plus" />
-            </button>
-          </div>
-          {error && <div className="alert alert-light-danger">{error}</div>}
-          <table className="table">
+                </div>
+                {error && <div className="alert alert-light-danger">{error}</div>}
+                <QueryToolbar
+                  actions={savedQueries.toolbarActions}
+                  className="operations mb-4"
+                  trailing={queryToolbarCount(`${filtered.length} tags`)}
+                />
+                <table className="table">
             <thead>
               <tr>
                 <th>Tag</th>
@@ -139,8 +156,11 @@ export function ProjectTagsPage() {
                 </tr>
               )}
             </tbody>
-          </table>
-        </div>
+                </table>
+              </div>
+            </div>
+          )}
+        </QueryListLayout>
       </div>
     </ProjectLayout>
   );

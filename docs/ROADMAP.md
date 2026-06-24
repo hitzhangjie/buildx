@@ -22,19 +22,27 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 - [ ] Git smart HTTP (clone, push, pull)
 - [ ] Git SSH
 - [x] Basic REST API (`/~api/users`, `/~api/projects`) — partial parity
+- [x] Project file management API (blob browse, create/update/delete file, raw download)
 
 **Milestone**: Can create a project, push code via HTTP/SSH.
 
 ### Phase 2 — Collaboration
 
-- [ ] Issue tracking (CRUD, states, assignees, labels)
-- [ ] Kanban board views
-- [ ] Pull requests (create, review, merge)
-- [ ] Code comments (inline + file-level)
-- [ ] Cross-linking (issue ↔ commit ↔ PR ↔ build)
+- [x] Issue tracking — core MVP (CRUD, default states, comments, iteration schedule)
+- [~] Issue iterations (list/create/edit/burndown — live API; chart + advanced stats pending)
+- [~] Kanban boards (dynamic columns from settings, backlog, drag state transition; card ordering pending)
+- [~] Issue global settings (`GET/POST /~api/settings/issue`; admin edit UI pending)
+- [ ] Issue extended: custom fields, labels, assignees, links, votes, watches, import
+- [~] Pull requests — 主流程已通（列表/新建/详情/评审/merge）；详见 [pull-request-migration.md](pull-request-migration.md)
+- [x] Code comments (inline + file-level with thread replies, resolve/unresolve, delete)
+- [~] Code compare (`/~compare`) — merge-base, commits, diffs, patch download, effective PR; see [code-compare-migration.md](code-compare-migration.md)
+- [~] Cross-linking (issue ↔ commit ↔ PR ↔ build) — Issue↔PR 列表已 partial；commits/builds tab 仍 stub
 - [ ] Notifications (email, webhook)
 
 **Milestone**: Full issue-to-PR workflow without leaving BuildX.
+
+> **Issue 续做**：见 [buildx-web-migration.md § Wave 3 续做指南](buildx-web-migration.md#wave-3-续做指南issue--看板--迭代)。  
+> **PR 续做**：见 [pull-request-migration.md](pull-request-migration.md)。
 
 ### Phase 3 — CI/CD
 

@@ -1,12 +1,3 @@
-export type Issue = {
-  id: number;
-  number: number;
-  title: string;
-  projectPath: string;
-  state: string;
-  submitter: string;
-  votes: number;
-  comments: number;
-};
+import type { Issue } from "../../api/issues";
 
 export const mockIssues: Issue[] = [];

@@ -1,139 +1,86 @@
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { Icon } from "../../../components/onedev/Icon";
-import { ProjectLayout } from "../../../layout/ProjectLayout";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { queryBuilds } from "../../../api/builds";
+import { BuildListPanel } from "../../../components/onedev/panels/BuildListPanel";
+import { QueryListLayout } from "../../../components/onedev/panels/QueryListLayout";
+import {
+  BUILD_COMMON_QUERIES,
+  buildProjectScopedHref,
+} from "../../../data/queryPresets";
 import { useProject } from "../../../context/ProjectContext";
-
-interface MockBuild {
-  number: number;
-  jobName: string;
-  status: "SUCCESSFUL" | "FAILED" | "RUNNING" | "CANCELLED" | "PENDING";
-  branch: string;
-  submitter: string;
-  date: string;
-  commit: string;
-}
-
-const MOCK_BUILDS: MockBuild[] = [];
-
-const STATUS_BADGE_CLASS: Record<string, string> = {
-  SUCCESSFUL: "badge-light-success",
-  FAILED: "badge-light-danger",
-  RUNNING: "badge-light-info",
-  CANCELLED: "badge-light-secondary",
-  PENDING: "badge-light-warning",
-};
+import { ProjectLayout } from "../../../layout/ProjectLayout";
 
 export function ProjectBuildsPage() {
   const { projectPath } = useProject();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("query") ?? "";
-  const [localQuery, setLocalQuery] = useState(query);
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
+  const [builds, setBuilds] = useState<Awaited<ReturnType<typeof queryBuilds>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = MOCK_BUILDS.filter(
-    (b) =>
-      !query ||
-      b.jobName.toLowerCase().includes(query.toLowerCase()) ||
-      `#${b.number}` === query ||
-      b.branch.toLowerCase().includes(query.toLowerCase()),
-  );
+  const loadBuilds = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const offset = (page - 1) * 25;
+      const scopedQuery = query.trim()
+        ? query
+        : `"Project" is "${projectPath}"`;
+      const items = await queryBuilds({
+        query: scopedQuery,
+        offset,
+        count: 25,
+      });
+      setBuilds(items);
+    } catch (err) {
+      setBuilds([]);
+      setError((err as { message?: string }).message ?? "Failed to load builds");
+    } finally {
+      setLoading(false);
+    }
+  }, [projectPath, query, page]);
 
-  function handleQuerySubmit(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    void loadBuilds();
+  }, [loadBuilds]);
+
+  function handleQueryChange(nextQuery: string) {
     setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (localQuery) {
-        next.set("query", localQuery);
+      const params = new URLSearchParams(prev);
+      if (nextQuery.trim()) {
+        params.set("query", nextQuery.trim());
       } else {
-        next.delete("query");
+        params.delete("query");
       }
-      return next;
+      params.delete("page");
+      return params;
     }, { replace: true });
   }
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Builds">
-      <div className="card m-3">
-        <div className="card-body">
-          <div className="d-flex mb-4">
-            <form className="clearable-wrapper flex-grow-1" onSubmit={handleQuerySubmit}>
-              <div className="input-group">
-                <input
-                  spellCheck={false}
-                  autoComplete="off"
-                  className="form-control"
-                  placeholder="Query/order builds"
-                  value={localQuery}
-                  onChange={(e) => setLocalQuery(e.target.value)}
-                />
-                <span className="input-group-append">
-                  <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
-                    <Icon name="magnify" />
-                  </button>
-                </span>
-              </div>
-            </form>
-            <button className="btn btn-primary flex-shrink-0 ml-3" title="Run Job">
-              <Icon name="play" /> Run Job
-            </button>
-          </div>
-          <div className="operations mb-4">
-            <a href="#saved-queries" className="show-saved-queries text-gray d-inline-block mb-2 mr-4">
-              <Icon name="eye" /> Show Saved Queries
-            </a>
-            <span className="save-query text-gray d-inline-block mb-2 mr-4 opacity-50">
-              <Icon name="save" /> Save Query
-            </span>
-            <span className="filter text-gray mr-4 mb-2 d-inline-block text-nowrap opacity-50">
-              <Icon name="filter" /> Filter
-            </span>
-            <span className="order-by text-gray d-inline-block mb-2 mr-4 opacity-50">
-              <Icon name="sort" /> Order By
-            </span>
-            <span className="operations d-inline-block mb-2 mr-4 text-gray opacity-50">
-              <Icon name="ellipsis-circle" /> Operations
-            </span>
-            <span className="float-right text-gray">{filtered.length}</span>
-          </div>
-          <div className="body">
-            <table className="table">
-              <tbody>
-                {filtered.map((build) => (
-                  <tr key={build.number}>
-                    <td>
-                      <div className="d-flex flex-wrap align-items-center">
-                        <Link
-                          to={`/${projectPath}/~builds/${build.number}`}
-                          className="font-weight-bold mr-2"
-                        >
-                          {build.jobName} #{build.number}
-                        </Link>
-                        <span className={`badge badge-sm font-size-xs mr-2 ${STATUS_BADGE_CLASS[build.status]}`}>
-                          {build.status}
-                        </span>
-                      </div>
-                      <div className="text-muted font-size-sm mt-1 d-flex align-items-center flex-wrap">
-                        <Icon name="branch" />
-                        <span className="ml-1 mr-2">{build.branch}</span>
-                        <span className="mx-1">|</span>
-                        <Icon name="user" />
-                        <span className="ml-1 mr-2">{build.submitter}</span>
-                        <span className="mx-1">|</span>
-                        <Icon name="calendar" />
-                        <span className="ml-1">{build.date}</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td className="text-center text-muted py-5">No builds found</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div className="p-2 p-sm-3">
+        <QueryListLayout
+          className="side-main side-main-wrap"
+          storageKey={`builds:project:${projectPath}`}
+          commonQueries={BUILD_COMMON_QUERIES}
+          currentQuery={query}
+          onSelectQuery={handleQueryChange}
+          buildHref={(q) => buildProjectScopedHref(`/${projectPath}/~builds`, q)}
+        >
+          {(savedQueries) => (
+            <BuildListPanel
+              builds={builds}
+              query={query}
+              onQueryChange={handleQueryChange}
+              loading={loading}
+              errors={error ? [error] : []}
+              projectPath={projectPath}
+              savedQueryToolbar={savedQueries.toolbarActions}
+            />
+          )}
+        </QueryListLayout>
       </div>
     </ProjectLayout>
   );

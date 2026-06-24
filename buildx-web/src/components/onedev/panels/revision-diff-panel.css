@@ -1,0 +1,48 @@
+.revision-diff > .head {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+  padding-bottom: 1.6rem;
+  height: 64px;
+}
+.dark-mode .revision-diff > .head {
+  background: var(--dark-mode-dark);
+}
+.revision-diff > .body > .detail > .comment,
+.revision-diff > .body > .detail > .navigation {
+  top: 64px;
+  max-height: calc(100vh - 64px - var(--topbar-height, 56px));
+}
+
+.split-diff-old.bg-light-danger,
+.split-diff-new.bg-light-success {
+  vertical-align: top;
+}
+.revision-diff > .body > .detail > .navigation {
+  min-width: 200px;
+  max-width: 320px;
+}
+.revision-diff > .body > .detail > .diffs > .diff:last-child {
+  margin-bottom: 0 !important;
+}
+.revision-diff > .body > .detail > .navigation > .content .tree-content > a {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 4px 1px 3px;
+  color: inherit;
+  text-decoration: none;
+}
+.revision-diff > .body > .detail > .navigation > .content .tree-content > a.active {
+  background: #fcf5da;
+}
+.dark-mode .revision-diff > .body > .detail > .navigation > .content .tree-content > a.active {
+  background: var(--dark-mode-light-warning);
+}
+.revision-diff .diff-options-menu .dropdown-item {
+  cursor: pointer;
+}
+.revision-diff .diff-options-menu .dropdown-item.active {
+  font-weight: 600;
+  color: var(--primary);
+}

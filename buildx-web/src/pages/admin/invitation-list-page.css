@@ -1,0 +1,10 @@
+.invitation-list .invitations td,
+.invitation-list .invitations th {
+  vertical-align: middle;
+}
+
+.invitation-list .invitations th:last-child,
+.invitation-list .invitations td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FormFeedbackPanel } from "../../components/onedev/FormFeedbackPanel";
 import { Icon } from "../../components/onedev/Icon";
 import { Layout } from "../../layout/Layout";
+import { createInvitations } from "../../api/invitations";
 
 type RoleOption = {
   value: string;
@@ -31,7 +32,14 @@ export function NewInvitationPage() {
     setErrors([]);
     setSubmitting(true);
     try {
-      // TODO: wire to API
+      const emailAddresses = emails
+        .split(/\r?\n/)
+        .map((it) => it.trim())
+        .filter(Boolean);
+      if (emailAddresses.length === 0) {
+        throw new Error("Please input at least one email address");
+      }
+      await createInvitations({ emailAddresses, role });
       navigate("/~administration/invitations");
     } catch (err) {
       setErrors([(err as { message?: string }).message ?? "Failed to send invitation"]);

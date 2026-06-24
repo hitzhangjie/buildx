@@ -23,3 +23,12 @@ type CodeComment struct {
 	UUID       string    `json:"uuid"`
 	Mark       Mark      `json:"mark"`
 }
+
+// CodeCommentReply is a reply under a code comment thread.
+type CodeCommentReply struct {
+	ID         int64     `json:"id"`
+	CommentID  int64     `json:"commentId"`
+	User       *User     `json:"user,omitempty"`
+	Content    string    `json:"content"`
+	CreateDate time.Time `json:"createDate"`
+}

@@ -3,6 +3,8 @@ import { useState } from "react";
 type CommitOptionPanelProps = {
   /** File name for generating the default commit message. */
   fileName?: string;
+  /** Commit action — affects the default message. */
+  action?: "add" | "edit" | "delete";
   /** Called when the user clicks Commit. */
   onCommit: (commitMessage: string) => void;
   /** Called when the user clicks Cancel. */
@@ -15,8 +17,20 @@ type CommitOptionPanelProps = {
  *
  * OneDev ref: web/page/project/blob/render/commitoption/CommitOptionPanel.html
  */
-export function CommitOptionPanel({ fileName, onCommit, onCancel }: CommitOptionPanelProps) {
-  const defaultMessage = fileName ? `Add ${fileName}` : "Add new file";
+export function CommitOptionPanel({ fileName, action = "add", onCommit, onCancel }: CommitOptionPanelProps) {
+  const defaultMessage = (() => {
+    if (!fileName) {
+      return action === "delete" ? "Delete file" : "Add new file";
+    }
+    switch (action) {
+      case "delete":
+        return `Delete ${fileName}`;
+      case "edit":
+        return `Edit ${fileName}`;
+      default:
+        return `Add ${fileName}`;
+    }
+  })();
   const [commitMessage, setCommitMessage] = useState(defaultMessage);
 
   const handleSubmit = (e: { preventDefault: () => void }) => {
