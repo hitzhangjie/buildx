@@ -10,8 +10,10 @@ export function parseBlobSegments(segments: string[]): { revision: string; path:
   if (segments.length === 0) {
     return { revision: DEFAULT_REVISION, path: "" };
   }
+  // Revision is encoded in the URL path so that branch names with slashes
+  // (e.g. feat/commitgraph → feat%2Fcommitgraph) remain as a single segment.
   return {
-    revision: segments[0],
+    revision: decodeURIComponent(segments[0]),
     path: segments.slice(1).join("/"),
   };
 }
@@ -23,7 +25,9 @@ export function blobUrl(
   mode?: BlobMode,
   extraParams?: Record<string, string>,
 ): string {
-  const base = `/${projectPath}/~files/${revision}`;
+  // Encode revision so branch names with slashes (e.g. feat/commitgraph)
+  // stay as a single URL path segment (feat%2Fcommitgraph).
+  const base = `/${projectPath}/~files/${encodeURIComponent(revision)}`;
   let url = path ? `${base}/${path}` : base;
 
   const params = new URLSearchParams();

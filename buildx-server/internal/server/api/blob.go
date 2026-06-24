@@ -189,19 +189,15 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 	}
 	op.With("user_id", user.ID)
 
-	// Parse wildcard: {projectPath}/files/{revision}/{filePath}
+	// Parse wildcard: {projectPath}/files/{revision}/{filePath}.
+	// RawPath preserves URL-encoded slashes (%2F) in branch names like
+	// feat/commitgraph; we split on literal "/" before decoding so that
+	// branch-name slashes are not mistaken for path separators.
 	rest := chi.URLParam(r, "*")
-
-	// Try RawPath first for encoded slashes, otherwise use decoded path.
-	// Same pattern as ServeHTTP.
 	if r.URL.RawPath != "" {
 		rawPrefix := "/~api/projects/"
 		if idx := strings.Index(r.URL.RawPath, rawPrefix); idx >= 0 {
-			start := idx + len(rawPrefix)
-			decoded, decErr := url.PathUnescape(r.URL.RawPath[start:])
-			if decErr == nil {
-				rest = decoded
-			}
+			rest = r.URL.RawPath[idx+len(rawPrefix):]
 		}
 	}
 
@@ -211,7 +207,7 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 		writeNotFound(w, r, "files_endpoint", "rest", rest)
 		return
 	}
-	projectPath := rest[:idx]
+	projectPath, _ := url.PathUnescape(rest[:idx])
 	revisionAndPath := rest[idx+len("/files/"):]
 
 	slashIdx := strings.Index(revisionAndPath, "/")
@@ -220,8 +216,8 @@ func (h *BlobHandler) FilesPost(w http.ResponseWriter, r *http.Request) {
 		writeBadRequest(w, r, "request must include file path after revision", nil)
 		return
 	}
-	revision := revisionAndPath[:slashIdx]
-	filePath := revisionAndPath[slashIdx+1:]
+	revision, _ := url.PathUnescape(revisionAndPath[:slashIdx])
+	filePath, _ := url.PathUnescape(revisionAndPath[slashIdx+1:])
 
 	op.With("project_path", projectPath, "revision", revision, "file_path", filePath)
 

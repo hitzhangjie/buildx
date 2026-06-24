@@ -49,7 +49,7 @@ export async function createFile(
   }
   const bytes = new TextEncoder().encode(content);
   const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${revision}/${encodeURIComponent(path)}`, {
+  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${encodeURIComponent(revision)}/${encodeURIComponent(path)}`, {
     method: "POST",
     body: JSON.stringify({
       commitMessage,
@@ -74,7 +74,7 @@ export async function updateFile(
   }
   const bytes = new TextEncoder().encode(content);
   const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${revision}/${encodeURIComponent(path)}`, {
+  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${encodeURIComponent(revision)}/${encodeURIComponent(path)}`, {
     method: "POST",
     body: JSON.stringify({
       commitMessage,
@@ -97,7 +97,7 @@ export async function deleteFile(
     deleteMockFile(revision, path, commitMessage);
     return;
   }
-  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${revision}/${encodeURIComponent(path)}`, {
+  await apiFetch(`/~api/projects/${encodeURIComponent(projectPath)}/files/${encodeURIComponent(revision)}/${encodeURIComponent(path)}`, {
     method: "POST",
     body: JSON.stringify({ commitMessage }),
   });
