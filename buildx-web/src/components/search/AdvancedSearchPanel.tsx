@@ -217,7 +217,9 @@ export function AdvancedSearchPanel({
           {activeTab === "text" && (
             <div className="option">
               <div className="form-group">
-                <label className="font-weight-bold">Search For</label>
+                <label className="control-label">
+                  Search For <span className="text-danger">*</span>
+                </label>
                 <input
                   ref={searchForRef}
                   type="text"
@@ -228,27 +230,32 @@ export function AdvancedSearchPanel({
                 />
               </div>
               <div className="form-group">
-                <label className="checkbox mr-3">
-                  <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />{" "}
-                  Regular Expression
-                </label>
-                <label className="checkbox mr-3">
-                  <input type="checkbox" checked={wholeWord} onChange={(e) => setWholeWord(e.target.checked)} />{" "}
-                  Whole Word
-                </label>
-                <label className="checkbox">
-                  <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} />{" "}
-                  Case Sensitive
-                </label>
+                <div className="checkbox-inline">
+                  <label className="checkbox">
+                    <input type="checkbox" checked={regex} onChange={(e) => setRegex(e.target.checked)} />
+                    <span />
+                    Regular Expression
+                  </label>
+                  <label className="checkbox">
+                    <input type="checkbox" checked={wholeWord} onChange={(e) => setWholeWord(e.target.checked)} />
+                    <span />
+                    Whole Word
+                  </label>
+                  <label className="checkbox">
+                    <input type="checkbox" checked={caseSensitive} onChange={(e) => setCaseSensitive(e.target.checked)} />
+                    <span />
+                    Case Sensitive
+                  </label>
+                </div>
               </div>
               <div className="form-group">
-                <label>File Name Patterns (separated by comma)</label>
+                <label className="control-label">File Name Patterns (separated by comma)</label>
                 <input
                   type="text"
                   className="form-control"
                   value={filePatterns}
                   onChange={(e) => setFilePatterns(e.target.value)}
-                  placeholder="e.g. *.go, *.ts"
+                  placeholder="File name patterns such as *.java, *.c"
                 />
               </div>
             </div>
@@ -257,7 +264,9 @@ export function AdvancedSearchPanel({
           {activeTab === "files" && (
             <div className="option">
               <div className="form-group">
-                <label className="font-weight-bold">File Name</label>
+                <label className="control-label">
+                  File Name <span className="text-danger">*</span>
+                </label>
                 <input
                   ref={fileNameRef}
                   type="text"
@@ -266,11 +275,12 @@ export function AdvancedSearchPanel({
                   onChange={(e) => setFileNameQuery(e.target.value)}
                   placeholder="Enter file name…"
                 />
-                <small className="form-text text-muted">* = any string, ? = any character</small>
+                <p className="form-text text-muted">(* = any string, ? = any character)</p>
               </div>
               <div className="form-group">
                 <label className="checkbox">
-                  <input type="checkbox" checked={fileCaseSensitive} onChange={(e) => setFileCaseSensitive(e.target.checked)} />{" "}
+                  <input type="checkbox" checked={fileCaseSensitive} onChange={(e) => setFileCaseSensitive(e.target.checked)} />
+                  <span />
                   Case Sensitive
                 </label>
               </div>
@@ -280,7 +290,7 @@ export function AdvancedSearchPanel({
           {activeTab === "symbols" && (
             <div className="option">
               <div className="form-group">
-                <label className="font-weight-bold">
+                <label className="control-label">
                   Symbol Name <span className="text-danger">*</span>
                 </label>
                 <input
@@ -291,7 +301,7 @@ export function AdvancedSearchPanel({
                   onChange={(e) => setSymbolQuery(e.target.value)}
                   placeholder="Enter symbol name…"
                 />
-                <small className="form-text text-muted">* = any string, ? = any character</small>
+                <p className="form-text text-muted">(* = any string, ? = any character)</p>
               </div>
               <div className="form-group">
                 <label className="checkbox">
@@ -299,18 +309,19 @@ export function AdvancedSearchPanel({
                     type="checkbox"
                     checked={symbolCaseSensitive}
                     onChange={(e) => setSymbolCaseSensitive(e.target.checked)}
-                  />{" "}
+                  />
+                  <span />
                   Case Sensitive
                 </label>
               </div>
               <div className="form-group">
-                <label>File Name Patterns (separated by comma)</label>
+                <label className="control-label">File Name Patterns (separated by comma)</label>
                 <input
                   type="text"
                   className="form-control"
                   value={symbolFilePatterns}
                   onChange={(e) => setSymbolFilePatterns(e.target.value)}
-                  placeholder="e.g. *.go, *.java"
+                  placeholder="File name patterns such as *.java, *.c"
                 />
               </div>
             </div>
@@ -323,7 +334,8 @@ export function AdvancedSearchPanel({
                   type="checkbox"
                   checked={insideCurrentDir}
                   onChange={(e) => setInsideCurrentDir(e.target.checked)}
-                />{" "}
+                />
+                <span />
                 Search inside current tree
               </label>
             </div>
