@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Icon } from "../../components/onedev/Icon";
 import { QueryListLayout } from "../../components/onedev/panels/QueryListLayout";
@@ -15,8 +15,10 @@ import { CommitHistoryGraph } from "../../components/onedev/CommitHistoryGraph";
 import {
   CommitFilterPanel,
   buildCommitQueryString,
+  parseUntilBranches,
   type CommitFilterState,
 } from "../../components/onedev/CommitFilterPanel";
+import { buildBranchLabelsByHash } from "../../util/commitBranchLabels";
 
 export function ProjectCommitsPage() {
   const { projectPath } = useProject();
@@ -27,6 +29,11 @@ export function ProjectCommitsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<number | null>(null);
+  const [branchLabelsByHash, setBranchLabelsByHash] = useState<
+    Map<string, string[]>
+  >(new Map());
+
+  const selectedBranches = useMemo(() => parseUntilBranches(query), [query]);
 
   // Load project ID once.
   useEffect(() => {
@@ -46,6 +53,33 @@ export function ProjectCommitsPage() {
     void load();
     return () => { cancelled = true; };
   }, [projectPath]);
+
+  // Resolve branch tip commits for labels when filtering by branch(es).
+  useEffect(() => {
+    if (!projectId || selectedBranches.length === 0) {
+      setBranchLabelsByHash(new Map());
+      return;
+    }
+
+    let cancelled = false;
+    async function load() {
+      try {
+        const labels = await buildBranchLabelsByHash(projectId!, selectedBranches);
+        if (!cancelled) {
+          setBranchLabelsByHash(labels);
+        }
+      } catch {
+        if (!cancelled) {
+          setBranchLabelsByHash(new Map());
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedBranches]);
 
   // Load commits whenever project, query, or projectId changes.
   useEffect(() => {
@@ -194,6 +228,7 @@ export function ProjectCommitsPage() {
                     <CommitHistoryGraph
                       commits={commits}
                       projectPath={projectPath}
+                      branchLabelsByHash={branchLabelsByHash}
                     />
                   )}
                 </div>

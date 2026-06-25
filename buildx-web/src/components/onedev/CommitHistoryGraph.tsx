@@ -15,6 +15,7 @@ import {
   type CommitGraphLayout,
   type GraphLayoutNode,
 } from "../../util/commitGraphLayout";
+import { branchLabelsForCommit } from "../../util/commitBranchLabels";
 import { formatWhen, formatDate } from "../../util/time";
 import { Icon } from "./Icon";
 import styles from "./CommitHistoryGraph.module.css";
@@ -84,6 +85,8 @@ interface DotCenter {
 interface CommitHistoryGraphProps {
   commits: RepositoryCommit[];
   projectPath: string;
+  /** Tip commit hash → branch names for filtered branches. */
+  branchLabelsByHash?: Map<string, string[]>;
 }
 
 // ── Component ──
@@ -91,6 +94,7 @@ interface CommitHistoryGraphProps {
 export function CommitHistoryGraph({
   commits,
   projectPath,
+  branchLabelsByHash,
 }: CommitHistoryGraphProps) {
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
   const [dotCenters, setDotCenters] = useState<Map<string, DotCenter>>(
@@ -262,6 +266,9 @@ export function CommitHistoryGraph({
             const relativeTime = formatWhen(when);
             const color = getLaneColor(node.colorIndex);
             const isHovered = hoveredHash === commit.hash;
+            const branchLabels = branchLabelsByHash
+              ? branchLabelsForCommit(commit.hash, branchLabelsByHash)
+              : [];
 
             return (
               <li
@@ -309,6 +316,15 @@ export function CommitHistoryGraph({
                       </span>
                       <span className={styles.commitWhen}>{relativeTime}</span>
                     </div>
+                    {branchLabels.length > 0 && (
+                      <div className={styles.branchLabels}>
+                        {branchLabels.map((name) => (
+                          <span key={name} className={styles.branchTag} title={name}>
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </Link>
                 </div>
               </li>
