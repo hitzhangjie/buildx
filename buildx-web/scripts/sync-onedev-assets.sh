@@ -33,6 +33,8 @@ cp "$SELECT2_RES/select2.png" "$SELECT2_RES/select2x2.png" "$SELECT2_RES/select2
 cp "$ONEDEV_WEB/asset/icon/"*.svg "$PUBLIC/~icon/"
 cp "$ONEDEV_WEB/img/mesh.jpg" "$PUBLIC/~img/"
 cp "$ONEDEV_WEB/img/dark-mesh.jpg" "$PUBLIC/~img/"
+cp "$ONEDEV_WEB/img/ajax-indicator-big.png" "$PUBLIC/~img/"
+cp "$ONEDEV_WEB/img/dark-ajax-indicator-big.png" "$PUBLIC/~img/"
 
 if [[ -f "$ROOT/references/onedev/server-product/system/site/assets/logo.png" ]]; then
   mkdir -p "$PUBLIC/~img"
