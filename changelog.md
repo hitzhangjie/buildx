@@ -8,6 +8,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ### Added
 
+- **Builds execution architecture doc** — [docs/onedev-builds-execution.md](docs/onedev-builds-execution.md)：buildspec 由 Job Service 调度、JobExecutor / Agent 执行的分层说明；BuildX 与 OneDev 对照及当前迁移进度；[onedev-builds-concepts.md](docs/onedev-builds-concepts.md) 增加链接
 - **Pull request migration handoff** — [docs/pull-request-migration.md](docs/pull-request-migration.md) 专项任务书（续做入口、端点/页面清单、批次 A–E）；同步更新 ROADMAP、buildx-web-migration Wave 4、buildx-server-api-migration
 - **Project Files edit/delete/download** — opened file view shows OneDev-style edit, delete, and download actions; edit uses existing blob editor + commit flow; delete commits via `POST .../files` with commit message only; download via `GET .../raw?disposition=attachment`
 - **User invitations API** — SQLite `o_UserInvitation` schema; REST API at `/~api/invitations` (list, create, resend, delete); admin invitation list and new-invitation pages wired to live API (mail delivery not yet implemented)

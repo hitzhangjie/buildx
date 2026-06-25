@@ -202,7 +202,7 @@ imports:
                     （某 commit 上的一次运行）
 ```
 
-**执行时**（`DefaultJobService.execute`）：对每个 Build，按 Job 的 steps 生成 actions；按 `requiredServices` 拉起 Service facade；变量插值（`@property:`、`@param:`、`@secret:`、`@job_token@` 等）后交给 agent / job executor 运行。
+**执行时**：YAML 不直接运行。Job Service（OneDev `DefaultJobService.execute`）解析 buildspec、插值变量，将 Steps 编译为 Action 计划、Services 转为 sidecar facade，再交给可插拔 **Job Executor**（本机 shell/docker、远程 **Agent** 或 K8s）执行。详见 [onedev-builds-execution.md](onedev-builds-execution.md)。
 
 ---
 
@@ -270,6 +270,7 @@ jobs:
 
 ## 相关文档
 
+- [onedev-builds-execution.md](onedev-builds-execution.md) — 谁执行 buildspec、Executor / Agent 架构、BuildX 迁移进度
 - [ARCHITECTURE.md](ARCHITECTURE.md) — BuildX 模块映射（`buildspec`、`build`、`job`）
 - [ROADMAP.md](ROADMAP.md) — CI/Build 模块迁移阶段
 - [buildx-web-migration.md](buildx-web-migration.md) — buildspec 编辑器页面迁移
