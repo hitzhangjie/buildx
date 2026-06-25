@@ -1,71 +1,9 @@
-/* ── Commit history graph + list (inspired by git-vis & OneDev) ── */
+/* ── Commit history graph (inspired by git-vis & OneDev) ── */
 
 .historyGraph {
   position: relative;
   display: flex;
   flex-direction: column;
-}
-
-/* ── View toggle bar ── */
-
-.viewBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0 0.75rem;
-  gap: 0.75rem;
-}
-
-.viewToggle {
-  display: inline-flex;
-  border: 1px solid var(--light-gray, #d0d7de);
-  border-radius: 6px;
-  overflow: hidden;
-  background: #fff;
-}
-
-:global(.dark-mode) .viewToggle {
-  border-color: var(--dark-mode-lighter-dark, #444);
-  background: var(--dark-mode-dark, #1e1e1e);
-}
-
-.viewToggleBtn {
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-  border: none;
-  background: transparent;
-  color: var(--gray, #57606a);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s;
-}
-
-.viewToggleBtn:hover {
-  background: var(--light, #f3f4f6);
-  color: var(--dark, #24292e);
-}
-
-:global(.dark-mode) .viewToggleBtn:hover {
-  background: var(--dark-mode-light-dark, #333);
-  color: var(--dark-mode-color, #ddd);
-}
-
-.viewToggleBtnActive {
-  background: var(--primary, #0969da);
-  color: #fff;
-}
-
-.viewToggleBtnActive:hover {
-  background: var(--primary, #0969da);
-  color: #fff;
-}
-
-.viewToggleBtn + .viewToggleBtn {
-  border-left: 1px solid var(--light-gray, #d0d7de);
-}
-
-.viewToggleBtnActive + .viewToggleBtn,
-.viewToggleBtn + .viewToggleBtnActive {
-  border-left-color: var(--primary, #0969da);
 }
 
 /* ── Graph + rows container ── */
@@ -253,12 +191,6 @@
   background: #0c2d6b;
   color: #58a6ff;
   border-color: #1f509e;
-}
-
-/* ── Compact list view (no graph) ── */
-
-.listView .commitRow {
-  /* no extra indent needed */
 }
 
 /* ── Responsive ── */

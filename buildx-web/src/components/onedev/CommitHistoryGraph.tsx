@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useMemo, useRef, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { RepositoryCommit } from "../../api/repositories";
 import {
@@ -25,30 +25,6 @@ const ROW_HEIGHT = 52;
 const DATE_ROW_HEIGHT = 48;
 /** Extra graph height at the bottom so the last dot isn't clipped. */
 const GRAPH_BOTTOM_PAD = 20;
-
-// ── View mode ──
-
-export type CommitHistoryViewMode = "graph" | "list";
-
-const VIEW_MODE_KEY = "buildx-commit-history-view";
-
-function loadViewMode(): CommitHistoryViewMode {
-  try {
-    const v = localStorage.getItem(VIEW_MODE_KEY);
-    if (v === "graph" || v === "list") return v;
-  } catch {
-    /* ignore */
-  }
-  return "graph";
-}
-
-function saveViewMode(mode: CommitHistoryViewMode) {
-  try {
-    localStorage.setItem(VIEW_MODE_KEY, mode);
-  } catch {
-    /* ignore */
-  }
-}
 
 // ── Helpers ──
 
@@ -122,37 +98,24 @@ export function CommitHistoryGraph({
   commits,
   projectPath,
 }: CommitHistoryGraphProps) {
-  const [viewMode, setViewMode] = useState<CommitHistoryViewMode>(loadViewMode);
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  const toggleView = useCallback(() => {
-    setViewMode((prev) => {
-      const next = prev === "graph" ? "list" : "graph";
-      saveViewMode(next);
-      return next;
-    });
-  }, []);
-
-  // Compute the lane layout once
   const layout = useMemo(
     () => layoutCommitGraph(commits),
     [commits],
   );
 
-  // Build the timeline with cumulative Y offsets
   const timeline = useMemo(
     () => buildTimeline(commits, layout),
     [commits, layout],
   );
 
-  // Extract just the commit rows for quick access
   const commitRows = useMemo(
     () => timeline.filter((r): r is CommitRowData => r.kind === "commit"),
     [timeline],
   );
 
-  // Total graph height
   const totalHeight =
     commitRows.length > 0
       ? commitRows[commitRows.length - 1].topY + ROW_HEIGHT + GRAPH_BOTTOM_PAD
@@ -160,7 +123,6 @@ export function CommitHistoryGraph({
 
   const graphWidth = layout.columnCount * LANE_WIDTH + GRAPH_PADDING * 2;
 
-  // ── Sync hover state: highlight matching list item & dot ──
   useEffect(() => {
     if (!listRef.current) return;
     const items = listRef.current.querySelectorAll<HTMLElement>("li.commit");
@@ -174,18 +136,12 @@ export function CommitHistoryGraph({
     }
   }, [hoveredHash]);
 
-  // ── Build SVG elements ──
-
   const svgElements = useMemo(() => {
-    if (viewMode !== "graph") return null;
-
     const nodeByHash = new Map<string, GraphLayoutNode>();
     for (const n of layout.nodes) nodeByHash.set(n.hash, n);
 
-    // Helper: get Y centre of a commit row
     const rowCY = (topY: number) => topY + ROW_HEIGHT / 2;
 
-    // Lane segments (vertical lines through nodes)
     const laneLines = layout.laneSegments.map((seg) => {
       const fromRow = commitRows[seg.fromRow];
       const toRow = commitRows[seg.toRow];
@@ -207,7 +163,6 @@ export function CommitHistoryGraph({
       );
     });
 
-    // Parent-child links
     const linkPaths = layout.links
       .map((link) => {
         const child = nodeByHash.get(link.childHash);
@@ -236,7 +191,6 @@ export function CommitHistoryGraph({
       })
       .filter(Boolean);
 
-    // Commit dots
     const dots = commitRows.map((row) => {
       const node = row.node;
       const cx = nodeCenterX(node.column, LANE_WIDTH, GRAPH_PADDING);
@@ -261,64 +215,26 @@ export function CommitHistoryGraph({
     });
 
     return [...laneLines, ...linkPaths, ...dots];
-  }, [viewMode, layout, commitRows, hoveredHash]);
-
-  // ── Render ──
+  }, [layout, commitRows, hoveredHash]);
 
   return (
     <div className={styles.historyGraph}>
-      {/* View toggle bar */}
-      <div className={styles.viewBar}>
-        <div className={styles.viewToggle} role="group" aria-label="View mode">
-          <button
-            type="button"
-            className={`${styles.viewToggleBtn} ${
-              viewMode === "graph" ? styles.viewToggleBtnActive : ""
-            }`}
-            onClick={() => viewMode !== "graph" && toggleView()}
-          >
-            Graph
-          </button>
-          <button
-            type="button"
-            className={`${styles.viewToggleBtn} ${
-              viewMode === "list" ? styles.viewToggleBtnActive : ""
-            }`}
-            onClick={() => viewMode !== "list" && toggleView()}
-          >
-            List
-          </button>
-        </div>
-        <span className="text-muted font-size-sm">
-          {commits.length} commits
-        </span>
-      </div>
-
-      {/* Graph + list body */}
       <div className={styles.graphBody}>
-        {/* SVG graph lane (absolutely positioned) */}
-        {viewMode === "graph" && (
-          <div className={styles.graphLane} style={{ width: graphWidth }}>
-            <svg
-              className={styles.graphSvg}
-              width={graphWidth}
-              height={totalHeight}
-              aria-hidden
-            >
-              {svgElements}
-            </svg>
-          </div>
-        )}
+        <div className={styles.graphLane} style={{ width: graphWidth }}>
+          <svg
+            className={styles.graphSvg}
+            width={graphWidth}
+            height={totalHeight}
+            aria-hidden
+          >
+            {svgElements}
+          </svg>
+        </div>
 
-        {/* Commit list */}
         <ul
           ref={listRef}
           className={styles.commitList}
-          style={
-            viewMode === "graph"
-              ? { marginLeft: graphWidth + 12 }
-              : undefined
-          }
+          style={{ marginLeft: graphWidth + 12 }}
         >
           {timeline.map((row) => {
             if (row.kind === "date") {

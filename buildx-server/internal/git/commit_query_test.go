@@ -37,6 +37,22 @@ func TestParseCommitQuery_UntilBranch(t *testing.T) {
 	}
 }
 
+func TestParseCommitQuery_MultipleUntilBranches(t *testing.T) {
+	q, err := ParseCommitQuery("until branch(main) until branch(dev) order-by-topo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(q.Revisions) != 2 {
+		t.Fatalf("expected 2 revisions, got %d", len(q.Revisions))
+	}
+	if q.Revisions[0].Value != "main" || q.Revisions[1].Value != "dev" {
+		t.Fatalf("unexpected revisions: %+v", q.Revisions)
+	}
+	if q.Order != OrderTopo {
+		t.Fatalf("order mismatch: %q", q.Order)
+	}
+}
+
 func TestParseCommitQuery_SinceBranch(t *testing.T) {
 	q, err := ParseCommitQuery("since branch(feature/foo)")
 	if err != nil {
@@ -572,6 +588,50 @@ func TestListCommitsQuery_NilQuery(t *testing.T) {
 	}
 	if len(commits) != 1 {
 		t.Fatalf("expected 1 commit with nil query, got %d", len(commits))
+	}
+}
+
+func TestListCommitsQuery_MultipleUntilBranches(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := filepath.Join(dir, "git")
+	if err := InitBare(gitDir); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := Open(gitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	workDir := filepath.Join(dir, "work")
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, workDir, "init")
+	runGit(t, workDir, "config", "user.email", "alice@example.com")
+	runGit(t, workDir, "config", "user.name", "Alice")
+	runGit(t, workDir, "remote", "add", "origin", gitDir)
+
+	writeFile(t, workDir, "a.txt", "a\n")
+	runGit(t, workDir, "add", "a.txt")
+	runGit(t, workDir, "commit", "-m", "base")
+	runGit(t, workDir, "push", "origin", "master")
+
+	runGit(t, workDir, "checkout", "-b", "feature")
+	writeFile(t, workDir, "b.txt", "b\n")
+	runGit(t, workDir, "add", "b.txt")
+	runGit(t, workDir, "commit", "-m", "feature commit")
+	runGit(t, workDir, "push", "origin", "feature")
+
+	query, err := ParseCommitQuery("until branch(master) until branch(feature) order-by-topo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commits, err := repo.ListCommitsQuery("", query, 10, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(commits) != 2 {
+		t.Fatalf("expected 2 commits across branches, got %d", len(commits))
 	}
 }
 

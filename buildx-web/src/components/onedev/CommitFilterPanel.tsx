@@ -8,7 +8,7 @@ import styles from "./CommitFilterPanel.module.css";
 // ── Filter state ──
 
 export interface CommitFilterState {
-  branch: string;
+  branches: string[];
   tag: string;
   touchedFile: string;
   authoredBy: string[];
@@ -18,7 +18,7 @@ export interface CommitFilterState {
 }
 
 export const EMPTY_FILTER: CommitFilterState = {
-  branch: "",
+  branches: [],
   tag: "",
   touchedFile: "",
   authoredBy: [],
@@ -36,8 +36,11 @@ export const EMPTY_FILTER: CommitFilterState = {
 export function buildCommitQueryString(f: CommitFilterState): string {
   const parts: string[] = [];
 
-  if (f.branch) {
-    parts.push(`until branch(${f.branch})`);
+  for (const branch of f.branches) {
+    parts.push(`until branch(${branch})`);
+  }
+  if (f.branches.length > 1) {
+    parts.push("order-by-topo");
   }
   if (f.tag) {
     parts.push(`until tag(${f.tag})`);
@@ -59,6 +62,17 @@ export function buildCommitQueryString(f: CommitFilterState): string {
   }
 
   return parts.join(" ");
+}
+
+/** Extract `until branch(...)` names from a commit query string. */
+export function parseUntilBranches(query: string): string[] {
+  const branches: string[] = [];
+  const re = /\buntil\s+branch\(([^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(query)) !== null) {
+    branches.push(match[1].trim());
+  }
+  return branches;
 }
 
 // ── Props ──
@@ -127,11 +141,12 @@ export function CommitFilterPanel({
       {/* Branch */}
       <div className="form-group">
         <label className="control-label">Branch</label>
-        <Select2SingleChoice
-          value={state.branch}
-          onChange={(v) => update({ branch: v })}
+        <Select2MultiChoice
+          values={state.branches}
+          onChange={(v) => update({ branches: v })}
           choices={branches}
           placeholder="Any branch"
+          checkboxList
         />
       </div>
 

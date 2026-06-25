@@ -30,6 +30,7 @@
 /* Force the select2 dropdowns inside the filter panel to use the full width
    of their parent form-group. */
 .filterPanel :global(.select2-choice-editor),
-.filterPanel :global(.select2-multi-choice-editor) {
+.filterPanel :global(.select2-multi-choice-editor),
+.filterPanel :global(.select2-checkbox-multi-choice-editor) {
   width: 100%;
 }

@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -624,6 +625,125 @@ func (r *Repository) resolveRevision(ref string) (*plumbing.Hash, error) {
 	return hash, nil
 }
 
+// resolveRevisionCriteria resolves a revision criterion to a plumbing.Hash.
+func (r *Repository) resolveRevisionCriteria(rev RevisionCriteria) (*plumbing.Hash, error) {
+	switch rev.Type {
+	case RevisionBranch:
+		if rev.Value == "" {
+			def := r.DefaultRevision()
+			if def == "" {
+				return nil, fmt.Errorf("no default branch")
+			}
+			return r.resolveRevision(def)
+		}
+		return r.resolveRevision(rev.Value)
+	case RevisionTag:
+		return r.resolveRevision("refs/tags/" + rev.Value)
+	case RevisionCommit:
+		return r.resolveRevision(rev.Value)
+	default:
+		return nil, fmt.Errorf("unknown revision type: %s", rev.Type)
+	}
+}
+
+// revisionRef returns a git rev-list ref string for a revision criterion.
+func (r *Repository) revisionRef(rev RevisionCriteria) (string, error) {
+	hash, err := r.resolveRevisionCriteria(rev)
+	if err != nil {
+		return "", err
+	}
+	return hash.String(), nil
+}
+
+// revListHashes runs `git rev-list` with multiple heads and optional exclusions.
+func (r *Repository) revListHashes(
+	heads []string,
+	excludes []string,
+	order OrderType,
+	count int,
+) ([]plumbing.Hash, error) {
+	if len(heads) == 0 {
+		return nil, fmt.Errorf("no revision heads")
+	}
+	if count <= 0 {
+		count = 100
+	}
+
+	args := []string{"-C", r.path, "rev-list"}
+	switch order {
+	case OrderDate, OrderAuthorDate:
+		args = append(args, "--date-order")
+	case OrderTopo:
+		args = append(args, "--topo-order")
+	default:
+		args = append(args, "--topo-order")
+	}
+	args = append(args, fmt.Sprintf("-n%d", count))
+	args = append(args, heads...)
+	for _, ex := range excludes {
+		args = append(args, "^"+ex)
+	}
+
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("git rev-list: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	hashes := make([]plumbing.Hash, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		hashes = append(hashes, plumbing.NewHash(line))
+	}
+	return hashes, nil
+}
+
+func collectFilteredCommitsFromHashes(
+	r *Repository,
+	hashes []plumbing.Hash,
+	query *CommitQuery,
+	count int,
+	currentUserName, currentUserEmail string,
+) ([]Commit, error) {
+	identity := userIdentities(currentUserName, currentUserEmail)
+	commits := make([]Commit, 0, count)
+
+	for _, hash := range hashes {
+		if len(commits) >= count {
+			break
+		}
+		obj, err := r.inner.CommitObject(hash)
+		if err != nil {
+			continue
+		}
+		if query != nil {
+			if !query.matchesAuthor(obj, identity) {
+				continue
+			}
+			if !query.matchesCommitter(obj, identity) {
+				continue
+			}
+			if !query.matchesDateRange(obj) {
+				continue
+			}
+			if !query.matchesMessage(obj) {
+				continue
+			}
+			if !query.matchesFuzzy(obj) {
+				continue
+			}
+			if len(query.Paths) > 0 && !query.matchesPath(obj) {
+				continue
+			}
+		}
+		commits = append(commits, commitFromObject(obj))
+	}
+	return commits, nil
+}
+
 // ---------------------------------------------------------------------------
 // ListCommitsQuery — the full query-driven commit listing.
 // ---------------------------------------------------------------------------
@@ -668,6 +788,48 @@ func (r *Repository) ListCommitsQuery(
 		count = 100
 	}
 
+	order := OrderType("")
+	if query != nil {
+		order = query.Order
+	}
+
+	var untilRevs []RevisionCriteria
+	var sinceRevs []RevisionCriteria
+	if query != nil {
+		for _, rev := range query.Revisions {
+			if rev.Exclude {
+				sinceRevs = append(sinceRevs, rev)
+			} else {
+				untilRevs = append(untilRevs, rev)
+			}
+		}
+	}
+
+	// Multiple until revisions: union reachable commits via git rev-list.
+	if len(untilRevs) > 1 {
+		heads := make([]string, 0, len(untilRevs))
+		for _, rev := range untilRevs {
+			ref, err := r.revisionRef(rev)
+			if err != nil {
+				return nil, err
+			}
+			heads = append(heads, ref)
+		}
+		excludes := make([]string, 0, len(sinceRevs))
+		for _, rev := range sinceRevs {
+			ref, err := r.revisionRef(rev)
+			if err != nil {
+				continue
+			}
+			excludes = append(excludes, ref)
+		}
+		hashes, err := r.revListHashes(heads, excludes, order, count*5)
+		if err != nil {
+			return nil, err
+		}
+		return collectFilteredCommitsFromHashes(r, hashes, query, count, currentUserName, currentUserEmail)
+	}
+
 	hash, err := r.resolveRevision(effectiveRevision)
 	if err != nil {
 		return nil, err
@@ -697,7 +859,7 @@ func (r *Repository) ListCommitsQuery(
 	if query != nil {
 		for _, rev := range query.Revisions {
 			if rev.Exclude {
-				exHash, err := r.resolveRevision(rev.Value)
+				exHash, err := r.resolveRevisionCriteria(rev)
 				if err == nil {
 					excludeHashes[exHash.String()] = true
 				}

@@ -1,12 +1,14 @@
 /* React Select2 shells: dropdown positioning inside bean editors */
 .select2-choice-editor .select2-container,
-.select2-multi-choice-editor .select2-container {
+.select2-multi-choice-editor .select2-container,
+.select2-checkbox-multi-choice-editor .select2-container {
   position: relative;
   width: 100%;
 }
 
 .select2-choice-editor .select2-choice,
-.select2-multi-choice-editor .select2-choice {
+.select2-multi-choice-editor .select2-choice,
+.select2-checkbox-multi-choice-editor .select2-choice {
   width: 100%;
   text-align: left;
   cursor: pointer;
@@ -16,7 +18,8 @@
 }
 
 .select2-choice-editor .select2-drop,
-.select2-multi-choice-editor .select2-drop {
+.select2-multi-choice-editor .select2-drop,
+.select2-checkbox-multi-choice-editor .select2-drop {
   position: absolute;
   z-index: 1050;
   left: 0;
@@ -24,7 +27,57 @@
   margin-top: 2px;
 }
 
-.select2-multi-choice-editor .select2-results {
+.select2-multi-choice-editor .select2-results,
+.select2-checkbox-multi-choice-editor .select2-results {
   max-height: 200px;
   overflow-y: auto;
+}
+
+.select2-checkbox-multi-choice-editor .select2-search {
+  padding: 0.35rem 0.5rem;
+}
+
+.select2-checkbox-multi-choice-editor .select2-search .select2-input {
+  width: 100%;
+}
+
+.select2-checkbox-multi-choice-editor .select2-checkbox-option {
+  margin: 0;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  padding-right: 0.75rem;
+  min-height: 1.75rem;
+}
+
+.select2-checkbox-multi-choice-editor .select2-checkbox-option .form-check-input {
+  margin-top: 0.2rem;
+  margin-left: -1.25rem;
+  cursor: pointer;
+}
+
+.select2-checkbox-multi-choice-editor .select2-checkbox-option .form-check-label {
+  margin: 0;
+  cursor: pointer;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.select2-checkbox-results .select2-result-selectable {
+  padding: 0;
+}
+
+.select2-checkbox-results .select2-result-selectable:hover {
+  background: var(--light, #f6f8fa);
+}
+
+.select2-checkbox-results .select2-highlighted:hover {
+  background: #3875d7;
+}
+
+:global(.dark-mode) .select2-checkbox-results .select2-result-selectable:hover {
+  background: var(--dark-mode-light-dark, #333);
+}
+
+:global(.dark-mode) .select2-checkbox-results .select2-highlighted .form-check-label {
+  color: #3699ff;
 }
