@@ -46,20 +46,21 @@ func NewJobContext(build *model.Build, job *buildspec.Job, projectDir string) (*
 	}
 
 	return &executor.JobContext{
-		BuildID:     build.ID,
-		BuildNumber: build.Number,
-		ProjectID:   build.ProjectID,
-		ProjectPath: "", // populated by caller if available
-		JobName:     build.JobName,
-		JobToken:    build.Token,
-		CommitHash:  build.CommitHash,
-		RefName:     build.RefName,
-		WorkDir:     projectDir,
-		AgentID:     0, // assigned by executor registry
-		AgentName:   "",
-		EnvVars:     envVars,
-		ParamMap:    paramMap,
-		Timeout:     timeout,
+		BuildID:           build.ID,
+		BuildNumber:       build.Number,
+		ProjectID:         build.ProjectID,
+		ProjectPath:       "", // populated by caller if available
+		JobName:           build.JobName,
+		JobToken:          build.Token,
+		CommitHash:        build.CommitHash,
+		RefName:           build.RefName,
+		WorkDir:           projectDir,
+		AgentID:           0,
+		AgentName:         "",
+		EnvVars:           envVars,
+		ParamMap:          paramMap,
+		Timeout:           timeout,
+		PreferredExecutor: job.JobExecutor,
 	}, nil
 }
 

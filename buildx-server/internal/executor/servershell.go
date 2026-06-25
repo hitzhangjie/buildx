@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 )
 
 // ServerShellExecutor runs job commands via local shell on the server.
@@ -56,24 +58,28 @@ func (e *ServerShellExecutor) SupportsSitePublishing() bool {
 	return e.config.SitePublishEnabled
 }
 
-// IsApplicable always returns true as a last-resort fallback. When no more
-// specific executor matches (e.g., remote-shell or kubernetes), the server-shell
-// executor is used for jobs configured to run on the server.
+// IsApplicable is the fallback when no docker/remote executor matches.
 func (e *ServerShellExecutor) IsApplicable(ctx context.Context, jobCtx *JobContext) bool {
+	if jobCtx == nil {
+		return true
+	}
+	if jobCtx.AgentID > 0 {
+		return false
+	}
+	if jobCtx.PreferredExecutor != "" && jobCtx.PreferredExecutor != "server-shell" {
+		return false
+	}
 	return true
 }
 
-// Execute runs shell commands in the build work directory.
-//
-// For each command string:
-//  1. The command is written to a temporary shell script inside the work dir.
-//  2. It is executed with /bin/sh -e {script}.sh under the build work directory.
-//  3. stdout and stderr are captured and streamed to the TaskLogger.
-//  4. The exit code and duration are recorded in the StepResult.
-//
-// The work directory is created at {workDirBase}/{projectId}/{buildNumber}/.
+// Execute runs shell commands in the build work directory (legacy flat API).
 func (e *ServerShellExecutor) Execute(ctx context.Context, jobCtx *JobContext, commands []string, logger TaskLogger) ([]StepResult, error) {
-	if len(commands) == 0 {
+	return e.ExecutePlan(ctx, jobCtx, execplan.NewCommandsPlan(commands), logger)
+}
+
+// ExecutePlan traverses a compiled Action plan and runs supported leaf steps.
+func (e *ServerShellExecutor) ExecutePlan(ctx context.Context, jobCtx *JobContext, plan *execplan.Plan, logger TaskLogger) ([]StepResult, error) {
+	if plan == nil || plan.Root == nil {
 		return []StepResult{}, nil
 	}
 
@@ -81,43 +87,45 @@ func (e *ServerShellExecutor) Execute(ctx context.Context, jobCtx *JobContext, c
 	if err := os.MkdirAll(workDir, 0755); err != nil {
 		return nil, fmt.Errorf("create work dir %s: %w", workDir, err)
 	}
-
 	if logger != nil {
 		logger.Log("info", "workDir: "+workDir)
 	}
 
-	results := make([]StepResult, 0, len(commands))
+	results, err := ExecutePlanOnShell(ctx, jobCtx, plan, e, logger)
+	return results, err
+}
 
-	for i, cmdText := range commands {
-		select {
-		case <-ctx.Done():
-			return results, ctx.Err()
-		default:
-		}
+// RunCommand implements execplan.ShellRunner.
+func (e *ServerShellExecutor) RunCommand(
+	ctx context.Context,
+	jobCtx *JobContext,
+	stepName string,
+	cmd *execplan.CommandFacade,
+	position []int,
+	logger TaskLogger,
+) (execplan.LeafResult, error) {
+	workDir := e.buildWorkDir(jobCtx)
+	index := stepIndex(position)
+	result := e.runScript(ctx, jobCtx, workDir, index, cmd.Commands, cmd.EnvVars, logger)
+	result.Name = stepName
+	return execplan.LeafResult{
+		StepResultName: result.Name,
+		Success:        result.Success,
+		ExitCode:       result.ExitCode,
+		DurationMs:     result.DurationMs,
+		Error:          result.Error,
+	}, nil
+}
 
-		cmdText = strings.TrimSpace(cmdText)
-		if cmdText == "" {
-			results = append(results, StepResult{
-				Name:    fmt.Sprintf("step-%d", i+1),
-				Success: true,
-			})
-			continue
-		}
-
-		result := e.runScript(ctx, jobCtx, workDir, i, cmdText, logger)
-		results = append(results, result)
-
-		// Stop on first failure when shell -e semantics apply.
-		if !result.Success && result.ExitCode != 0 {
-			break
-		}
+func stepIndex(position []int) int {
+	if len(position) == 0 {
+		return 0
 	}
-
-	return results, nil
+	return position[len(position)-1]
 }
 
 // runScript writes a single command to a temp script file and executes it.
-func (e *ServerShellExecutor) runScript(ctx context.Context, jobCtx *JobContext, workDir string, index int, cmdText string, logger TaskLogger) StepResult {
+func (e *ServerShellExecutor) runScript(ctx context.Context, jobCtx *JobContext, workDir string, index int, cmdText string, stepEnv map[string]string, logger TaskLogger) StepResult {
 	stepName := fmt.Sprintf("step-%d", index+1)
 	scriptPath := filepath.Join(workDir, fmt.Sprintf("step-%d.sh", index+1))
 
@@ -133,13 +141,13 @@ func (e *ServerShellExecutor) runScript(ctx context.Context, jobCtx *JobContext,
 	defer os.Remove(scriptPath)
 
 	start := time.Now()
-	result := e.runShellCommand(ctx, jobCtx, workDir, scriptPath, stepName, logger)
+	result := e.runShellCommand(ctx, jobCtx, workDir, scriptPath, stepName, stepEnv, logger)
 	result.DurationMs = time.Since(start).Milliseconds()
 	return result
 }
 
 // runShellCommand executes a shell script via /bin/sh and streams output.
-func (e *ServerShellExecutor) runShellCommand(ctx context.Context, jobCtx *JobContext, workDir, scriptPath, stepName string, logger TaskLogger) StepResult {
+func (e *ServerShellExecutor) runShellCommand(ctx context.Context, jobCtx *JobContext, workDir, scriptPath, stepName string, stepEnv map[string]string, logger TaskLogger) StepResult {
 	// Build a derived context with timeout if set.
 	execCtx := ctx
 	if jobCtx.Timeout > 0 {
@@ -151,8 +159,9 @@ func (e *ServerShellExecutor) runShellCommand(ctx context.Context, jobCtx *JobCo
 	cmd := exec.CommandContext(execCtx, "/bin/sh", scriptPath)
 	cmd.Dir = workDir
 
-	// Set up the environment: inherit current env, overlay job env vars.
-	cmd.Env = append(os.Environ(), envSlice(jobCtx.EnvVars)...)
+	// Set up the environment: inherit current env, overlay job and step env vars.
+	mergedEnv := mergeEnv(jobCtx.EnvVars, stepEnv)
+	cmd.Env = append(os.Environ(), envSlice(mergedEnv)...)
 
 	// Create pipes for stdout and stderr.
 	stdout, err := cmd.StdoutPipe()
@@ -227,6 +236,11 @@ func (e *ServerShellExecutor) buildWorkDir(jobCtx *JobContext) string {
 	return filepath.Join(e.workDirBase, fmt.Sprintf("%d", jobCtx.ProjectID), fmt.Sprintf("%d", jobCtx.BuildNumber))
 }
 
+// WorkDirFor returns the job work directory path (public accessor for job service).
+func (e *ServerShellExecutor) WorkDirFor(jobCtx *JobContext) string {
+	return e.buildWorkDir(jobCtx)
+}
+
 // streamOutput reads lines from reader and sends them to the callback function
 // via a goroutine. It returns a channel that is closed when reading is complete.
 func streamOutput(reader io.Reader, callback func(string)) chan struct{} {
@@ -267,6 +281,20 @@ func envSlice(env map[string]string) []string {
 		s = append(s, k+"="+v)
 	}
 	return s
+}
+
+func mergeEnv(base, overlay map[string]string) map[string]string {
+	if len(base) == 0 && len(overlay) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(base)+len(overlay))
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range overlay {
+		out[k] = v
+	}
+	return out
 }
 
 // exitCodeFromError extracts the exit code from an exec.ExitError.

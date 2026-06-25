@@ -34,7 +34,7 @@ func NewBuildStateMachine(build *model.Build) *BuildStateMachine {
 var validTransitions = map[model.BuildStatus][]model.BuildStatus{
 	model.BuildStatusWaiting:    {model.BuildStatusPending, model.BuildStatusCancelled},
 	model.BuildStatusPending:    {model.BuildStatusRunning, model.BuildStatusCancelled},
-	model.BuildStatusRunning:    {model.BuildStatusSuccessful, model.BuildStatusFailed, model.BuildStatusCancelled, model.BuildStatusTimedOut},
+	model.BuildStatusRunning:    {model.BuildStatusSuccessful, model.BuildStatusFailed, model.BuildStatusCancelled, model.BuildStatusTimedOut, model.BuildStatusPending},
 }
 
 // Transition validates and executes a state transition.

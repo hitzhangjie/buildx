@@ -42,11 +42,6 @@ const mockTree: MockNode = {
       content: "# Demo Project\n\nWelcome to BuildX.\n",
       lastCommit: DEFAULT_COMMIT,
     },
-    ".onedev-buildspec.yml": {
-      type: "file",
-      content: "version: 1\njobs:\n  - name: CI\n    steps:\n      - !CommandStep\n        name: build\n        runInContainer: true\n        image: golang:1.22\n        commands:\n          - go build ./...\n",
-      lastCommit: { author: "admin", message: "Add CI buildspec", when: "1 day ago" },
-    },
     src: {
       type: "directory",
       lastCommit: DEFAULT_COMMIT,

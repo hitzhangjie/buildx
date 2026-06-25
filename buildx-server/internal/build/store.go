@@ -475,6 +475,43 @@ func (s *DBStore) UpdateStatus(ctx context.Context, id int64, status model.Build
 	return affectedOne(res, ErrNotFound)
 }
 
+// UpdateVersion sets the build version string (SetBuildVersionStep).
+func (s *DBStore) UpdateVersion(ctx context.Context, id int64, version string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE o_Build SET o_version = ? WHERE o_id = ?`, version, id)
+	if err != nil {
+		return err
+	}
+	return affectedOne(res, ErrNotFound)
+}
+
+// ResetForResubmit resets a finished build for resubmission (OneDev resubmit semantics).
+func (s *DBStore) ResetForResubmit(ctx context.Context, id int64, token, reason string, submitterID int64) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE o_Build SET
+			o_status = ?, o_token = ?, o_finishDate = NULL, o_pendingDate = NULL,
+			o_runningDate = NULL, o_retryDate = NULL, o_submitDate = ?,
+			o_submitReason = ?, o_submitter_id = ?,
+			o_submitSequence = o_submitSequence + 1, o_checkoutPaths = '[]'
+		WHERE o_id = ? AND o_status IN ('SUCCESSFUL', 'FAILED', 'CANCELLED', 'TIMED_OUT')`,
+		string(model.BuildStatusWaiting), token, now, reason, submitterID, id)
+	if err != nil {
+		return err
+	}
+	return affectedOne(res, ErrNotFound)
+}
+
+// UpdateRetryPending resets a build to PENDING for retry with cleared running state.
+func (s *DBStore) UpdateRetryPending(ctx context.Context, id int64) error {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE o_Build SET o_status = ?, o_runningDate = NULL, o_pendingDate = ?,
+			o_retryDate = ?, o_checkoutPaths = '[]'
+		WHERE o_id = ?`,
+		string(model.BuildStatusPending), now, now, id)
+	return err
+}
+
 // UpdateDates updates the pending, running, and/or finish dates of a build.
 // Nil values are not updated (leave the existing value).
 func (s *DBStore) UpdateDates(ctx context.Context, id int64, pendingDate, runningDate, finishDate *time.Time) error {

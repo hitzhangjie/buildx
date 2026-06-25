@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 )
 
@@ -31,7 +32,11 @@ func TestRemoteShell_IsApplicable_WithoutAgent(t *testing.T) {
 	e := executor.NewRemoteShellExecutor(nil)
 	jc := &executor.JobContext{AgentID: 0}
 	if e.IsApplicable(context.Background(), jc) {
-		t.Fatal("expected not applicable when AgentID == 0")
+		t.Fatal("expected not applicable when AgentID == 0 and no preferred executor")
+	}
+	jc.PreferredExecutor = "remote-shell"
+	if !e.IsApplicable(context.Background(), jc) {
+		t.Fatal("expected applicable when preferred executor is remote-shell")
 	}
 }
 
@@ -106,7 +111,7 @@ type mockAgentDialer struct {
 	expectedError  error
 }
 
-func (m *mockAgentDialer) ExecuteOnAgent(ctx context.Context, agentID int64, jobCtx *executor.JobContext, commands []string, logger executor.TaskLogger) ([]executor.StepResult, error) {
+func (m *mockAgentDialer) ExecuteOnAgent(ctx context.Context, agentID int64, jobCtx *executor.JobContext, plan *execplan.Plan, logger executor.TaskLogger) ([]executor.StepResult, error) {
 	if m.expectedError != nil {
 		return nil, m.expectedError
 	}

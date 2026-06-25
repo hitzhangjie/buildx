@@ -4,22 +4,19 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hitzhangjie/buildx/buildx-server/internal/buildspec"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 )
 
-// ---------------------------------------------------------------------------
-// RunServerStep tests
-// ---------------------------------------------------------------------------
-
 func TestRunServerStep_NilStep(t *testing.T) {
-	_, err := executor.RunServerStep(context.Background(), nil, &executor.JobContext{}, nil)
+	_, err := executor.RunServerStep(context.Background(), nil, &executor.JobContext{}, "", nil)
 	if err == nil {
 		t.Fatal("expected error for nil step")
 	}
 }
 
 func TestRunServerStep_UnsupportedStep(t *testing.T) {
-	_, err := executor.RunServerStep(context.Background(), "string-step", &executor.JobContext{}, nil)
+	_, err := executor.RunServerStep(context.Background(), "string-step", &executor.JobContext{}, "", nil)
 	if err == nil {
 		t.Fatal("expected error for unsupported step type")
 	}
@@ -27,7 +24,7 @@ func TestRunServerStep_UnsupportedStep(t *testing.T) {
 
 func TestRunServerStep_WithLogger(t *testing.T) {
 	log := executor.NewBuildLogger(1)
-	_, err := executor.RunServerStep(context.Background(), "some-step", &executor.JobContext{BuildID: 1}, log)
+	_, err := executor.RunServerStep(context.Background(), "some-step", &executor.JobContext{BuildID: 1}, "", log)
 	if err == nil {
 		t.Fatal("expected error for unsupported step type")
 	}
@@ -38,14 +35,32 @@ func TestRunServerStep_WithLogger(t *testing.T) {
 	}
 }
 
-func TestRunServerStep_NilJobCtx(t *testing.T) {
-	_, err := executor.RunServerStep(context.Background(), "step", nil, nil)
-	if err == nil {
-		t.Fatal("expected error")
+func TestRunServerStep_SetBuildVersion(t *testing.T) {
+	store := &versionStore{}
+	handler := &executor.DefaultServerStepHandler{BuildStore: store}
+	jc := &executor.JobContext{
+		BuildID:     1,
+		ServerSteps: handler,
+	}
+	step := &buildspec.SetBuildVersionStep{StepBase: buildspec.StepBase{Name: "ver"}, Version: "1.2.3"}
+	res, err := executor.RunServerStep(context.Background(), step, jc, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Success || store.version != "1.2.3" {
+		t.Fatalf("res=%+v version=%q", res, store.version)
 	}
 }
 
-// ServerStepResult basic usage.
+type versionStore struct {
+	version string
+}
+
+func (v *versionStore) UpdateVersion(_ context.Context, _ int64, version string) error {
+	v.version = version
+	return nil
+}
+
 func TestServerStepResult_Basic(t *testing.T) {
 	r := executor.ServerStepResult{
 		Success: true,

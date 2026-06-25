@@ -16,7 +16,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	buildstore "github.com/hitzhangjie/buildx/buildx-server/internal/build"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/buildspec"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/cache"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/artifact"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 )
@@ -44,9 +48,12 @@ type BuildStore interface {
 	Create(ctx context.Context, b *model.Build) (*model.Build, error)
 	Get(ctx context.Context, id int64) (*model.Build, error)
 	GetByNumber(ctx context.Context, projectID int64, number int) (*model.Build, error)
-	Query(ctx context.Context, filter interface{}, offset, count int) ([]*model.Build, error)
+	Query(ctx context.Context, filter buildstore.QueryFilter, offset, count int) ([]*model.Build, error)
 	Delete(ctx context.Context, id int64) error
 	UpdateStatus(ctx context.Context, id int64, status model.BuildStatus) error
+	UpdateVersion(ctx context.Context, id int64, version string) error
+	ResetForResubmit(ctx context.Context, id int64, token, reason string, submitterID int64) error
+	UpdateRetryPending(ctx context.Context, id int64) error
 	UpdateDates(ctx context.Context, id int64, pendingDate, runningDate, finishDate *time.Time) error
 	CreateDependence(ctx context.Context, dep *model.BuildDependence) error
 	ListDependencies(ctx context.Context, buildID int64) ([]*model.BuildDependence, error)
@@ -115,6 +122,7 @@ type RunningJob struct {
 	StartTime  time.Time
 	CancelFunc context.CancelFunc
 	Logger     *executor.BuildLogger
+	Active     *ActiveJobContext // worker API context while executing
 }
 
 // ---------------------------------------------------------------------------
@@ -130,10 +138,16 @@ type Service struct {
 	projects     ProjectResolver
 	gitService   GitService
 	logStore     LogStore
+	cache        *cache.Service
+	artifacts    *artifact.Store
 
-	mu          sync.RWMutex
-	runningJobs map[string]*RunningJob // keyed by job token
-	logBuffers  map[int64]*LogBuffer   // keyed by build ID
+	mu              sync.RWMutex
+	runningJobs     map[string]*RunningJob // keyed by job token
+	scheduling      map[int64]bool         // builds being started by scheduler
+	logBuffers      map[int64]*LogBuffer   // keyed by build ID
+	seqLocks        map[string]time.Time   // sequential group locks
+	scheduleCache   *ScheduleCache
+	logPersistDir   string
 }
 
 // NewService creates a new JobService with the given dependencies.
@@ -152,9 +166,23 @@ func NewService(
 		projects:     projects,
 		gitService:   gitService,
 		logStore:     logStore,
-		runningJobs:  make(map[string]*RunningJob),
-		logBuffers:   make(map[int64]*LogBuffer),
+		runningJobs:   make(map[string]*RunningJob),
+		scheduling:    make(map[int64]bool),
+		logBuffers:    make(map[int64]*LogBuffer),
+		seqLocks:      make(map[string]time.Time),
+		scheduleCache: NewScheduleCache(),
 	}
+}
+
+// SetLogPersistDir enables on-disk log persistence under the given directory.
+func (s *Service) SetLogPersistDir(dir string) {
+	s.logPersistDir = dir
+}
+
+// SetCacheAndArtifacts wires optional cache and artifact stores for CI steps.
+func (s *Service) SetCacheAndArtifacts(cacheSvc *cache.Service, artifactStore *artifact.Store) {
+	s.cache = cacheSvc
+	s.artifacts = artifactStore
 }
 
 // ---------------------------------------------------------------------------
@@ -212,47 +240,60 @@ func (s *Service) Submit(ctx context.Context, req SubmitRequest) (*model.Build, 
 		return nil, fmt.Errorf("submit: create build: %w", err)
 	}
 
-	// 4. Create dependency records
-	depBuilds, err := s.resolveDependencies(ctx, req, spec, created)
-	if err != nil {
-		// Log but don't fail — dependencies may be optional or external
-		// For a robust implementation, log the error and continue
+	// 4. Create dependency records (submit dependency jobs, link DAG)
+	if err := s.resolveAndLinkDependencies(ctx, req, commitHash, job, created); err != nil {
 		_ = err
 	}
 
-	// 5. Start execution
-	// If no dependencies, the build can start immediately; otherwise it waits.
-	if len(job.JobDependencies) == 0 || len(depBuilds) == 0 {
-		// All dependencies resolved (or none), transition to pending
+	// 5. Transition to PENDING when no dependencies; otherwise stay WAITING
+	if len(job.JobDependencies) == 0 {
 		now := time.Now().UTC()
 		if err := s.buildStore.UpdateStatus(ctx, created.ID, model.BuildStatusPending); err == nil {
 			_ = s.buildStore.UpdateDates(ctx, created.ID, &now, nil, nil)
+			created.Status = model.BuildStatusPending
 		}
 	}
 
-	// Launch execution goroutine
-	go s.runBuild(context.Background(), created, job)
+	if created.Status == model.BuildStatusPending {
+		go s.tryScheduleBuild(context.Background(), created.ID)
+	}
 
 	return created, nil
 }
 
-// Resubmit re-runs an existing build.
+// Resubmit re-runs a finished build in place (OneDev resubmit semantics).
 func (s *Service) Resubmit(ctx context.Context, buildID int64, reason string) (*model.Build, error) {
 	existing, err := s.buildStore.Get(ctx, buildID)
 	if err != nil {
 		return nil, fmt.Errorf("resubmit: %w", err)
 	}
-
-	// Create a new build record with the same parameters
-	req := SubmitRequest{
-		ProjectID:   existing.ProjectID,
-		CommitHash:  existing.CommitHash,
-		JobName:     existing.JobName,
-		RefName:     existing.RefName,
-		Reason:      reason,
-		SubmitterID: existing.Submitter.ID,
+	if !NewBuildStateMachine(existing).IsTerminal() {
+		return nil, fmt.Errorf("%w: build %d is not finished", ErrInvalidTransition, buildID)
 	}
-	return s.Submit(ctx, req)
+
+	token := uuid.NewString()
+	if err := s.buildStore.ResetForResubmit(ctx, buildID, token, reason, existing.Submitter.ID); err != nil {
+		return nil, fmt.Errorf("resubmit: %w", err)
+	}
+
+	deps, _ := s.buildStore.ListDependencies(ctx, buildID)
+	for _, dep := range deps {
+		if dep.DependencyID > 0 {
+			_, _ = s.Resubmit(ctx, dep.DependencyID, "Resubmitted by dependent build")
+		}
+	}
+
+	updated, err := s.buildStore.Get(ctx, buildID)
+	if err != nil {
+		return nil, err
+	}
+	if len(deps) == 0 {
+		now := time.Now().UTC()
+		_ = s.buildStore.UpdateStatus(ctx, buildID, model.BuildStatusPending)
+		_ = s.buildStore.UpdateDates(ctx, buildID, &now, nil, nil)
+		go s.tryScheduleBuild(context.Background(), buildID)
+	}
+	return updated, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -454,8 +495,14 @@ func (s *Service) loadBuildSpec(ctx context.Context, projectID int64, commitHash
 }
 
 // readFileFromGit reads a file from a git repository at a given commit.
-func (s *Service) readFileFromGit(_ context.Context, repoPath, commitHash, filePath string) ([]byte, error) {
-	// Try system git first (fast for large repos)
+func (s *Service) readFileFromGit(ctx context.Context, repoPath, commitHash, filePath string) ([]byte, error) {
+	if s.gitService != nil {
+		data, err := s.gitService.ReadFileAtCommit(ctx, repoPath, commitHash, filePath)
+		if err == nil {
+			return data, nil
+		}
+	}
+	// Try system git (fast for large repos)
 	cmd := exec.Command("git", "-C", repoPath, "show", commitHash+":"+filePath)
 	out, err := cmd.Output()
 	if err != nil {
@@ -464,97 +511,48 @@ func (s *Service) readFileFromGit(_ context.Context, repoPath, commitHash, fileP
 	return out, nil
 }
 
-// resolveDependencies creates BuildDependence records for job dependencies
-// and returns the dependency build references.
-func (s *Service) resolveDependencies(ctx context.Context, req SubmitRequest, spec *buildspec.BuildSpec, build *model.Build) ([]*model.Build, error) {
-	jobMap := spec.GetJobMap()
-	job, ok := jobMap[req.JobName]
-	if !ok || job == nil || len(job.JobDependencies) == 0 {
-		return nil, nil
+// resolveAndLinkDependencies submits dependency jobs and creates BuildDependence records.
+func (s *Service) resolveAndLinkDependencies(ctx context.Context, req SubmitRequest, commitHash string, job *buildspec.Job, build *model.Build) error {
+	if job == nil || len(job.JobDependencies) == 0 {
+		return nil
 	}
-
-	var depBuilds []*model.Build
-
 	for _, dep := range job.JobDependencies {
 		if dep.JobName == "" {
 			continue
 		}
-
-		// Try to find an existing build for the dependency job at the same commit
-		depBuildsForJob, err := s.buildStore.Query(ctx, nil, 0, 1)
+		depBuild, err := s.Submit(ctx, SubmitRequest{
+			ProjectID:   req.ProjectID,
+			CommitHash:  commitHash,
+			JobName:     dep.JobName,
+			RefName:     req.RefName,
+			Params:      req.Params,
+			Reason:      fmt.Sprintf("Dependency for job %q", req.JobName),
+			SubmitterID: req.SubmitterID,
+		})
 		if err != nil {
-			continue
+			return fmt.Errorf("submit dependency %q: %w", dep.JobName, err)
 		}
-
-		// Create the dependence record
 		d := &model.BuildDependence{
 			DependentID:       build.ID,
-			DependencyID:      0, // Set when we have a concrete dependency build ID
+			DependencyID:      depBuild.ID,
 			RequireSuccessful: dep.RequireSuccessful,
 			Artifacts:         dep.Artifacts,
 			DestinationPath:   dep.DestinationPath,
 		}
-
-		// For now, we need to find or create the dependency build.
-		// In a full implementation, each job in the pipeline creates its own Build record,
-		// and the DAG is managed across builds. Here we set up the relationship.
-		//
-		// If the dependency build already exists, link to it.
-		// Otherwise, the dependency will be resolved when the dependent builds are queried.
-		if len(depBuildsForJob) > 0 {
-			d.DependencyID = depBuildsForJob[0].ID
-		}
-
 		if err := s.buildStore.CreateDependence(ctx, d); err != nil {
-			return depBuilds, fmt.Errorf("create dependence for %q: %w", dep.JobName, err)
+			return fmt.Errorf("create dependence for %q: %w", dep.JobName, err)
 		}
 	}
-
-	return depBuilds, nil
+	return nil
 }
 
-// runBuild executes a build in a goroutine. It manages the full lifecycle:
-//  1. Transition WAITING -> PENDING (if not already)
-//  2. Wait for dependencies
-//  3. Transition PENDING -> RUNNING
-//  4. Find executor and create context
-//  5. Execute steps
-//  6. Update status based on results (SUCCESSFUL, FAILED, CANCELLED, TIMED_OUT)
-//  7. Log completion
+// runBuild executes a build: RUNNING → execute plan (with retry) → terminal state → post-build actions.
 func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildspec.Job) {
-	sm := NewBuildStateMachine(build)
-
-	// 1. Transition to PENDING
-	if build.Status == model.BuildStatusWaiting {
-		if err := sm.Transition(model.BuildStatusPending); err == nil {
-			now := time.Now().UTC()
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusPending)
-			_ = s.buildStore.UpdateDates(ctx, build.ID, &now, nil, nil)
-		}
-	}
-
-	// 2. Wait for dependencies (check periodically)
-	if err := s.waitForDependencies(ctx, build, job); err != nil {
-		// Dependencies failed or context cancelled
-		if errors.Is(err, context.Canceled) {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusCancelled)
-		} else {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusFailed)
-		}
-		now := time.Now().UTC()
-		_ = s.buildStore.UpdateDates(ctx, build.ID, nil, nil, &now)
+	if build.Status != model.BuildStatusPending {
 		return
 	}
 
-	// Reload build to get updated status (in case it was cancelled while waiting)
-	build, err := s.buildStore.Get(ctx, build.ID)
-	if err != nil || build.Status != model.BuildStatusPending {
-		if err == nil && build.Status == model.BuildStatusCancelled {
-			return
-		}
-	}
-
-	// 3. Transition to RUNNING
+	sm := NewBuildStateMachine(build)
 	if err := sm.Transition(model.BuildStatusRunning); err != nil {
 		return
 	}
@@ -562,34 +560,77 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 	_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusRunning)
 	_ = s.buildStore.UpdateDates(ctx, build.ID, nil, &now, nil)
 
-	// 4. Find executor and create context
+	spec, _, specErr := s.loadBuildSpec(ctx, build.ProjectID, build.CommitHash, build.RefName)
+	if specErr != nil {
+		s.finishBuild(ctx, build.ID, model.BuildStatusFailed, now)
+		return
+	}
+	if j, ok := spec.GetJobMap()[build.JobName]; ok && j != nil {
+		job = j
+		job.Defaults()
+	}
+
 	projectDir := s.projects.ProjectDir(build.ProjectID)
 	jobCtx, err := NewJobContext(build, job, projectDir)
 	if err != nil {
-		_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusFailed)
-		_ = s.buildStore.UpdateDates(ctx, build.ID, nil, nil, &now)
+		s.finishBuild(ctx, build.ID, model.BuildStatusFailed, now)
 		return
+	}
+	if proj, err := s.projects.Get(ctx, build.ProjectID); err == nil && proj != nil {
+		jobCtx.ProjectPath = proj.Path
+	}
+	jobCtx.GitDir = s.projects.GitDir(build.ProjectID)
+
+	plan, err := execplan.CompileJob(execplan.CompileContext{
+		Spec:     spec,
+		Job:      job,
+		ParamMap: jobCtx.ParamMap,
+	})
+	if err != nil {
+		s.finishBuild(ctx, build.ID, model.BuildStatusFailed, now)
+		return
+	}
+	jobCtx.RequiresDocker = executor.PlanNeedsDocker(plan) || len(job.RequiredServices) > 0
+
+	if !s.acquireSequentialLock(job.SequentialGroup, job.Timeout) {
+		_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusPending)
+		return
+	}
+	defer s.releaseSequentialLock(job.SequentialGroup)
+
+	if (jobCtx.PreferredExecutor == "remote-shell" || jobCtx.PreferredExecutor == "") && s.agentService != nil {
+		if agents, err := s.agentService.GetOnlineAgents(ctx); err == nil && len(agents) > 0 {
+			jobCtx.AgentID = agents[0]
+		}
+	}
+
+		jobCtx.ServerSteps = &executor.DefaultServerStepHandler{
+		BuildStore:    s.buildStore,
+		ArtifactStore: s,
+		GitDir:        jobCtx.GitDir,
+		Projects:      s.projects,
+		ReportStore:   s,
+	}
+	if s.cache != nil {
+		jobCtx.Cache = &executor.RunCacheHandler{Cache: s.cache}
 	}
 
 	executor_, ok := s.registry.Find(ctx, jobCtx)
 	if !ok {
-		_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusFailed)
-		_ = s.buildStore.UpdateDates(ctx, build.ID, nil, nil, &now)
+		s.finishBuild(ctx, build.ID, model.BuildStatusFailed, now)
 		return
 	}
 
-	// Apply timeout
+	execCtx := ctx
 	if job.Timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(job.Timeout)*time.Second)
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(job.Timeout)*time.Second)
 		defer cancel()
 	}
 
-	// 5. Create build logger and track running job
 	logger := executor.NewBuildLogger(build.ID)
-
 	s.mu.Lock()
-	runCtx, runCancel := context.WithCancel(ctx)
+	runCtx, runCancel := context.WithCancel(execCtx)
 	s.runningJobs[build.Token] = &RunningJob{
 		BuildID:    build.ID,
 		JobToken:   build.Token,
@@ -598,116 +639,107 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 		Logger:     logger,
 	}
 	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.runningJobs, build.Token)
+		s.mu.Unlock()
+	}()
 
-	// 6. Execute steps
-	commands := extractCommands(job.Steps)
-	results, execErr := executor_.Execute(runCtx, jobCtx, commands, logger)
+	s.setActiveJobContext(build.Token, &ActiveJobContext{
+		BuildID:      build.ID,
+		JobCtx:       jobCtx,
+		Plan:         plan,
+		ExecutorName: executor_.Name(),
+	})
 
-	// 7. Clean up running job
-	s.mu.Lock()
-	delete(s.runningJobs, build.Token)
-	s.mu.Unlock()
+	workDir := projectDir
+	if sh, ok := executor_.(*executor.ServerShellExecutor); ok {
+		workDir = sh.WorkDirFor(jobCtx)
+	} else if de, ok := executor_.(*executor.DockerExecutor); ok {
+		workDir = de.WorkDirFor(jobCtx)
+	}
+	s.copyDependencyArtifacts(ctx, build.ID, workDir)
+	s.attachLogPersistence(build.ID, logger)
 
-	// 8. Update status based on results
-	finishTime := time.Now().UTC()
+	retried := 0
+	var finalStatus model.BuildStatus
+	var buildSuccess bool
 
-	if execErr != nil {
-		// Check for timeout vs cancellation vs execution error
-		if errors.Is(execErr, context.DeadlineExceeded) {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusTimedOut)
-		} else if errors.Is(execErr, context.Canceled) {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusCancelled)
-		} else {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusFailed)
+retryLoop:
+	for {
+		results, execErr := executor_.ExecutePlan(runCtx, jobCtx, plan, logger)
+
+		if execErr != nil {
+			if errors.Is(execErr, context.DeadlineExceeded) {
+				finalStatus = model.BuildStatusTimedOut
+			} else if errors.Is(execErr, context.Canceled) {
+				finalStatus = model.BuildStatusCancelled
+			} else {
+				finalStatus = model.BuildStatusFailed
+			}
+			buildSuccess = false
+			break
 		}
-	} else {
-		success := true
+
+		buildSuccess = true
+		var errMsg string
 		for _, r := range results {
 			if !r.Success {
-				success = false
+				buildSuccess = false
+				errMsg = r.Error
 				break
 			}
 		}
-		if success {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusSuccessful)
-		} else {
-			_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusFailed)
+		if buildSuccess {
+			finalStatus = model.BuildStatusSuccessful
+			break
 		}
-	}
 
-	_ = s.buildStore.UpdateDates(ctx, build.ID, nil, nil, &finishTime)
-}
-
-// waitForDependencies blocks until all build dependencies are satisfied or
-// one fails (with RequireSuccessful). It polls the dependency status periodically.
-func (s *Service) waitForDependencies(ctx context.Context, build *model.Build, job *buildspec.Job) error {
-	if len(job.JobDependencies) == 0 {
-		return nil
-	}
-
-	// Poll every 5 seconds for dependency resolution
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
+		finalStatus = model.BuildStatusFailed
+		if retried >= job.MaxRetries || !MatchesRetryCondition(job, RetryContext{
+			Build: build, ErrorMessage: errMsg, ParamMap: jobCtx.ParamMap,
+		}) {
+			break
+		}
+		if logger != nil {
+			logger.Log("warning", "Job will be retried after a while...")
+		}
+		delay := RetryDelaySeconds(job, retried)
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			deps, err := s.buildStore.ListDependencies(ctx, build.ID)
-			if err != nil {
-				continue
-			}
-
-			if len(deps) == 0 {
-				// No dependency records means the build can proceed
-				return nil
-			}
-
-			allSatisfied := true
-			for _, dep := range deps {
-				if dep.DependencyID == 0 {
-					// Dependency not yet resolved; keep waiting
-					allSatisfied = false
-					continue
-				}
-
-				depBuild, err := s.buildStore.Get(ctx, dep.DependencyID)
-				if err != nil {
-					allSatisfied = false
-					continue
-				}
-
-				depSm := NewBuildStateMachine(depBuild)
-				if depSm.IsTerminal() {
-					if dep.RequireSuccessful && depBuild.Status != model.BuildStatusSuccessful {
-						// Dependency failed and we require success
-						return fmt.Errorf("dependency build %d failed (status: %s)",
-							dep.DependencyID, depBuild.Status)
-					}
-					// Dependency completed (success or not); continue
-				} else {
-					allSatisfied = false
-				}
-			}
-
-			if allSatisfied {
-				return nil
-			}
+		case <-runCtx.Done():
+			finalStatus = model.BuildStatusCancelled
+			buildSuccess = false
+			break retryLoop
+		case <-time.After(time.Duration(delay) * time.Second):
 		}
+		if runCtx.Err() != nil {
+			finalStatus = model.BuildStatusCancelled
+			buildSuccess = false
+			break retryLoop
+		}
+		retried++
+		_ = s.buildStore.UpdateRetryPending(ctx, build.ID)
+		build, _ = s.buildStore.Get(ctx, build.ID)
+		sm = NewBuildStateMachine(build)
+		_ = sm.Transition(model.BuildStatusRunning)
+		_ = s.buildStore.UpdateStatus(ctx, build.ID, model.BuildStatusRunning)
+	}
+
+	finishTime := time.Now().UTC()
+	s.finishBuild(ctx, build.ID, finalStatus, finishTime)
+
+	build, _ = s.buildStore.Get(ctx, build.ID)
+	s.runPostBuildActions(ctx, build, job, buildSuccess)
+	s.notifyDependencyFinished(ctx, build)
+
+	// Promote dependent WAITING builds
+	deps, _ := s.buildStore.ListDependents(ctx, build.ID)
+	for _, d := range deps {
+		s.promoteWaitingBuild(ctx, d.DependentID)
 	}
 }
 
-// extractCommands extracts command strings from job steps for executor execution.
-// Currently only handles CommandStep types.
-func extractCommands(steps buildspec.Steps) []string {
-	var commands []string
-	for _, step := range steps {
-		if cs, ok := step.(*buildspec.CommandStep); ok {
-			if cs.Commands != "" {
-				commands = append(commands, cs.Commands)
-			}
-		}
-	}
-	return commands
+func (s *Service) finishBuild(ctx context.Context, buildID int64, status model.BuildStatus, finishTime time.Time) {
+	_ = s.buildStore.UpdateStatus(ctx, buildID, status)
+	_ = s.buildStore.UpdateDates(ctx, buildID, nil, nil, &finishTime)
 }

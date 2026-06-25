@@ -54,10 +54,6 @@ function getMockTree(): MockNode {
         type: "file",
         content: "# Demo Project\n\nWelcome to BuildX.\n",
       },
-      ".onedev-buildspec.yml": {
-        type: "file",
-        content: "version: 1\njobs:\n  - name: CI\n    steps:\n      - !CommandStep\n        name: build\n        runInContainer: true\n        image: golang:1.22\n        commands:\n          - go build ./...\n",
-      },
       src: {
         type: "directory",
         children: {

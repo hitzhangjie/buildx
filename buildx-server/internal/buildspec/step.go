@@ -184,9 +184,11 @@ func (s *CheckoutStep) StepType() StepType { return StepTypeCheckout }
 
 // SetupCacheStep restores/saves a cache (maps to SetupCacheStep.java).
 type SetupCacheStep struct {
-	StepBase `yaml:",inline"`
-	Key      string   `yaml:"key" json:"key"`
-	Paths    []string `yaml:"paths" json:"paths"`
+	StepBase      `yaml:",inline"`
+	Key           string   `yaml:"key" json:"key"`
+	ChecksumFiles string   `yaml:"checksumFiles,omitempty" json:"checksumFiles,omitempty"`
+	Paths         []string `yaml:"paths" json:"paths"`
+	UploadStrategy string  `yaml:"uploadStrategy,omitempty" json:"uploadStrategy,omitempty"`
 }
 
 func (s *SetupCacheStep) StepType() StepType { return StepTypeSetupCache }
@@ -198,6 +200,7 @@ func (s *SetupCacheStep) StepType() StepType { return StepTypeSetupCache }
 // PublishArtifactStep publishes build artifacts (maps to PublishArtifactStep.java).
 type PublishArtifactStep struct {
 	StepBase   `yaml:",inline"`
+	SourcePath string `yaml:"sourcePath,omitempty" json:"sourcePath,omitempty"`
 	Artifacts  string `yaml:"artifacts" json:"artifacts"`
 	TargetPath string `yaml:"targetPath,omitempty" json:"targetPath,omitempty"`
 }

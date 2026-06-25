@@ -5,10 +5,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/artifact"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/build"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/security"
@@ -18,10 +20,11 @@ const maxBuildPageSize = 100
 
 // BuildsHandler serves OneDev-compatible /~api/builds endpoints.
 type BuildsHandler struct {
-	Builds   buildStore
-	Projects projectService
-	Security securityService
-	Jobs     JobService // optional, for run/cancel operations
+	Builds    buildStore
+	Projects  projectService
+	Security  securityService
+	Jobs      JobService // optional, for run/cancel operations
+	Artifacts *artifact.Store
 }
 
 type buildStore interface {
@@ -477,4 +480,48 @@ func ParseBuildID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 		return 0, false
 	}
 	return id, true
+}
+
+// ListArtifacts handles GET /~api/builds/{buildId}/artifacts
+func (h *BuildsHandler) ListArtifacts(w http.ResponseWriter, r *http.Request, buildID int64) {
+	op := StartOp(r, "BuildsHandler.ListArtifacts", "build_id", buildID)
+	b, err := h.Builds.Get(r.Context(), buildID)
+	if err != nil {
+		http.Error(w, "build not found", http.StatusNotFound)
+		return
+	}
+	if h.Artifacts == nil {
+		writeJSON(w, r, http.StatusOK, []string{})
+		return
+	}
+	paths, err := h.Artifacts.List(b.ProjectID, b.Number)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	op.OK(http.StatusOK)
+	writeJSON(w, r, http.StatusOK, paths)
+}
+
+// DownloadArtifact handles GET /~api/builds/{buildId}/artifacts/{artifactPath}
+func (h *BuildsHandler) DownloadArtifact(w http.ResponseWriter, r *http.Request, buildID int64, artifactPath string) {
+	op := StartOp(r, "BuildsHandler.DownloadArtifact", "build_id", buildID)
+	b, err := h.Builds.Get(r.Context(), buildID)
+	if err != nil {
+		http.Error(w, "build not found", http.StatusNotFound)
+		return
+	}
+	if h.Artifacts == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	rc, err := h.Artifacts.Open(b.ProjectID, b.Number, artifactPath)
+	if err != nil {
+		http.Error(w, "artifact not found", http.StatusNotFound)
+		return
+	}
+	defer rc.Close()
+	w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(artifactPath))
+	_, _ = io.Copy(w, rc)
+	op.OK(http.StatusOK)
 }

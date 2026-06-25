@@ -46,13 +46,18 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 
 ### Phase 3 — CI/CD
 
-- [ ] Buildspec parser (`.onedev-buildspec.yml`, OneDev-compatible)
-- [ ] Job scheduler and build queue
-- [ ] Server shell executor
-- [ ] Server Docker executor
-- [ ] Kubernetes executor
-- [ ] Build log streaming
-- [ ] Job cache and artifacts
+- [x] Buildspec parser (`.onedev-buildspec.yml`, OneDev-compatible) — `internal/buildspec` (steps, templates, triggers; partial)
+- [x] Job scheduler and build queue — `internal/job` WAITING/PENDING polling, dependency gating, retry, resubmit
+- [~] Step → Action IR — `internal/execplan` (+ BuildImage/PullImage/PushImage facades)
+- [~] Server-side steps — PublishArtifact/SetBuildVersion/PublishReport/CreateBranch/CreateTag; CreatePullRequest stub
+- [~] Job cache — `internal/cache` + worker job-cache endpoints
+- [~] Artifacts — publish/copy + `GET /builds/{id}/artifacts` list/download
+- [~] Triggers — Branch/PR + ScheduleTrigger branch cache + minute tick (single-node)
+- [~] Post-build actions — RunJobAction; CreateIssue/SendNotification stub
+- [~] Docker executor — `server-docker` via Docker CLI when available
+- [x] Agent WorkerResource API (JSON) + RemoteShell ExecutePlan over WebSocket
+- [x] Server shell executor — `internal/executor/servershell` with `ExecutePlan`
+- [~] Build log streaming — in-memory + basic file persistence under data dir
 
 **Milestone**: Push code → CI runs → status reported on PR.
 

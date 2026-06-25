@@ -13,9 +13,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/codecomment"
-	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/build"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/issue"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/job"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/invitation"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/issuesetting"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/persistence/sqlite"
@@ -34,6 +35,7 @@ type Server struct {
 	store  *sqlite.Store
 	router chi.Router
 	http   *http.Server
+	jobs   *job.Service // CI engine; nil only in tests that skip wireCI
 }
 
 // New constructs a Server with routes wired but not yet listening.
@@ -92,15 +94,17 @@ func (s *Server) routes() chi.Router {
 	workspacesHandler := &api.WorkspacesHandler{Workspaces: workspacesStore, Projects: projects, Security: sec}
 	codeStatsHandler := &api.CodeStatsHandler{Projects: projects, Security: sec}
 
-	// CI engine handlers (job service and agent store may be nil until wired).
-	var jobService api.JobService
-	var logService api.LogService
-	var agentStore api.AgentStore
-	jobRunHandler := &api.JobRunHandler{Jobs: jobService, Builds: buildsStore, Projects: projects, Security: sec}
-	buildLogHandler := &api.BuildLogHandler{Jobs: logService, Builds: buildsStore, Security: sec}
-	agentsHandler := &api.AgentsHandler{Agents: agentStore, Security: sec}
-	// Update buildsHandler with optional job service for run/cancel.
-	buildsHandler.Jobs = jobService
+	// CI engine
+	ci := s.wireCI(projects, buildsStore)
+	gitHandler.CINotifier = ci.jobs
+	pullRequestsHandler.CINotifier = ci.jobs
+	jobRunHandler := &api.JobRunHandler{Jobs: ci.jobs, Builds: buildsStore, Projects: projects, Security: sec}
+	buildLogHandler := &api.BuildLogHandler{Jobs: ci.jobs, Builds: buildsStore, Security: sec}
+	agentsHandler := &api.AgentsHandler{Agents: ci.agentStore, Security: sec}
+	buildsHandler.Jobs = ci.jobs
+	buildsHandler.Artifacts = ci.artifactStore
+	workerHandler := ci.worker
+	agentWS := ci.agentWS
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -774,6 +778,29 @@ func (s *Server) routes() chi.Router {
 			}
 			buildsHandler.Cancel(w, r, id)
 		})
+		r.Get("/builds/{buildId}/artifacts", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			buildsHandler.ListArtifacts(w, r, id)
+		})
+		r.Get("/builds/{buildId}/artifacts/*", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			path := chi.URLParam(r, "*")
+			buildsHandler.DownloadArtifact(w, r, id, path)
+		})
+
+		// Agent WebSocket (token query param)
+		r.Get("/agents/ws", agentWS.ServeHTTP)
+
+		// Internal worker API for build agents
+		r.Route("/worker", func(r chi.Router) {
+			workerHandler.RegisterRoutes(r)
+		})
 
 		// Agent management routes (admin only)
 		r.Get("/agents", agentsHandler.Query)
@@ -876,6 +903,11 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = s.store.Close() }()
+
+	if s.jobs != nil {
+		s.jobs.StartScheduler(ctx)
+		s.jobs.StartScheduleTicker(ctx)
+	}
 
 	listener, err := net.Listen("tcp", s.cfg.HTTPAddr)
 	if err != nil {

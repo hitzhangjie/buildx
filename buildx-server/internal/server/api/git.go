@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,12 +19,14 @@ import (
 // URL pattern: /{projectPath}.git/{git-suffix}
 // git-suffix is one of: info/refs, git-upload-pack, git-receive-pack.
 //
-// All git operations use go-git (pure Go) — no system git CLI required.
+// Push uses native git receive-pack; successful pushes optionally notify
+// CINotifier for branch/tag trigger matching.
 //
 // Maps to OneDev: io.onedev.server.git.GitFilter
 type GitHandler struct {
-	Projects projectService
-	Security securityService
+	Projects   projectService
+	Security   securityService
+	CINotifier CINotifier // optional CI trigger hook after push
 }
 
 // Middleware intercepts git requests and delegates others to next.
@@ -120,7 +123,7 @@ func (h *GitHandler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	case "git-upload-pack":
 		h.handleUploadPack(w, r, repo, op)
 	case "git-receive-pack":
-		h.handleReceivePack(w, r, repo, op)
+		h.handleReceivePack(w, r, repo, proj, user, op)
 	default:
 		op.Fail(nil, http.StatusBadRequest, "git_suffix", gitSuffix)
 		http.Error(w, "unknown git service", http.StatusBadRequest)
@@ -209,22 +212,45 @@ func (h *GitHandler) handleUploadPack(w http.ResponseWriter, r *http.Request, re
 
 // handleReceivePack delegates to native "git receive-pack --stateless-rpc".
 // go-git's server-side receive-pack has known issues; see protocol.go.
-func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, repo *git.Repository, op *OpLog) {
+func (h *GitHandler) handleReceivePack(w http.ResponseWriter, r *http.Request, repo *git.Repository, proj *project.Project, user *security.User, op *OpLog) {
 	if r.Method != http.MethodPost {
 		op.Fail(nil, http.StatusMethodNotAllowed)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		http.Error(w, "read body", http.StatusBadRequest)
+		return
+	}
+
+	updates, _ := git.ParseReceiveUpdates(body)
+
 	doNotCache(w)
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 
-	if err := repo.ReceivePack(w, r.Body); err != nil {
+	if err := repo.ReceivePack(w, bytes.NewReader(body)); err != nil {
 		op.Fail(err, http.StatusInternalServerError)
 		slog.ErrorContext(r.Context(), "receive-pack failed", "error", err)
 		return
 	}
-	op.OK(http.StatusOK)
+
+	if h.CINotifier != nil && user != nil {
+		for _, upd := range updates {
+			if git.IsZeroHash(upd.NewHash) {
+				continue
+			}
+			var changed []string
+			if files, err := repo.ChangedFilesBetween(upd.OldHash, upd.NewHash); err == nil {
+				changed = files
+			}
+			h.CINotifier.NotifyRefUpdated(r.Context(), proj.ID, upd.RefName, upd.OldHash, upd.NewHash, user.ID, changed)
+		}
+	}
+
+	op.OK(http.StatusOK, "ref_updates", len(updates))
 }
 
 // ---------- helpers ----------

@@ -118,8 +118,8 @@ func TestBuildStateMachine_CanTransition(t *testing.T) {
 	if !sm.CanTransition(model.BuildStatusSuccessful) {
 		t.Error("RUNNING -> SUCCESSFUL should be valid")
 	}
-	if sm.CanTransition(model.BuildStatusPending) {
-		t.Error("RUNNING -> PENDING should be invalid")
+	if !sm.CanTransition(model.BuildStatusPending) {
+		t.Error("RUNNING -> PENDING should be valid (retry)")
 	}
 	if sm.IsPaused() {
 		t.Error("Should not be paused initially")

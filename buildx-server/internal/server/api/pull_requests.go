@@ -19,10 +19,11 @@ const maxPullRequestPageSize = 500
 
 // PullRequestsHandler serves /~api/pulls and related sub-resources.
 type PullRequestsHandler struct {
-	Service  *pullrequest.Service
-	Store    *pullrequest.DBStore
-	Projects projectService
-	Security securityService
+	Service    *pullrequest.Service
+	Store      *pullrequest.DBStore
+	Projects   projectService
+	Security   securityService
+	CINotifier CINotifier // optional CI trigger hook after PR sync
 }
 
 func (h *PullRequestsHandler) Get(w http.ResponseWriter, r *http.Request, requestID int64) {
@@ -440,6 +441,13 @@ func (h *PullRequestsHandler) Synchronize(w http.ResponseWriter, r *http.Request
 		op.Fail(err, http.StatusBadRequest)
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if h.CINotifier != nil {
+		if updated, err := h.Store.Get(r.Context(), requestID); err == nil && updated != nil &&
+			updated.TargetProject != nil && updated.BuildCommitHash != "" {
+			h.CINotifier.NotifyPullRequestUpdated(r.Context(), updated.TargetProject.ID,
+				updated.BuildCommitHash, updated.SourceBranch, nil, user.ID)
+		}
 	}
 	op.OK(http.StatusOK)
 	w.WriteHeader(http.StatusOK)

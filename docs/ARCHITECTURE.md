@@ -54,8 +54,12 @@ Reference source: `references/onedev/server-core/src/main/java/io/onedev/server`
 | `io.onedev.server.model` | `internal/model` | Entity names aligned (`User`, `Project`, `Role`, `AccessToken`, …) |
 | `io.onedev.server.entitymanager` | `internal/entitymanager` (planned) | Service-manager naming stays close to OneDev |
 | `io.onedev.server.git` | `internal/git` | Keep Git protocol concepts aligned |
-| `io.onedev.server.buildspec` | `internal/buildspec` (planned) | Keep buildspec terminology aligned |
-| `io.onedev.server.job` / `...build` | `internal/build` (planned) | Prefer `build` over generic `cicd` for traceability |
+| `io.onedev.server.buildspec` | `internal/buildspec` | YAML parser for jobs, steps, templates, triggers |
+| `io.onedev.k8shelper` (Action IR) | `internal/execplan` | Step → Action/CompositeFacade/LeafFacade compile + traverse |
+| `io.onedev.server.job` | `internal/job` | Submit, scheduling loop, `runBuild`, DAG helpers |
+| `io.onedev.server.build` / build persistence | `internal/build` | Build CRUD REST; execution wired via `job` |
+| `io.onedev.server.service.RunCacheService` | `internal/cache` | Job cache tar storage (project/key/checksum) |
+| Artifact storage (`StorageService.initArtifactsDir`) | `internal/artifact` | Publish + dependency copy |
 | `io.onedev.server.security` | `internal/security` (planned) | Prefer `security` over `auth` for naming parity |
 | `io.onedev.server.search` | `internal/search` (planned) | Keep query/search model aligned |
 | `io.onedev.server.event` | `internal/event` (planned) | Keep event types and names close |
@@ -90,10 +94,12 @@ Lightweight, idiomatic, composable middleware. No heavy framework magic.
 
 Plugin interface inspired by OneDev:
 
-- `servershell` — run on BuildX host
-- `serverdocker` — Docker on host
-- `kubernetes` — K8s jobs (reuse patterns from `references/k8s-helper`)
-- `remoteshell` / `remotedocker` — remote agents
+- `servershell` — run on BuildX host (`internal/executor/servershell`)
+- `serverdocker` — Docker CLI on host (`internal/executor/docker`, auto-enabled when Docker available)
+- `remoteshell` — remote agents via WebSocket `executePlan` + `internal/worker` REST API
+- `kubernetes` — K8s jobs (planned; reuse patterns from `references/k8s-helper`)
+
+Worker/internal API: `buildx-server/internal/worker/` (JSON job-data, run-server-step, cache) maps to OneDev `WorkerResource`.
 
 ### Frontend strategy
 

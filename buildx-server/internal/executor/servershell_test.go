@@ -275,7 +275,7 @@ func TestServerShell_Execute_DurationPopulated(t *testing.T) {
 	ctx := context.Background()
 	jc := &executor.JobContext{BuildID: 11, BuildNumber: 20, ProjectID: 100}
 
-	results, err := e.Execute(ctx, jc, []string{"echo quick"}, nil)
+	results, err := e.Execute(ctx, jc, []string{"sleep 0.05"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

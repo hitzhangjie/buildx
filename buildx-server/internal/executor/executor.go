@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 )
 
 // JobContext holds the runtime context for a job execution.
@@ -30,6 +32,21 @@ type JobContext struct {
 	EnvVars     map[string]string
 	ParamMap    map[string]string
 	Timeout     int64 // seconds; 0 means no timeout
+
+	// GitDir is the bare repository path for checkout steps (server-shell).
+	GitDir string
+
+	// ServerSteps executes server-side buildspec steps (PublishArtifact, SetBuildVersion, …).
+	ServerSteps ServerStepHandler
+
+	// Cache restores/saves job cache (SetupCacheStep).
+	Cache CacheHandler
+
+	// PreferredExecutor is set from buildspec job.jobExecutor before registry lookup.
+	PreferredExecutor string
+
+	// RequiresDocker is set when the compiled plan needs a docker-aware executor.
+	RequiresDocker bool
 }
 
 // TaskLogger is the logging interface for job steps.
@@ -68,13 +85,10 @@ type JobExecutor interface {
 	// Examples: "server-shell", "remote-shell", "kubernetes".
 	Name() string
 
-	// Execute runs job steps in the given context. Returns one StepResult per
-	// command. The executor is responsible for setting up the environment
-	// (checking out code, creating directories), running the commands,
-	// and streaming logs back through the TaskLogger.
-	//
-	// If the context is cancelled (timeout or build cancellation), the executor
-	// should terminate all running processes and return the partial results.
+	// ExecutePlan runs a compiled Action plan in the given context.
+	ExecutePlan(ctx context.Context, jobCtx *JobContext, plan *execplan.Plan, logger TaskLogger) ([]StepResult, error)
+
+	// Execute runs legacy flat command strings. Prefer ExecutePlan for new code.
 	Execute(ctx context.Context, jobCtx *JobContext, commands []string, logger TaskLogger) ([]StepResult, error)
 
 	// IsApplicable checks if this executor can handle the given job context.
@@ -151,13 +165,42 @@ func (r *Registry) List() []JobExecutor {
 	return list
 }
 
+// executorPriority defines selection order (first applicable wins).
+var executorPriority = []string{"remote-shell", "server-docker", "server-shell"}
+
 // Find locates the first enabled executor whose IsApplicable returns true for
-// the given job context. This is used to select the executor for a new build.
-// Returns nil, false if no executor matches.
+// the given job context. Honors jobCtx.PreferredExecutor when set.
 func (r *Registry) Find(ctx context.Context, jobCtx *JobContext) (JobExecutor, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
+	if jobCtx != nil && jobCtx.PreferredExecutor != "" {
+		if e, ok := r.executors[jobCtx.PreferredExecutor]; ok {
+			cfg := r.configs[jobCtx.PreferredExecutor]
+			if cfg != nil && cfg.Enabled && e.IsApplicable(ctx, jobCtx) {
+				return e, true
+			}
+		}
+	}
+
+	order := executorPriority
+	for _, name := range order {
+		e, ok := r.executors[name]
+		if !ok {
+			continue
+		}
+		cfg, ok := r.configs[name]
+		if !ok || !cfg.Enabled {
+			continue
+		}
+		if e.IsApplicable(ctx, jobCtx) {
+			return e, true
+		}
+	}
 	for name, e := range r.executors {
+		if containsString(order, name) {
+			continue
+		}
 		cfg, ok := r.configs[name]
 		if !ok || !cfg.Enabled {
 			continue
@@ -167,6 +210,15 @@ func (r *Registry) Find(ctx context.Context, jobCtx *JobContext) (JobExecutor, b
 		}
 	}
 	return nil, false
+}
+
+func containsString(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 // Configs returns a copy of all registered executor configurations.

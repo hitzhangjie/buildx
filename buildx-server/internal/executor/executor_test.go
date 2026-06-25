@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 )
 
@@ -388,5 +389,9 @@ func (m *mockExecutor) SupportsSitePublishing() bool {
 }
 
 func (m *mockExecutor) Execute(ctx context.Context, jobCtx *executor.JobContext, commands []string, logger executor.TaskLogger) ([]executor.StepResult, error) {
+	return m.ExecutePlan(ctx, jobCtx, execplan.NewCommandsPlan(commands), logger)
+}
+
+func (m *mockExecutor) ExecutePlan(ctx context.Context, jobCtx *executor.JobContext, plan *execplan.Plan, logger executor.TaskLogger) ([]executor.StepResult, error) {
 	return nil, errors.New("not implemented")
 }

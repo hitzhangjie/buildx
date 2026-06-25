@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/agent/protocol"
 )
 
 var defaultUpgrader = websocket.Upgrader{
@@ -85,6 +86,9 @@ func (ws *AgentWebSocket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("agent %d (%s): connected", agent.ID, agent.Name)
 
+	wsConn := &wsSession{conn: conn, connectedAt: time.Now().UTC()}
+	ws.service.SetSessionConn(agent.ID, wsConn)
+
 	// Read loop
 	for {
 		_, message, err := conn.ReadMessage()
@@ -106,6 +110,8 @@ func (ws *AgentWebSocket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ws.handleHeartbeat(agent.ID, msg)
 		case "log":
 			ws.handleLog(agent.ID, msg)
+		case "jobComplete", "jobFinished":
+			ws.handleJobComplete(msg)
 		default:
 			log.Printf("agent %d: unknown message type: %s", agent.ID, msg.Type)
 		}
@@ -113,32 +119,54 @@ func (ws *AgentWebSocket) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ws *AgentWebSocket) handleHeartbeat(agentID int64, msg agentMessage) {
-	var cpuLoad float64
-	if v, ok := msg.Data["cpuLoad"]; ok {
-		cpuLoad, _ = v.(float64)
+	cpuLoad := msg.CPU
+	if cpuLoad == 0 && msg.Data != nil {
+		if v, ok := msg.Data["cpuLoad"]; ok {
+			cpuLoad, _ = v.(float64)
+		}
 	}
 	var memFree int64
-	if v, ok := msg.Data["memFree"]; ok {
-		memFree = int64(v.(float64))
+	if msg.Data != nil {
+		if v, ok := msg.Data["memFree"]; ok {
+			memFree = int64(v.(float64))
+		}
+	} else {
+		memFree = int64(msg.MemFree)
 	}
 	var diskFree int64
-	if v, ok := msg.Data["diskFree"]; ok {
-		diskFree = int64(v.(float64))
+	if msg.Data != nil {
+		if v, ok := msg.Data["diskFree"]; ok {
+			diskFree = int64(v.(float64))
+		}
+	} else {
+		diskFree = int64(msg.DiskFree)
 	}
 
 	_ = ws.service.Heartbeat(context.Background(), agentID, cpuLoad, memFree, diskFree)
 }
 
 func (ws *AgentWebSocket) handleLog(agentID int64, msg agentMessage) {
-	level := "INFO"
-	if l, ok := msg.Data["level"]; ok {
-		level, _ = l.(string)
+	level := msg.Level
+	if level == "" && msg.Data != nil {
+		if l, ok := msg.Data["level"]; ok {
+			level, _ = l.(string)
+		}
 	}
-	message := ""
-	if m, ok := msg.Data["message"]; ok {
-		message, _ = m.(string)
+	if level == "" {
+		level = "INFO"
+	}
+	message := msg.Message
+	if message == "" && msg.Data != nil {
+		if m, ok := msg.Data["message"]; ok {
+			message, _ = m.(string)
+		}
 	}
 	ws.service.logStore.Append(agentID, level, message)
+}
+
+func (ws *AgentWebSocket) handleJobComplete(msg agentMessage) {
+	result := protocol.JobResultFromMessage(msg.JobToken, msg.Success, msg.Error, msg.Steps)
+	protocol.CompletePending(result)
 }
 
 // SendExec sends an execution command to an agent via its WebSocket session.
@@ -168,8 +196,17 @@ func (ws *AgentWebSocket) SendRestart(agentID int64) error {
 
 // agentMessage represents a JSON message exchanged with an agent.
 type agentMessage struct {
-	Type string         `json:"type"`
-	Data map[string]any `json:"data,omitempty"`
+	Type     string          `json:"type"`
+	Data     map[string]any  `json:"data,omitempty"`
+	JobToken string          `json:"jobToken,omitempty"`
+	Success  bool            `json:"success,omitempty"`
+	Steps    json.RawMessage `json:"steps,omitempty"`
+	Error    string          `json:"error,omitempty"`
+	CPU      float64         `json:"cpuLoad,omitempty"`
+	MemFree  float64         `json:"memFree,omitempty"`
+	DiskFree float64         `json:"diskFree,omitempty"`
+	Level    string          `json:"level,omitempty"`
+	Message  string          `json:"message,omitempty"`
 }
 
 // wsSession wraps a WebSocket connection for an agent session.

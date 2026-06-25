@@ -3,45 +3,174 @@ package executor
 import (
 	"context"
 	"fmt"
+	"os/exec"
+
+	"github.com/hitzhangjie/buildx/buildx-server/internal/buildspec"
 )
 
-// ServerStepResult is returned by server-side step execution.
-// These steps execute directly on the server (e.g., branch operations,
-// pull request creation, version tagging) rather than on an agent.
-type ServerStepResult struct {
-	Success bool              `json:"success"`
-	Message string            `json:"message"`
-	Outputs map[string]string `json:"outputs,omitempty"`
+// ProjectPathResolver resolves project paths for server steps.
+type ProjectPathResolver interface {
+	GitDir(projectID int64) string
+}
+
+// BuildVersionUpdater updates build metadata from server steps.
+type BuildVersionUpdater interface {
+	UpdateVersion(ctx context.Context, buildID int64, version string) error
+}
+
+// ArtifactPublisher stores build artifacts from the work directory.
+type ArtifactPublisher interface {
+	PublishArtifacts(ctx context.Context, projectID int64, buildNumber int, workDir, sourcePath, patterns string) error
+}
+
+// DefaultServerStepHandler implements server-side steps with injected stores.
+type DefaultServerStepHandler struct {
+	BuildStore      BuildVersionUpdater
+	ArtifactStore   ArtifactPublisher
+	GitDir          string
+	Projects        ProjectPathResolver
+	ReportStore     ReportPublisher
+}
+
+// ReportPublisher stores published test/analysis reports.
+type ReportPublisher interface {
+	PublishReport(ctx context.Context, projectID int64, buildNumber int, name, reportType, path string) error
 }
 
 // RunServerStep executes a single step on the server side.
-// This maps to OneDev's JobService.runServerStep and handles steps that must
-// run on the server rather than on a build agent, such as:
-//   - CreateBranch / DeleteBranch
-//   - CreatePullRequest / MergePullRequest
-//   - SetBuildVersion
-//   - PublishReport / PublishSite
-//   - SendNotification
-//
-// The step parameter is a typed struct that determines the operation to
-// perform (e.g., CreateBranchStep, SetBuildVersionStep). The implementation
-// uses a type switch to dispatch to the appropriate handler.
-//
-// TODO: Implement individual step handlers as the corresponding OneDev step
-// types are ported. For now this is a placeholder that logs the step type
-// and returns an unimplemented error.
-func RunServerStep(ctx context.Context, step interface{}, jobCtx *JobContext, logger TaskLogger) (*ServerStepResult, error) {
+func RunServerStep(ctx context.Context, step interface{}, jobCtx *JobContext, workDir string, logger TaskLogger) (*ServerStepResult, error) {
 	if step == nil {
 		return nil, fmt.Errorf("runServerStep: step is nil")
 	}
+	if jobCtx != nil && jobCtx.ServerSteps != nil {
+		if bs, ok := step.(buildspec.Step); ok {
+			return jobCtx.ServerSteps.RunServerStep(ctx, bs, jobCtx, workDir, logger)
+		}
+	}
+	return runServerStepBuiltin(ctx, step, jobCtx, workDir, logger)
+}
+
+func (h *DefaultServerStepHandler) RunServerStep(ctx context.Context, step buildspec.Step, jobCtx *JobContext, workDir string, logger TaskLogger) (*ServerStepResult, error) {
+	if h == nil {
+		return runServerStepBuiltin(ctx, step, jobCtx, workDir, logger)
+	}
+	switch s := step.(type) {
+	case *buildspec.SetBuildVersionStep:
+		if h.BuildStore == nil {
+			return nil, fmt.Errorf("runServerStep: build store not configured")
+		}
+		if err := h.BuildStore.UpdateVersion(ctx, jobCtx.BuildID, s.Version); err != nil {
+			return &ServerStepResult{Success: false, Message: err.Error()}, nil
+		}
+		if logger != nil {
+			logger.Logf("info", "build version set to %q", s.Version)
+		}
+		return &ServerStepResult{Success: true, Outputs: map[string]string{"version": s.Version}}, nil
+
+	case *buildspec.PublishArtifactStep:
+		if h.ArtifactStore == nil {
+			return nil, fmt.Errorf("runServerStep: artifact store not configured")
+		}
+		if err := h.ArtifactStore.PublishArtifacts(ctx, jobCtx.ProjectID, jobCtx.BuildNumber, workDir, s.SourcePath, s.Artifacts); err != nil {
+			return &ServerStepResult{Success: false, Message: err.Error()}, nil
+		}
+		if logger != nil {
+			logger.Log("info", "artifacts published")
+		}
+		return &ServerStepResult{Success: true}, nil
+
+	case *buildspec.PublishReportStep:
+		if h.ReportStore != nil {
+			reportPath := s.Path
+			if reportPath != "" && workDir != "" {
+				reportPath = workDir + "/" + reportPath
+			}
+			if err := h.ReportStore.PublishReport(ctx, jobCtx.ProjectID, jobCtx.BuildNumber, s.ReportName, s.ReportType, reportPath); err != nil {
+				return &ServerStepResult{Success: false, Message: err.Error()}, nil
+			}
+		} else if logger != nil {
+			logger.Logf("info", "report %q registered (type %s)", s.ReportName, s.ReportType)
+		}
+		return &ServerStepResult{Success: true}, nil
+
+	case *buildspec.CreateBranchStep:
+		gitDir := h.gitDirFor(jobCtx)
+		if gitDir == "" {
+			return &ServerStepResult{Success: false, Message: "git directory not configured"}, nil
+		}
+		if err := createGitRef(ctx, gitDir, "branch", s.BranchName, jobCtx.CommitHash, s.CommitMessage); err != nil {
+			return &ServerStepResult{Success: false, Message: err.Error()}, nil
+		}
+		if logger != nil {
+			logger.Logf("info", "branch %q created", s.BranchName)
+		}
+		return &ServerStepResult{Success: true}, nil
+
+	case *buildspec.CreateTagStep:
+		gitDir := h.gitDirFor(jobCtx)
+		if gitDir == "" {
+			return &ServerStepResult{Success: false, Message: "git directory not configured"}, nil
+		}
+		if err := createGitRef(ctx, gitDir, "tag", s.TagName, jobCtx.CommitHash, s.Message); err != nil {
+			return &ServerStepResult{Success: false, Message: err.Error()}, nil
+		}
+		if logger != nil {
+			logger.Logf("info", "tag %q created", s.TagName)
+		}
+		return &ServerStepResult{Success: true}, nil
+
+	default:
+		return runServerStepBuiltin(ctx, step, jobCtx, workDir, logger)
+	}
+}
+
+func (h *DefaultServerStepHandler) gitDirFor(jobCtx *JobContext) string {
+	if h.GitDir != "" {
+		return h.GitDir
+	}
+	if h.Projects != nil && jobCtx != nil {
+		return h.Projects.GitDir(jobCtx.ProjectID)
+	}
+	if jobCtx != nil {
+		return jobCtx.GitDir
+	}
+	return ""
+}
+
+func createGitRef(ctx context.Context, gitDir, kind, name, commitHash, message string) error {
+	if name == "" || commitHash == "" {
+		return fmt.Errorf("ref name and commit are required")
+	}
+	switch kind {
+	case "branch":
+		cmd := exec.CommandContext(ctx, "git", "-C", gitDir, "branch", name, commitHash)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git branch: %s: %w", string(out), err)
+		}
+		return nil
+	case "tag":
+		args := []string{"-C", gitDir, "tag", name, commitHash}
+		if message != "" {
+			args = []string{"-C", gitDir, "tag", "-a", name, commitHash, "-m", message}
+		}
+		cmd := exec.CommandContext(ctx, "git", args...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("git tag: %s: %w", string(out), err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown ref kind %q", kind)
+	}
+}
+
+func runServerStepBuiltin(ctx context.Context, step interface{}, jobCtx *JobContext, workDir string, logger TaskLogger) (*ServerStepResult, error) {
 	if logger != nil {
 		logger.Logf("info", "running server step: %T", step)
 	}
-
-	// Dispatch to step-specific handlers.
-	// Each case will be implemented as the corresponding OneDev step type is ported.
-	switch s := step.(type) {
+	switch step.(type) {
+	case *buildspec.CreatePullRequestStep:
+		return &ServerStepResult{Success: false, Message: "CreatePullRequestStep not yet implemented"}, nil
 	default:
-		return nil, fmt.Errorf("runServerStep: unsupported step type %T", s)
+		return nil, fmt.Errorf("runServerStep: unsupported step type %T", step)
 	}
 }

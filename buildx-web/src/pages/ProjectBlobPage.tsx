@@ -33,6 +33,8 @@ import { SourceView } from "../components/onedev/SourceView";
 import { MarkdownContent } from "../components/onedev/MarkdownContent";
 import { useAuth } from "../context/AuthContext";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
+import { BuildSpecBlobEditPanel } from "../components/buildspec/BuildSpecBlobEditPanel";
+import { isBuildSpecPath, BUILD_SPEC_PATH, LEGACY_BUILD_SPEC_PATH } from "../buildspec/path";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
 import { CommitOptionPanel } from "./project/blob/CommitOptionPanel";
 import { InlineDropdown } from "../components/onedev/DropdownMenu";
@@ -42,6 +44,31 @@ import { AdvancedSearchPanel } from "../components/search/AdvancedSearchPanel";
 import { SearchResultPanel } from "../components/search/SearchResultPanel";
 import "./project-blob-page.css";
 import { bindBlobSearchShortcuts } from "../util/blobSearchShortcuts";
+import { Icon } from "../components/onedev/Icon";
+
+function hasBuildSpec(entries?: BlobEntry[]): boolean {
+  if (!entries) {
+    return false;
+  }
+  return entries.some(
+    (entry) =>
+      entry.type === "file" &&
+      (entry.name === BUILD_SPEC_PATH ||
+        entry.name === LEGACY_BUILD_SPEC_PATH ||
+        entry.path === BUILD_SPEC_PATH ||
+        entry.path === LEGACY_BUILD_SPEC_PATH),
+  );
+}
+
+function isOnBranch(revision: string, branches: string[]): boolean {
+  if (!revision) {
+    return true;
+  }
+  if (isCommitHash(revision)) {
+    return false;
+  }
+  return branches.length === 0 || branches.includes(revision);
+}
 
 function isMarkdownFile(path: string) {
   return /\.(md|markdown)$/i.test(path);
@@ -180,6 +207,29 @@ function FolderRow({
         {entry.lastCommit?.when}
       </td>
     </tr>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BuildSupportNote — CI/CD setup hint at repo root (OneDev buildSupportNote)
+// ---------------------------------------------------------------------------
+
+function BuildSupportNote({ onAddBuildSpec }: { onAddBuildSpec: () => void }) {
+  return (
+    <div className="build-support-note p-3 flex-shrink-0">
+      <Icon name="bulb" className="icon" />
+      {" Enable CI/CD by "}
+      <a
+        href="#"
+        className="link-primary"
+        onClick={(e) => {
+          e.preventDefault();
+          onAddBuildSpec();
+        }}
+      >
+        adding {BUILD_SPEC_PATH}
+      </a>
+    </div>
   );
 }
 
@@ -1018,6 +1068,15 @@ export function ProjectBlobPage() {
     path === "" &&
     (!blob || (blob.type === "directory" && !(blob.entries?.length)));
   const isEmpty = forceEmpty || hasNoCommits;
+  const showBuildSupportNote =
+    mode === "view" &&
+    path === "" &&
+    !isEmpty &&
+    !loading &&
+    !error &&
+    blob?.type === "directory" &&
+    isOnBranch(activeRevision, branches) &&
+    !hasBuildSpec(blob.entries);
 
   let content: React.ReactNode;
 
@@ -1037,9 +1096,22 @@ export function ProjectBlobPage() {
     } else if (mode === "add" || mode === "edit") {
       // File name entered — show editor
       const existingContent = mode === "edit" && blob?.type === "file" ? (blob.content ?? "") : "";
-      content = (
+      const editFilePath = mode === "edit" ? path : newFilePath;
+      const editingBuildSpec = isBuildSpecPath(editFilePath);
+      content = editingBuildSpec ? (
+        <BuildSpecBlobEditPanel
+          filePath={editFilePath}
+          initialContent={existingContent}
+          revision={displayRevision || revision}
+          mode={mode === "edit" ? "edit" : "add"}
+          position={position}
+          onPositionChange={(nextPosition) => updateBlobQuery({ position: nextPosition })}
+          onCancel={handleCancelEdit}
+          onCommit={handleCommit}
+        />
+      ) : (
         <BlobAddEditPanel
-          filePath={mode === "edit" ? path : newFilePath}
+          filePath={editFilePath}
           initialContent={existingContent}
           revision={displayRevision || revision}
           mode={mode === "edit" ? "edit" : "add"}
@@ -1218,6 +1290,10 @@ export function ProjectBlobPage() {
             </Link>
           </div>
         </div>
+
+        {showBuildSupportNote && (
+          <BuildSupportNote onAddBuildSpec={() => enterAddMode(BUILD_SPEC_PATH)} />
+        )}
 
         <div className="blob-content autofit flex-grow-1 d-flex flex-column overflow-auto">
           {error && !forceEmpty && <div className="alert alert-light-danger m-3">{error}</div>}
