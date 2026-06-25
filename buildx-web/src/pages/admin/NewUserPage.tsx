@@ -12,15 +12,22 @@ import { Layout } from "../../layout/Layout";
 export function NewUserPage() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErrors([]);
+
+    if (password !== confirmPassword) {
+      setErrors(["Password and its confirmation should be identical."]);
+      return;
+    }
+
     setSubmitting(true);
     try {
       await createUser({
@@ -48,7 +55,7 @@ export function NewUserPage() {
             <form method="post" onSubmit={handleSubmit}>
               <FormFeedbackPanel messages={errors} />
               <div className="form-group">
-                <label className="control-label">Name</label>
+                <label className="control-label">Login Name</label>
                 <div className="clearable-wrapper">
                   <input
                     type="text"
@@ -56,6 +63,32 @@ export function NewUserPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     required
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="control-label">Password</label>
+                <div>
+                  <input
+                    type="password"
+                    className="form-control"
+                    placeholder="Type password here"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="password-confirm mt-3">
+                  <input
+                    type="password"
+                    className="form-control"
+                    placeholder="Confirm password here"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
                   />
                 </div>
               </div>
@@ -79,19 +112,6 @@ export function NewUserPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                  />
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="control-label">Password</label>
-                <div className="clearable-wrapper">
-                  <input
-                    type="password"
-                    className="form-control"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    autoComplete="new-password"
                   />
                 </div>
               </div>
