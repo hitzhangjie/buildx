@@ -23,7 +23,7 @@ func Bootstrap(ctx context.Context, db *sql.DB, dataDir string) error {
 	if err := ensureSystemUsers(ctx, db); err != nil {
 		return err
 	}
-	if err := ensureOwnerRole(ctx, db); err != nil {
+	if err := ensureDefaultRoles(ctx, db); err != nil {
 		return err
 	}
 	if err := ensureRootUser(ctx, db); err != nil {
@@ -57,16 +57,26 @@ func ensureSystemUsers(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func ensureOwnerRole(ctx context.Context, db *sql.DB) error {
-	var count int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM o_Role WHERE o_id = ?", model.RoleOwnerID).Scan(&count); err != nil {
-		return err
+func ensureDefaultRoles(ctx context.Context, db *sql.DB) error {
+	roles := []struct {
+		id   int64
+		name string
+	}{
+		{model.RoleOwnerID, "Project Owner"},
+		{2, "Developer"},
+		{3, "Viewer"},
+		{4, "Code Writer"},
+		{5, "Code Reader"},
 	}
-	if count > 0 {
-		return nil
+	for _, r := range roles {
+		_, err := db.ExecContext(ctx,
+			"INSERT OR IGNORE INTO o_Role (o_id, o_name) VALUES (?, ?)",
+			r.id, r.name)
+		if err != nil {
+			return err
+		}
 	}
-	_, err := db.ExecContext(ctx, "INSERT INTO o_Role (o_id, o_name) VALUES (?, ?)", model.RoleOwnerID, "Project Owner")
-	return err
+	return nil
 }
 
 func ensureRootUser(ctx context.Context, db *sql.DB) error {

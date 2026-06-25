@@ -42,7 +42,7 @@ export const GLOBAL_ROUTES: RouteDefinition[] = [
   { path: "/~users/:user/basic-setting", page: "UserBasicSettingPage", title: "Basic Settings", ref: "web/page/user/basicsetting/UserBasicSettingPage", layout: "main" },
   { path: "/~users/:user/email-setting", page: "UserEmailAddressesPage", title: "Email Addresses", ref: "web/page/user/emailaddresses/UserEmailAddressesPage", layout: "main" },
   { path: "/~users/:user/groups", page: "UserMembershipsPage", title: "Groups", ref: "web/page/user/membership/UserMembershipsPage", layout: "main" },
-  { path: "/~users/:user/authorizations", page: "UserAuthorizationsPage", title: "Authorizations", ref: "web/page/user/authorization/UserAuthorizationsPage", layout: "main" },
+  { path: "/~users/:user/authorizations", page: "UserAuthorizationsPage", title: "Authorizations", ref: "web/page/user/authorization/UserAuthorizationsPage", layout: "main", known: "userAuthorizations" },
   { path: "/~users/:user/avatar", page: "UserAvatarPage", title: "Edit Avatar", ref: "web/page/user/avatar/UserAvatarPage", layout: "main" },
   { path: "/~users/:user/password", page: "UserPasswordPage", title: "Password", ref: "web/page/user/password/UserPasswordPage", layout: "main" },
   { path: "/~users/:user/ai-model-setting", page: "UserModelSettingPage", title: "AI Model", ref: "web/page/user/aisetting/UserModelSettingPage", layout: "main" },

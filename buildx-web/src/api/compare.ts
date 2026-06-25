@@ -8,11 +8,17 @@ export type CompareRevision = {
   subject?: string;
 };
 
+export type CompareMergePreview = {
+  conflicted: boolean;
+  mergeCommitHash?: string;
+};
+
 export type CompareResult = {
   left: CompareRevision;
   right: CompareRevision;
   mergeBase?: CompareRevision;
   effectivePullRequest?: PullRequest;
+  mergePreview?: CompareMergePreview;
   commits?: RepositoryCommit[];
   diffs?: FileDiff[];
 };
@@ -39,6 +45,7 @@ export type CompareParams = {
   includeCommits?: boolean;
   includeDiffs?: boolean;
   includeEffectivePullRequest?: boolean;
+  includeMergePreview?: boolean;
   pathFilter?: string;
   whitespaceOption?: WhitespaceOption;
   count?: number;
@@ -62,6 +69,9 @@ export async function fetchCompare(
   }
   if (params.includeEffectivePullRequest) {
     query.set("include-effective-pull-request", "true");
+  }
+  if (params.includeMergePreview) {
+    query.set("include-merge-preview", "true");
   }
   if (params.pathFilter) {
     query.set("path-filter", params.pathFilter);

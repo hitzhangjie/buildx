@@ -48,24 +48,26 @@ export function matchProjectRoute(pathname: string): MatchedProjectRoute | null 
     }
   }
 
+  // Exact literal suffix match takes priority over parameterized regex matches.
+  // This prevents /~pulls/new from being captured by /~pulls/:request,
+  // /~issues/new from being captured by /~issues/:issue, etc.
+  const exactMatch = compiled.find(({ def }) => def.suffix === suffix);
+  if (exactMatch) {
+    return { projectPath, def: exactMatch.def, params: {} };
+  }
+
   for (const { def, regex } of compiled) {
-    if (def.suffix !== suffix) {
-      if (regex && regex.test(suffix)) {
-        const match = suffix.match(regex);
-        const params: Record<string, string> = {};
-        if (match?.groups) {
-          for (const [key, value] of Object.entries(match.groups)) {
-            if (value !== undefined) {
-              params[key.replace(/_/g, "-")] = value;
-            }
+    if (regex && regex.test(suffix)) {
+      const match = suffix.match(regex);
+      const params: Record<string, string> = {};
+      if (match?.groups) {
+        for (const [key, value] of Object.entries(match.groups)) {
+          if (value !== undefined) {
+            params[key.replace(/_/g, "-")] = value;
           }
         }
-        return { projectPath, def, params };
       }
-      continue;
-    }
-    if (def.suffix === suffix) {
-      return { projectPath, def, params: {} };
+      return { projectPath, def, params };
     }
   }
 

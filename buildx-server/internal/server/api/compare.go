@@ -29,14 +29,21 @@ type CompareRevision struct {
 	Subject    string `json:"subject,omitempty"`
 }
 
+// CompareMergePreview is the merge preview in a compare result.
+type CompareMergePreview struct {
+	Conflicted      bool   `json:"conflicted"`
+	MergeCommitHash string `json:"mergeCommitHash,omitempty"`
+}
+
 // CompareResult is the response for GET /repositories/{projectId}/compare.
 type CompareResult struct {
-	Left                  CompareRevision     `json:"left"`
-	Right                 CompareRevision     `json:"right"`
-	MergeBase             *CompareRevision    `json:"mergeBase,omitempty"`
-	EffectivePullRequest  *model.PullRequest  `json:"effectivePullRequest,omitempty"`
-	Commits               []git.Commit        `json:"commits,omitempty"`
-	Diffs                 []git.FileDiff      `json:"diffs,omitempty"`
+	Left                  CompareRevision      `json:"left"`
+	Right                 CompareRevision      `json:"right"`
+	MergeBase             *CompareRevision     `json:"mergeBase,omitempty"`
+	EffectivePullRequest  *model.PullRequest   `json:"effectivePullRequest,omitempty"`
+	MergePreview          *CompareMergePreview `json:"mergePreview,omitempty"`
+	Commits               []git.Commit         `json:"commits,omitempty"`
+	Diffs                 []git.FileDiff       `json:"diffs,omitempty"`
 }
 
 func (h *RepositoryHandler) Compare(w http.ResponseWriter, r *http.Request) {
@@ -68,6 +75,7 @@ func (h *RepositoryHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	includeCommits := r.URL.Query().Get("include-commits") == "true"
 	includeDiffs := r.URL.Query().Get("include-diffs") == "true"
 	includeEffectivePR := r.URL.Query().Get("include-effective-pull-request") == "true"
+	includeMergePreview := r.URL.Query().Get("include-merge-preview") == "true"
 	pathFilter := r.URL.Query().Get("path-filter")
 	whitespaceOption := r.URL.Query().Get("whitespace-option")
 
@@ -153,6 +161,20 @@ func (h *RepositoryHandler) Compare(w http.ResponseWriter, r *http.Request) {
 		} else if pr != nil {
 			result.EffectivePullRequest = pr
 		}
+	}
+
+	if includeMergePreview && mergeBaseHash != "" {
+		conflicted, err := repo.CheckMergeConflict(mergeBaseHash, leftDetail.CommitHash, rightDetail.CommitHash)
+		if err != nil {
+			op.Fail(err, http.StatusInternalServerError)
+			writeInternalError(w, r, err)
+			return
+		}
+		preview := &CompareMergePreview{Conflicted: conflicted}
+		if !conflicted {
+			preview.MergeCommitHash = mergeBaseHash
+		}
+		result.MergePreview = preview
 	}
 
 	if includeCommits && mergeBaseHash != "" {

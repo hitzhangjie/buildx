@@ -127,6 +127,7 @@ Cobra commands organized by group: `project` (project/get/issue/pr/build/cr), `m
 - **Status**: All 223 OneDev routes are reachable (no white screens), but only ~12 pages have dedicated components; the rest use `PageRenderer` as a scaffold placeholder. **0 pages have passed screenshot-acceptance (✓)**.
 - **Layouts**: `SimpleLayout` (public pages: login, signup, init) and `Layout` (authenticated sidebar + topbar)
 - **API layer**: `src/api/` modules per resource domain; `VITE_USE_MOCK` for development without running server
+- **Import discipline**: Never mix static and dynamic imports (`import()`) for the same module. If a module is statically imported anywhere in the codebase, all imports of that module must be static — otherwise Vite warns "dynamic import will not move module into another chunk." Use dynamic `import()` only for modules that are exclusively dynamically imported (code-splitting entry points). This applies especially to `src/api/` modules which are almost always statically imported by multiple pages.
 - **URL scheme**: Clean OneDev-style paths (`/~projects`, `/~login`, `/{project}/~files`)
 
 ## Testing (buildx-server)

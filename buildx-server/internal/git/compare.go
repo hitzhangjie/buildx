@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"sort"
 	"strings"
@@ -307,6 +308,17 @@ func (r *Repository) ListCommitsSince(baseRevision, headRevision string, count i
 		commits = append(commits, commitFromObject(obj))
 	}
 	return commits, nil
+}
+
+// CheckMergeConflict checks whether merging ours into theirs produces conflicts.
+// base is the merge-base commit hash.
+func (r *Repository) CheckMergeConflict(base, ours, theirs string) (bool, error) {
+	out, err := exec.Command("git", "-C", r.path, "merge-tree", base, ours, theirs).CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("merge-tree: %w", err)
+	}
+	output := string(out)
+	return strings.Contains(output, "changed in both") || strings.Contains(output, "CONFLICT"), nil
 }
 
 // FilterDiffsByPath keeps diffs whose path matches any whitespace-separated glob pattern.

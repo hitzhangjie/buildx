@@ -8,6 +8,7 @@ export interface BranchSelection {
   projectId: number;
   projectPath: string;
   branch: string;
+  commitHash?: string;
 }
 
 interface BranchSelectorProps {
