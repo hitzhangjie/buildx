@@ -13,15 +13,21 @@ import (
 
 // ProjectService implements the projectService interface expected by API handlers.
 type ProjectService struct {
-	GetFunc        func(ctx context.Context, id int64) (*model.Project, error)
-	GetByPathFunc  func(ctx context.Context, path string) (*model.Project, error)
-	ListFunc       func(ctx context.Context) ([]*model.Project, error)
-	CreateFunc     func(ctx context.Context, userID int64, p *model.Project) (*model.Project, error)
-	SetupFunc      func(ctx context.Context, userID int64, path string) (*model.Project, error)
-	DeleteFunc     func(ctx context.Context, id int64) error
-	ProjectDirFunc func(projectID int64) string
-	GitDirFunc     func(projectID int64) string
-	StatsFunc      func(ctx context.Context, projectID int64) (*git.ProjectStats, error)
+	GetFunc           func(ctx context.Context, id int64) (*model.Project, error)
+	GetByPathFunc     func(ctx context.Context, path string) (*model.Project, error)
+	ListFunc          func(ctx context.Context) ([]*model.Project, error)
+	CreateFunc        func(ctx context.Context, userID int64, p *model.Project) (*model.Project, error)
+	SetupFunc         func(ctx context.Context, userID int64, path string) (*model.Project, error)
+	MoveFunc          func(ctx context.Context, projectID int64, newParentID *int64) (*model.Project, error)
+	ListChildrenFunc  func(ctx context.Context, parentID int64) ([]*model.Project, error)
+	CountChildrenFunc func(ctx context.Context, parentID int64) (int, error)
+	DeleteFunc        func(ctx context.Context, id int64) error
+	ProjectDirFunc    func(projectID int64) string
+	GitDirFunc        func(projectID int64) string
+	StatsFunc         func(ctx context.Context, projectID int64) (*git.ProjectStats, error)
+	UpdateFunc        func(ctx context.Context, p *model.Project) error
+	GetSettingFunc    func(ctx context.Context, id int64) (*model.ProjectSetting, error)
+	UpdateSettingFunc func(ctx context.Context, id int64, setting *model.ProjectSetting) error
 }
 
 func (m *ProjectService) Get(ctx context.Context, id int64) (*model.Project, error) {
@@ -80,9 +86,51 @@ func (m *ProjectService) GitDir(projectID int64) string {
 	return m.GitDirFunc(projectID)
 }
 
+func (m *ProjectService) Move(ctx context.Context, projectID int64, newParentID *int64) (*model.Project, error) {
+	if m.MoveFunc == nil {
+		return nil, fmt.Errorf("mock.ProjectService.MoveFunc not set")
+	}
+	return m.MoveFunc(ctx, projectID, newParentID)
+}
+
+func (m *ProjectService) ListChildren(ctx context.Context, parentID int64) ([]*model.Project, error) {
+	if m.ListChildrenFunc == nil {
+		return nil, nil // safe default — most tests don't need children
+	}
+	return m.ListChildrenFunc(ctx, parentID)
+}
+
+func (m *ProjectService) CountChildren(ctx context.Context, parentID int64) (int, error) {
+	if m.CountChildrenFunc == nil {
+		return 0, nil // safe default — most tests don't need child counts
+	}
+	return m.CountChildrenFunc(ctx, parentID)
+}
+
 func (m *ProjectService) Stats(ctx context.Context, projectID int64) (*git.ProjectStats, error) {
 	if m.StatsFunc == nil {
 		return nil, nil // no stats is not an error — tests that don't set this get nil stats
 	}
 	return m.StatsFunc(ctx, projectID)
+}
+
+func (m *ProjectService) Update(ctx context.Context, p *model.Project) error {
+	if m.UpdateFunc == nil {
+		panic("mock.ProjectService.UpdateFunc not set")
+	}
+	return m.UpdateFunc(ctx, p)
+}
+
+func (m *ProjectService) GetSetting(ctx context.Context, id int64) (*model.ProjectSetting, error) {
+	if m.GetSettingFunc == nil {
+		panic("mock.ProjectService.GetSettingFunc not set")
+	}
+	return m.GetSettingFunc(ctx, id)
+}
+
+func (m *ProjectService) UpdateSetting(ctx context.Context, id int64, setting *model.ProjectSetting) error {
+	if m.UpdateSettingFunc == nil {
+		panic("mock.ProjectService.UpdateSettingFunc not set")
+	}
+	return m.UpdateSettingFunc(ctx, id, setting)
 }

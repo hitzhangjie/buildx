@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
 import {
   fetchMergePreview,
+  fetchPullRequestAssignments,
   fetchPullRequestByNumber,
   fetchPullRequestReviews,
   type MergePreview,
   type PullRequest,
+  type PullRequestAssignment,
   type PullRequestReview,
 } from "../api/pullRequests";
 
@@ -16,6 +18,7 @@ export function usePullRequestDetail(projectPath: string) {
   const navigate = useNavigate();
   const [pr, setPr] = useState<PullRequest | null>(null);
   const [reviews, setReviews] = useState<PullRequestReview[]>([]);
+  const [assignments, setAssignments] = useState<PullRequestAssignment[]>([]);
   const [mergePreview, setMergePreview] = useState<MergePreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +42,13 @@ export function usePullRequestDetail(projectPath: string) {
         return;
       }
       setPr(loaded);
-      const [reviewList, preview] = await Promise.all([
+      const [reviewList, assignmentList, preview] = await Promise.all([
         fetchPullRequestReviews(loaded.id),
+        fetchPullRequestAssignments(loaded.id),
         loaded.status === "OPEN" ? fetchMergePreview(loaded.id) : Promise.resolve(null),
       ]);
       setReviews(reviewList);
+      setAssignments(assignmentList);
       setMergePreview(preview);
     } catch (err) {
       setError((err as { message?: string }).message ?? "Failed to load pull request");
@@ -60,6 +65,7 @@ export function usePullRequestDetail(projectPath: string) {
     request: request ?? "",
     pr,
     reviews,
+    assignments,
     mergePreview,
     loading,
     error,

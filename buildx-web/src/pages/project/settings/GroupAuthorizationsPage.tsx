@@ -1,67 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
-
-interface GroupAuthorization {
-  id: string;
-  groupName: string;
-  role: string;
-}
 
 export default function GroupAuthorizationsPage() {
   const { projectPath } = useProject();
+  const [loading, setLoading] = useState(true);
 
-  const [authorizations, setAuthorizations] = useState<GroupAuthorization[]>([
-    { id: "1", groupName: "developers", role: "Developer" },
-    { id: "2", groupName: "viewers", role: "Viewer" },
-  ]);
+  useEffect(() => { setLoading(false); }, []);
 
-  const handleRemove = (id: string) => {
-    setAuthorizations((prev) => prev.filter((a) => a.id !== id));
-  };
-
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="Group Authorizations"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
   return (
     <SettingsLayout projectPath={projectPath} pageTitle="Group Authorizations">
-      <div className="card">
-        <div className="card-body">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Group</th>
-                <th>Role</th>
-                <th className="text-end">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {authorizations.map((auth) => (
-                <tr key={auth.id}>
-                  <td>{auth.groupName}</td>
-                  <td>{auth.role}</td>
-                  <td className="text-end">
-                    <button className="btn btn-sm btn-link me-2">
-                      <Icon name="edit" />
-                    </button>
-                    <button
-                      className="btn btn-sm btn-link text-danger"
-                      onClick={() => handleRemove(auth.id)}
-                    >
-                      <Icon name="remove" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {authorizations.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="text-muted text-center">
-                    No group authorizations configured.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </SettingsLayout>
-  );
+      <div className="card"><div className="card-body">
+        <div className="alert alert-notice bg-white shadow mb-5 text-gray">Group authorizations will be available when groups are implemented.</div>
+      </div></div>
+    </SettingsLayout>);
 }

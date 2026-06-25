@@ -59,9 +59,11 @@ import { PullRequestActivitiesPage } from "../pages/project/pullrequests/PullReq
 import { PullRequestChangesPage } from "../pages/project/pullrequests/PullRequestChangesPage";
 import { PullRequestCodeCommentsPage } from "../pages/project/pullrequests/PullRequestCodeCommentsPage";
 import { InvalidPullRequestPage } from "../pages/project/pullrequests/InvalidPullRequestPage";
-import { PullRequestSettingPage } from "../pages/project/settings/PullRequestSettingPage";
+import PullRequestSettingPage from "../pages/project/settings/PullRequestSettingPage";
 
 // --- Project settings pages ---
+import GeneralProjectSettingPage from "../pages/project/settings/GeneralProjectSettingPage";
+import AvatarEditPage from "../pages/project/settings/AvatarEditPage";
 import ProjectUserAuthorizationsPage from "../pages/project/settings/UserAuthorizationsPage";
 
 // --- Wave 5 project build pages ---
@@ -72,6 +74,7 @@ import { BuildLogPage } from "../pages/project/builds/BuildLogPage";
 import { BuildChangesPage } from "../pages/project/builds/BuildChangesPage";
 import { BuildArtifactsPage } from "../pages/project/builds/BuildArtifactsPage";
 import { FixedIssuesPage } from "../pages/project/builds/FixedIssuesPage";
+import { BuildReportPage } from "../pages/project/builds/BuildReportPage";
 
 // --- Wave 8 my pages ---
 import { MyProfilePage } from "../pages/my/MyProfilePage";
@@ -96,6 +99,11 @@ import { SecuritySettingPage } from "../pages/admin/SecuritySettingPage";
 import { MailConnectorPage } from "../pages/admin/MailConnectorPage";
 import { BrandingSettingPage } from "../pages/admin/BrandingSettingPage";
 import { AgentListPage } from "../pages/admin/AgentListPage";
+import { AgentOverviewPage } from "../pages/admin/AgentOverviewPage";
+import { AgentBuildsPage } from "../pages/admin/AgentBuildsPage";
+import { AgentWorkspacesPage } from "../pages/admin/AgentWorkspacesPage";
+import { AgentLogPage } from "../pages/admin/AgentLogPage";
+import { JobExecutorsPage } from "../pages/admin/JobExecutorsPage";
 import { IssueFieldListPage } from "../pages/admin/IssueFieldListPage";
 import { IssueStateListPage } from "../pages/admin/IssueStateListPage";
 
@@ -103,6 +111,21 @@ import { IssueStateListPage } from "../pages/admin/IssueStateListPage";
 import { IncompatibilitiesPage } from "../pages/help/IncompatibilitiesPage";
 import { ResourceListPage } from "../pages/help/ResourceListPage";
 import { ResourceDetailPage } from "../pages/help/ResourceDetailPage";
+
+// --- Pack pages ---
+import { ProjectPacksPage } from "../pages/project/packs/ProjectPacksPage";
+import { PackDetailPage } from "../pages/project/packs/PackDetailPage";
+
+// --- Stats pages ---
+import CodeStatsPage from "../pages/project/stats/CodeStatsPage";
+import BuildMetricStatsPage from "../pages/project/stats/BuildMetricStatsPage";
+import { BuildPacksPage } from "../pages/project/builds/BuildPacksPage";
+
+// --- Wave 6 workspace pages ---
+import ProjectWorkspacesPage from "../pages/project/workspaces/ProjectWorkspacesPage";
+import WorkspaceDashboardPage from "../pages/project/workspaces/WorkspaceDashboardPage";
+import WorkspaceChangesPage from "../pages/project/workspaces/WorkspaceChangesPage";
+import WorkspaceLogPage from "../pages/project/workspaces/WorkspaceLogPage";
 
 import { PageRenderer } from "../pages/render/PageRenderer";
 import type { RouteDefinition } from "./types";
@@ -152,6 +175,11 @@ const GLOBAL_KNOWN: Partial<Record<NonNullable<RouteDefinition["known"]>, () => 
   mailService: () => <MailConnectorPage />,
   branding: () => <BrandingSettingPage />,
   agentList: () => <AgentListPage />,
+  agentOverview: () => <AgentOverviewPage />,
+  agentBuilds: () => <AgentBuildsPage />,
+  agentWorkspaces: () => <AgentWorkspacesPage />,
+  agentLog: () => <AgentLogPage />,
+  jobExecutors: () => <JobExecutorsPage />,
   issueFieldList: () => <IssueFieldListPage />,
   issueStateList: () => <IssueStateListPage />,
 
@@ -212,9 +240,28 @@ const PROJECT_KNOWN: Partial<Record<NonNullable<import("./types").ProjectRouteDe
   buildChanges: () => <BuildChangesPage />,
   buildFixedIssues: () => <FixedIssuesPage />,
   buildArtifacts: () => <BuildArtifactsPage />,
+  buildReport: () => <BuildReportPage />,
 
   // Project settings
+	generalSetting: () => <GeneralProjectSettingPage />,
+	avatarEdit: () => <AvatarEditPage />,
   projectUserAuthorizations: () => <ProjectUserAuthorizationsPage />,
+
+  // Workspaces
+  projectWorkspaces: () => <ProjectWorkspacesPage />,
+  workspaceDashboard: () => <WorkspaceDashboardPage />,
+  workspaceChanges: () => <WorkspaceChangesPage />,
+  workspaceLog: () => <WorkspaceLogPage />,
+
+  // Packages
+  projectPacks: () => <ProjectPacksPage />,
+  packDetail: () => <PackDetailPage />,
+  buildPacks: () => <BuildPacksPage />,
+
+  // Statistics
+  codeContribs: () => <CodeStatsPage />,
+  sourceLines: () => <CodeStatsPage />,
+  buildMetricStats: () => <BuildMetricStatsPage />,
 };
 
 function GlobalRouteElement({ def }: { def: RouteDefinition }) {

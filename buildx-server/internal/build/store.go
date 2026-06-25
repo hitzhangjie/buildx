@@ -6,6 +6,7 @@ package build
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -222,6 +223,64 @@ func (s *DBStore) Delete(ctx context.Context, id int64) error {
 	return affectedOne(res, ErrNotFound)
 }
 
+func (s *DBStore) ListDependencies(ctx context.Context, buildID int64) ([]*model.BuildDependence, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT o_id, o_dependent_id, o_dependency_id, o_requireSuccessful, o_artifacts, o_destinationPath
+		 FROM o_BuildDependence WHERE o_dependent_id = ? ORDER BY o_id`, buildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var deps []*model.BuildDependence
+	for rows.Next() {
+		var d model.BuildDependence
+		var requireSuccessful int
+		var artifacts, destPath sql.NullString
+		if err := rows.Scan(&d.ID, &d.DependentID, &d.DependencyID, &requireSuccessful, &artifacts, &destPath); err != nil {
+			return nil, err
+		}
+		d.RequireSuccessful = requireSuccessful != 0
+		if artifacts.Valid {
+			d.Artifacts = artifacts.String
+		}
+		if destPath.Valid {
+			d.DestinationPath = destPath.String
+		}
+		deps = append(deps, &d)
+	}
+	return deps, rows.Err()
+}
+
+func (s *DBStore) ListDependents(ctx context.Context, buildID int64) ([]*model.BuildDependence, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT o_id, o_dependent_id, o_dependency_id, o_requireSuccessful, o_artifacts, o_destinationPath
+		 FROM o_BuildDependence WHERE o_dependency_id = ? ORDER BY o_id`, buildID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var deps []*model.BuildDependence
+	for rows.Next() {
+		var d model.BuildDependence
+		var requireSuccessful int
+		var artifacts, destPath sql.NullString
+		if err := rows.Scan(&d.ID, &d.DependentID, &d.DependencyID, &requireSuccessful, &artifacts, &destPath); err != nil {
+			return nil, err
+		}
+		d.RequireSuccessful = requireSuccessful != 0
+		if artifacts.Valid {
+			d.Artifacts = artifacts.String
+		}
+		if destPath.Valid {
+			d.DestinationPath = destPath.String
+		}
+		deps = append(deps, &d)
+	}
+	return deps, rows.Err()
+}
+
 func (s *DBStore) ListLabels(ctx context.Context, buildID int64) ([]*model.BuildLabel, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT o_id, o_build_id, o_name FROM o_BuildLabel WHERE o_build_id = ? ORDER BY o_id`, buildID)
@@ -291,6 +350,9 @@ func scanBuild(row rowScanner) (*model.Build, error) {
 	var cancellerID sql.NullInt64
 	var cancellerName, cancellerFullName, cancellerType sql.NullString
 	var cancellerDisabled sql.NullInt64
+	var submitSequence int64
+	var retryDate sql.NullString
+	var token, workDirPath, checkoutPathsJSON string
 
 	err := row.Scan(
 		&b.ID, &b.ProjectID, &b.NumberScopeID, &b.Number, &b.JobName, &status,
@@ -307,6 +369,18 @@ func scanBuild(row rowScanner) (*model.Build, error) {
 
 	b.Status = model.BuildStatus(status)
 	b.Paused = paused != 0
+	b.SubmitSequence = submitSequence
+	b.Token = token
+	b.WorkDirPath = workDirPath
+	if checkoutPathsJSON != "" && checkoutPathsJSON != "[]" {
+		_ = json.Unmarshal([]byte(checkoutPathsJSON), &b.CheckoutPaths)
+	}
+	if retryDate.Valid && retryDate.String != "" {
+		t, err := time.Parse(time.RFC3339Nano, retryDate.String)
+		if err == nil {
+			b.RetryDate = &t
+		}
+	}
 	b.SubmitDate, _ = time.Parse(time.RFC3339Nano, submitDate)
 	b.PendingDate = parseOptionalTime(pendingDate)
 	b.RunningDate = parseOptionalTime(runningDate)
@@ -389,4 +463,76 @@ func affectedOne(res sql.Result, notFound error) error {
 		return notFound
 	}
 	return nil
+}
+
+// UpdateStatus updates the status of a build.
+func (s *DBStore) UpdateStatus(ctx context.Context, id int64, status model.BuildStatus) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE o_Build SET o_status = ? WHERE o_id = ?`, string(status), id)
+	if err != nil {
+		return err
+	}
+	return affectedOne(res, ErrNotFound)
+}
+
+// UpdateDates updates the pending, running, and/or finish dates of a build.
+// Nil values are not updated (leave the existing value).
+func (s *DBStore) UpdateDates(ctx context.Context, id int64, pendingDate, runningDate, finishDate *time.Time) error {
+	if pendingDate != nil {
+		_, err := s.db.ExecContext(ctx,
+			`UPDATE o_Build SET o_pendingDate = ? WHERE o_id = ?`,
+			pendingDate.Format(time.RFC3339Nano), id)
+		if err != nil {
+			return err
+		}
+	}
+	if runningDate != nil {
+		_, err := s.db.ExecContext(ctx,
+			`UPDATE o_Build SET o_runningDate = ? WHERE o_id = ?`,
+			runningDate.Format(time.RFC3339Nano), id)
+		if err != nil {
+			return err
+		}
+	}
+	if finishDate != nil {
+		_, err := s.db.ExecContext(ctx,
+			`UPDATE o_Build SET o_finishDate = ? WHERE o_id = ?`,
+			finishDate.Format(time.RFC3339Nano), id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateDependence creates a build dependency record.
+func (s *DBStore) CreateDependence(ctx context.Context, dep *model.BuildDependence) error {
+	if dep == nil {
+		return errors.New("dependence is nil")
+	}
+	var requireSuccessful int
+	if dep.RequireSuccessful {
+		requireSuccessful = 1
+	}
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO o_BuildDependence (o_dependent_id, o_dependency_id, o_requireSuccessful, o_artifacts, o_destinationPath)
+		VALUES (?, ?, ?, ?, ?)`,
+		dep.DependentID, dep.DependencyID, requireSuccessful,
+		nullString(dep.Artifacts), nullString(dep.DestinationPath))
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return err
+	}
+	dep.ID = id
+	return nil
+}
+
+func nullString(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }

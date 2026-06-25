@@ -1,0 +1,135 @@
+/*
+ * Build detail styles — matches OneDev build-detail.css + build-side.css + build-status.css
+ *
+ * Reference: references/onedev/.../web/page/project/builds/detail/build-detail.css
+ * Reference: references/onedev/.../web/component/build/side/build-side.css
+ * Reference: references/onedev/.../web/component/build/status/build-status.css
+ */
+
+/* ---- build status colors ---- */
+.build-status-successful {
+  color: var(--success) !important;
+}
+.build-status-failed,
+.build-status-cancelled,
+.build-status-timed_out {
+  color: var(--danger) !important;
+}
+.build-status-running,
+.build-status-paused,
+.build-status-waiting,
+.build-status-pending {
+  color: var(--warning) !important;
+}
+.build-status-none {
+  color: #CCC !important;
+}
+.dark-mode .build-status-none {
+  color: var(--dark-mode-gray) !important;
+}
+
+/* ---- card header ---- */
+.build-detail>.card-header>.card-title>.status>svg {
+  width: 20px;
+  height: 20px;
+}
+.build-detail>.card-header>.card-title>.status>img {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---- description ---- */
+.build-detail>.card-body>.main>.description {
+  border-width: 2px !important;
+}
+
+/* ---- error message ---- */
+.build-detail>.card-body>.main>.error-message {
+  max-height: 100px;
+}
+
+/* ---- issue list in build detail ---- */
+.build-detail .issue-list .add-new {
+  display: none;
+}
+
+/* ---- build side panel ---- */
+.build-side>* {
+  margin-bottom: 1.5rem;
+  border-top: 1px dashed var(--secondary);
+  padding-top: 1.5rem;
+}
+.dark-mode .build-side>* {
+  border-top-color: var(--dark-mode-dark-gray);
+}
+.build-side>div:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.build-side>.properties {
+  width: 100%;
+  display: table;
+}
+.build-side>.properties>div {
+  display: table-row;
+}
+.build-side>.properties>div>div.name {
+  display: table-cell;
+  padding: 0 1rem 1.5rem 0;
+  width: 40%;
+  font-weight: 500;
+}
+.build-side>.properties>div>div.value {
+  display: table-cell;
+  padding: 0 0 1.5rem 1rem;
+}
+.build-side>.params.properties>div>div.name,
+.build-side>.params.properties>div>div.value {
+  max-width: 150px;
+}
+.build-side>.properties>div:last-child>div {
+  padding-bottom: 0;
+}
+.build-side>.labels>div>.icon {
+  display: none;
+}
+.build-side>div>.head {
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.build-side .delete {
+  width: 100%;
+}
+
+/* ---- more info side-info toggle ---- */
+.build-detail .more-info.side-info {
+  cursor: pointer;
+}
+.build-detail .more-info.side-info:hover {
+  color: var(--primary);
+}
+
+/* ---- pipeline (inside build detail) ---- */
+.build-pipeline .pipeline-column {
+  flex-grow: 0 !important;
+}
+.build-pipeline .pipeline-row>.btn-group {
+  width: 100%;
+}
+.build-pipeline .pipeline-row>.btn-group>.run {
+  flex-grow: 0;
+}
+
+/* ---- responsive ---- */
+@media (max-width: 1199px) {
+  .build-detail>.card-body>.more-info {
+    border-left: none !important;
+    border-top: 1px dashed var(--secondary);
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    padding-left: 0 !important;
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}

@@ -34,7 +34,7 @@ export function resolvePageTemplate(page: string): PageTemplate {
   if (page === "RevisionComparePage") {
     return "compare";
   }
-  if (/Stats|Contribs|Lines|Metric|Burndown/.test(page)) {
+  if (/Burndown/.test(page)) {
     return "stats";
   }
   if (/ResourceListPage|ResourceDetailPage|MethodDetailPage/.test(page)) {

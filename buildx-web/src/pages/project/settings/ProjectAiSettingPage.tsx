@@ -1,89 +1,30 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
-
-const AI_MODELS = [
-  "claude-sonnet-4-20250514",
-  "gpt-4o",
-  "gpt-4o-mini",
-  "gemini-2.5-flash",
-  "deepseek-v3",
-];
+import { fetchProjects, fetchProjectSettings, updateProjectSettings, type AiSetting } from "../../../api/projects";
 
 export default function ProjectAiSettingPage() {
   const { projectPath } = useProject();
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0]);
-  const [feedback, setFeedback] = useState<{
-    type: "info" | "danger";
-    message: string;
-  } | null>(null);
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [ai, setAi] = useState<AiSetting>({ enabled: false });
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [feedback, setFeedback] = useState<string[]>([]);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    setFeedback({
-      type: "info",
-      message: `AI settings saved. Model: ${selectedModel}, Enabled: ${aiEnabled}`,
-    });
-  };
+  useEffect(() => { let c = false; fetchProjects().then(ps => { if (!c) { const f = ps.find(p => p.path === projectPath); setProjectId(f?.id ?? null); } }).catch(() => {}); return () => { c = true; }; }, [projectPath]);
+  useEffect(() => { if (projectId === null) return; let c = false; setLoading(true); fetchProjectSettings(projectId).then(s => { if (!c) { setAi(s.aiSetting ?? { enabled: false }); setLoading(false); } }).catch(() => { if (!c) setLoading(false); }); return () => { c = true; }; }, [projectId]);
 
+  const save = useCallback(async (e: React.FormEvent) => { e.preventDefault(); if (projectId === null) return; setSaving(true); setFeedback([]); try { await updateProjectSettings(projectId, { aiSetting: ai }); setFeedback(["AI settings updated."]); } catch (err: unknown) { setFeedback([err instanceof Error ? err.message : String(err)]); } finally { setSaving(false); } }, [projectId, ai]);
+
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="AI Settings"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
   return (
-    <SettingsLayout projectPath={projectPath} pageTitle="AI Setting">
-      <div className="card">
-        <div className="card-body">
-          <FormFeedbackPanel messages={feedback ? [feedback.message] : []} />
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <div className="d-flex align-items-center justify-content-between">
-                <span>Enable AI Features</span>
-                <div className="form-check form-switch">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    role="switch"
-                    checked={aiEnabled}
-                    onChange={(e) => setAiEnabled(e.target.checked)}
-                  />
-                </div>
-              </div>
-              <div className="form-text">
-                When enabled, AI-powered features such as code review suggestions and issue
-                summaries are available for this project.
-              </div>
-            </div>
-
-            {aiEnabled && (
-              <div className="mb-3">
-                <label className="form-label" htmlFor="ai-model">
-                  AI Model
-                </label>
-                <select
-                  id="ai-model"
-                  className="form-select"
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
-                >
-                  {AI_MODELS.map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-                <div className="form-text">
-                  Select the AI model to use for this project.
-                </div>
-              </div>
-            )}
-
-            <button type="submit" className="btn btn-primary">
-              <Icon name="save" className="me-1" />
-              Save
-            </button>
-          </form>
-        </div>
-      </div>
-    </SettingsLayout>
-  );
+    <SettingsLayout projectPath={projectPath} pageTitle="AI Settings">
+      <div className="card"><div className="card-body">
+        <FormFeedbackPanel messages={feedback} />
+        <form className="leave-confirm" onSubmit={save}>
+          <div className="form-check form-switch mb-3"><input className="form-check-input" type="checkbox" checked={ai.enabled} onChange={e => setAi({ ...ai, enabled: e.target.checked })} id="ai-enabled" /><label className="form-check-label" htmlFor="ai-enabled">Enable AI Features</label></div>
+          {ai.enabled && (<div className="mb-3"><label className="form-label">Model</label><input className="form-control" value={ai.model ?? ""} onChange={e => setAi({ ...ai, model: e.target.value })} placeholder="e.g. gpt-4" /></div>)}
+          <button type="submit" className="btn btn-primary dirty-aware" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+        </form>
+      </div></div>
+    </SettingsLayout>);
 }

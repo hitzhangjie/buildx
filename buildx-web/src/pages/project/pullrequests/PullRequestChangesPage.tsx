@@ -3,6 +3,7 @@ import { Icon } from "../../../components/onedev/Icon";
 import { PullRequestDetailShell } from "../../../components/onedev/panels/PullRequestDetailShell";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
+import { useAuth } from "../../../context/AuthContext";
 import { usePullRequestDetail } from "../../../hooks/usePullRequestDetail";
 import { fetchCompare, type CompareResult } from "../../../api/compare";
 import { fetchProjects } from "../../../api/projects";
@@ -15,8 +16,9 @@ function diffStatus(additions: number, deletions: number): string {
 
 export function PullRequestChangesPage() {
   const { projectPath, params } = useProject();
+  const { user: currentUser } = useAuth();
   const request = params.request as string | undefined;
-  const { pr, reviews, mergePreview, loading, error } = usePullRequestDetail(projectPath);
+  const { pr, reviews, assignments, mergePreview, loading, error } = usePullRequestDetail(projectPath);
   const [compare, setCompare] = useState<CompareResult | null>(null);
 
   useEffect(() => {
@@ -56,11 +58,12 @@ export function PullRequestChangesPage() {
         requestNumber={request ?? ""}
         pr={pr}
         reviews={reviews}
-        assignments={[]}
+        assignments={assignments}
         activeTab="changes"
         mergePreview={mergePreview}
         loading={loading}
         error={error}
+        currentUser={currentUser}
       >
         <div className="d-flex align-items-center mb-4 text-muted font-size-sm">
           <span className="mr-3">

@@ -278,18 +278,130 @@ Wave 3 所有页面当前 **复刻 = `~` 或 `—`**，无一通过截图 DoD。
 
 ## Wave 5 — 项目内：构建 CI/CD
 
-| 路由 | OneDev 页面 | 参考路径 | API | 状态 |
-|------|-------------|----------|-----|------|
-| `/:project/~builds` | ProjectBuildsPage | `web/page/project/builds/ProjectBuildsPage` | live | [x] |
-| `/:project/~builds/:build` | BuildDashboardPage | `web/page/project/builds/detail/dashboard/` | live | [x] |
-| `/:project/~builds/:build/pipeline` | BuildPipelinePage | `web/page/project/builds/detail/pipeline/` | live | [x] |
-| `/:project/~builds/:build/log` | BuildLogPage | `web/page/project/builds/detail/log/` | live | [x] |
-| `/:project/~builds/:build/changes` | BuildChangesPage | `web/page/project/builds/detail/changes/` | live | [x] |
-| `/:project/~builds/:build/fixed-issues` | FixedIssuesPage | `web/page/project/builds/detail/issues/` | live | [x] |
-| `/:project/~builds/:build/artifacts` | BuildArtifactsPage | `web/page/project/builds/detail/artifacts/` | live | [x] |
-| `/:project/~builds/:build/packages/:type` | BuildPacksPage | `web/page/project/builds/detail/pack/` | stub | [x] |
-| `/:project/~builds/:build/invalid` | InvalidBuildPage | `web/page/project/builds/detail/InvalidBuildPage` | stub | [x] |
-| `/:project/~builds/:build/reports/:report` | BuildReportPage | `web/page/project/builds/detail/report/` | stub | [x] |
+| 路由 | OneDev 页面 | 参考路径 | API | 路由 | 复刻 | 备注 |
+|------|-------------|----------|-----|------|------|------|
+| `/:project/~builds` | ProjectBuildsPage | `web/page/project/builds/ProjectBuildsPage` | live | [x] | ~ | BuildListPanel + Filter/OrderBy/Operations/RunJob 工具栏已可交互 |
+| `/:project/~builds/:build` | BuildDashboardPage | `web/page/project/builds/detail/dashboard/` | live | [x] | ~ | 重定向到 log tab |
+| `/:project/~builds/:build/pipeline` | BuildPipelinePage | `web/page/project/builds/detail/pipeline/` | live | [x] | ~ | PipelinePanel SVG DAG 可视化已接入，缺 BuildSpec 驱动真实依赖图 |
+| `/:project/~builds/:build/log` | BuildLogPage | `web/page/project/builds/detail/log/` | live | [x] | ~ | 日志查看器 shell 已就绪（download/深色终端），缺 log stream API |
+| `/:project/~builds/:build/changes` | BuildChangesPage | `web/page/project/builds/detail/changes/` | live | [x] | ~ | 构建上下文表（Branch/Commit/Job/Version），缺 git diff 文件列表 |
+| `/:project/~builds/:build/fixed-issues` | FixedIssuesPage | `web/page/project/builds/detail/issues/` | live | [x] | ~ | 调用 `fixed-issue-ids` API；后端返回空数组（待 commit 解析） |
+| `/:project/~builds/:build/artifacts` | BuildArtifactsPage | `web/page/project/builds/detail/artifacts/` | live | [x] | ~ | Upload 按钮 + 空状态，缺产物列表 API |
+| `/:project/~builds/:build/packages/:type` | BuildPacksPage | `web/page/project/builds/detail/pack/` | stub | [x] | ~ | 按 build+type 过滤 pack 列表，已接 fetchPacks API |
+| `/:project/~builds/:build/invalid` | InvalidBuildPage | `web/page/project/builds/detail/InvalidBuildPage` | stub | [x] | ~ | 完整：warning alert + Back to Builds 导航 |
+| `/:project/~builds/:build/reports/:report` | BuildReportPage | `web/page/project/builds/detail/report/` | stub | [x] | ~ | 报告类型识别+空状态，缺报告数据 API |
+| `/~builds` | BuildListPage | `web/page/builds/BuildListPage` | live | [x] | ~ | 全局构建列表（兼容新版 BuildListPanel） |
+
+### Wave 5 续做指南（Build / CI）
+
+> **最后更新**：2026-06-25。本小节供后续会话直接接续，不必重读全库。
+
+#### 已实现一览
+
+**buildx-server**
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| Schema | `internal/persistence/sqlite/migrations/006_build.sql` | `o_Build`, `o_BuildParam`, `o_BuildLabel` |
+| Schema | `internal/persistence/sqlite/migrations/007_build_dependence.sql` | `o_BuildDependence` — 构建间依赖关系 |
+| Schema | `internal/persistence/sqlite/migrations/008_build_extra_fields.sql` | `o_token`, `o_workDirPath`, `o_checkoutPaths`, `o_submitSequence`, `o_retryDate` |
+| Model | `internal/model/build.go` | `Build`, `BuildParam`, `BuildLabel`, `BuildDependence` — 完整 Go 结构体 + JSON tag |
+| Store | `internal/build/store.go` | CRUD + Query 查询（7 种过滤条件）+ ListLabels/ListParams/ListDependencies/ListDependents |
+| Query | `internal/build/query.go` | BuildQuery 解析器：Job/Status/Number/Branch/Commit/FreeText/OrderByFinishDate |
+| API | `internal/server/api/builds.go` | 9 个端点全部 live（见下方端点表） |
+| 测试 | `internal/build/*_test.go` | query parser 4 case + store CRUD 2 case — 全部 PASS |
+
+**buildx-web**
+
+| 页面 / 组件 / API | 路径 | Live API |
+|-------------------|------|----------|
+| API 客户端 | `src/api/builds.ts` | `queryBuilds`, `getBuild`, `getBuildByNumber`, `getBuildLabels`, `getBuildParams`, `getBuildDependencies`, `getBuildDependents`, `setBuildDescription`, `deleteBuild` |
+| 构建列表 | `src/components/onedev/panels/BuildListPanel.tsx` | Filter/OrderBy/Operations/DisplayParams/RunJob 工具栏全部可交互 |
+| 构建详情布局 | `src/components/onedev/build/BuildDetailLayout.tsx` | 完整 BuildDetailPage shell：card header（actions 按钮区 + more-info toggle）+ tabs + 侧边栏 |
+| 侧边栏 | `BuildDetailLayout.tsx` 内 `BuildSideInfo` | 11 行属性表（Commit/Branch/Tag/Job/Submitter/SubmittedAt/SubmitReason/QueueingTakes/RunningTakes/CancelledBy）+ Labels + Delete |
+| 状态图标 | `src/components/onedev/build/BuildStatusIcon.tsx` | 7 种状态 SVG + CSS class |
+| 描述编辑器 | `BuildDetailLayout.tsx` 内 `BuildDescriptionEditor` | 内联 Markdown 编辑，调用 `setBuildDescription` API |
+| 流水线面板 | `src/components/onedev/pipeline/PipelinePanel.tsx` | SVG 贝塞尔曲线 DAG + 列-行网格 + active job 高亮 + 暗色模式 |
+| 迷你构建列表 | `src/components/onedev/build/MiniBuildListPanel.tsx` | 紧凑内联构建列表（用于 Issue/PR 详情侧栏） |
+| PR 构建集成 | `src/components/onedev/pullrequest/PullRequestJobsPanel.tsx` | PR 页面 Required/Optional Jobs 状态汇总 |
+| CSS | `src/pages/project/builds/build-detail.css` | 对齐 OneDev `build-detail.css` + `build-side.css` + `build-status.css` + `pipeline.css` |
+| CSS | `src/components/onedev/pipeline/pipeline.css` | 对齐 OneDev `pipeline.css` |
+| 工具函数 | `src/util/build.ts` | `formatRefName`, `formatDuration`, `formatBuildDate` |
+| Query 预设 | `src/data/queryPresets.ts` | 9 种预设查询（All/Successful/Failed/...） |
+
+#### REST endpoint 已实现 / 未实现
+
+| Method | Path | 状态 | 备注 |
+|--------|------|------|------|
+| GET | `/~api/builds` | ✅ live | `query`, `offset`, `count`, `projectId` |
+| GET | `/~api/builds/{id}` | ✅ live | 含嵌套 Project/Submitter/Canceller |
+| GET | `/~api/builds/{id}/labels` | ✅ live | |
+| GET | `/~api/builds/{id}/params` | ✅ live | Secret 类型自动 mask |
+| GET | `/~api/builds/{id}/dependencies` | ✅ live | 查询 `o_BuildDependence.o_dependent_id` |
+| GET | `/~api/builds/{id}/dependents` | ✅ live | 查询 `o_BuildDependence.o_dependency_id` |
+| GET | `/~api/builds/{id}/fixed-issue-ids` | ⚠️ 空返回 | 需要 commit message 解析（扫描 "fix #123" 模式） |
+| POST | `/~api/builds/{id}/description` | ✅ live | 鉴权：root / submitter / project admin |
+| DELETE | `/~api/builds/{id}` | ✅ live | 鉴权：root / submitter / project admin |
+| — | `/~api/builds/log/{id}` | ❌ 未实现 | BuildLogResource — 需要 CI 引擎写入日志文件 |
+| — | BuildSpec REST / YAML | ❌ 未实现 | `.onedev-buildspec.yml` 解析、验证、存储 |
+| — | Job 管理 (submit/cancel/rerun) | ❌ 未实现 | 需要 CI 引擎 |
+| — | Agent / JobExecutor 管理 | ❌ 未实现 | 需要 CI 引擎 |
+
+#### 与 OneDev 的主要差距（按优先级）
+
+| 优先级 | 任务 | OneDev 参考 | 建议落点 |
+|--------|------|-------------|----------|
+| **P0** | **BuildLog API + 实时日志流** | `BuildLogResource.java`, `LogPanel` | 后端 `/~api/builds/log/{id}` SSE 端点；前端 log viewer 接实时流 |
+| **P0** | **FixedIssueIDs 解析** | `Build.getFixedIssueIds()` | `internal/build/` 扫描 commits 间的 "fix #N" 模式 |
+| **P1** | **PipelinePanel 接 BuildSpec 真实数据** | `BuildPipelinePage.java`, `PipelinePanel.java` | 解析 buildspec YAML → job DAG → PipelinePanel |
+| **P1** | **BuildChangesPage — git diff** | `BuildChangesPage.java` | 比较当前 build commit vs 上次成功 build commit |
+| **P1** | **BuildArtifactsPage — 产物列表** | `BuildArtifactsPage.java` | 产物目录扫描 + 下载链接 API |
+| **P1** | **鉴权完善** `canAccessBuild` | `AccessBuild.java` | 项目/角色/匿名访问权限检查（当前恒返回 true） |
+| **P2** | **WebSocket 实时更新** | `BuildEventBroadcaster.java` | 构建列表/详情页状态实时刷新 |
+| **P2** | **BuildQuery 保存（用户/项目级）** | `BuildQueryPersonalization`, `NamedBuildQuery` | `o_BuildQueryPersonalization` 表 + settings 持久化 |
+| **P2** | **BuildFilterPanel（高级过滤）** | `BuildFilterPanel.html/.java` | 多条件组合过滤 UI |
+| **P2** | **JobRunSelector（触发构建对话框）** | `JobRunSelector`, `BuildOptionContentPanel` | Run Job → 选择 job → revision → params |
+| **P2** | **Admin Agent/JobExecutor 页面实现** | `agent/`, `jobexecutor/` 目录下全部页面 | 当前仅路由占位 |
+| **P3** | **构建执行引擎（CI 核心）** | `job/` 包（JobService, JobRunnable, JobContext, JobAgentShell） | BuildSpec YAML → Job DAG → Agent 调度 → 步骤执行 → 日志流 |
+| **P3** | **BuildMetric 统计页** | `BuildMetricStatsPage` | 已路由，待后端 `BuildMetricService` |
+| **P3** | **BuildQueryWatchesPanel** | `BuildQueryWatchesPanel` | 用户关注构建查询 → 通知 |
+| **P3** | **AI 集成（Failure Investigation）** | `ai/BuildHelper.java`, `GetBuildSpecEditInstructions` | ChatTool + build 上下文 |
+
+#### 推荐下一批执行顺序
+
+1. **BuildLog API** — 最小的后端增量即可让 Log 页从占位变为可用
+2. **FixedIssueIDs** — `Build.getFixedIssueIds()` 逻辑移植，补上最后一块空返回 API
+3. **鉴权** `canAccessBuild` — 安全基线，让所有 API 的权限检查从桩变为可用
+4. **PipelinePanel + BuildSpec** — 解析 buildspec YAML 生成 job DAG 驱动流水线可视化
+5. **WebSocket 实时更新** — 列表页和详情页状态实时刷新
+6. **构建执行引擎** — 最大的单块工作，需要完整 CI 引擎实现
+
+#### 关键 OneDev 只读参考
+
+```
+references/onedev/server-core/src/main/java/io/onedev/server/
+  model/Build.java, BuildParam.java, BuildLabel.java, BuildDependence.java
+  buildspec/                          # BuildSpec + Job + Step 定义
+    job/trigger/                      # 8 种触发器
+    step/                             # 29 种构建步骤
+    param/spec/                       # 13 种参数类型
+    job/action/                       # PostBuildAction
+  job/                                # JobService, JobContext, JobRunnable
+  rest/resource/BuildResource.java
+  rest/resource/BuildLogStreamResource.java
+  web/page/project/builds/            # 全部 Wicket 页面
+  web/component/build/                # 全部 Wicket 组件
+  web/component/pipeline/             # PipelinePanel + pipeline.js
+```
+
+#### 验收提醒
+
+Wave 5 所有页面当前 **复刻 = `~`**，无一通过截图 DoD。主要阻塞：
+- **CI 引擎缺失** → 无 buildspec 执行、无日志流、无产物发布、无真实 pipeline 数据
+- **git diff API 缺失** → BuildChangesPage 无法计算文件变更
+- **commit 解析缺失** → FixedIssuesPage 无数据
+
+在 CI 引擎就绪前，P0/P1 项可独立推进；P3 中的「构建执行引擎」是整个 Wave 5 的前置依赖。接 API 不等于完成；每页仍需对照 Wicket HTML/CSS 做 1:1 验收（见 [buildx-web-design.md](buildx-web-design.md)）。
 
 ---
 

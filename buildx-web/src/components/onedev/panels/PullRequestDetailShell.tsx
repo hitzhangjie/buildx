@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../Icon";
+import { InlineDropdown } from "../DropdownMenu";
 import { PullRequestMoreInfoPanel } from "./PullRequestMoreInfoPanel";
 import {
   pullRequestStatusBadge,
@@ -11,6 +12,7 @@ import {
   type PullRequestAssignment,
 } from "../../../api/pullRequests";
 import { formatWhenISO } from "../../../util/time";
+import "../../../pages/project/pullrequests/pull-request-detail.css";
 
 export type PullRequestTab = "activities" | "changes" | "code-comments";
 
@@ -34,8 +36,15 @@ type PullRequestDetailShellProps = {
   onRequestChanges?: () => void;
   onDeleteSourceBranch?: () => void;
   onRestoreSourceBranch?: () => void;
-  onSynchronize?: () => void;
+  onUpdateSourceBranch?: (method: "merge" | "rebase") => void;
   onDelete?: () => void;
+
+  // Sidebar actions.
+  onSynchronize?: () => void;
+  onAssignToMe?: () => void;
+  onAutoMergeChange?: (enabled: boolean) => void;
+  autoMergeEnabled?: boolean;
+  currentUser?: { id: number; name: string } | null;
 
   // Reviewers.
   onRemoveReviewer?: (userId: number) => void;
@@ -53,6 +62,9 @@ type PullRequestDetailShellProps = {
 
   // Target branch change.
   onChangeTargetBranch?: (branch: string) => void;
+
+  // Source branch outdated.
+  sourceBranchOutdated?: boolean;
 
   children: ReactNode;
 };
@@ -75,14 +87,20 @@ export function PullRequestDetailShell({
   onRequestChanges,
   onDeleteSourceBranch,
   onRestoreSourceBranch,
-  onSynchronize,
+  onUpdateSourceBranch,
   onDelete,
+  onSynchronize,
+  onAssignToMe,
+  onAutoMergeChange,
+  autoMergeEnabled,
+  currentUser,
   onRemoveReviewer,
   onRequestReviewAgain,
   onMergeStrategyChange,
   onTitleChange,
   onDescriptionChange,
   onChangeTargetBranch,
+  sourceBranchOutdated,
   addReviewerSlot,
   children,
 }: PullRequestDetailShellProps) {
@@ -94,6 +112,25 @@ export function PullRequestDetailShell({
   const [editedTitle, setEditedTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState("");
+  const [sideInfoVisible, setSideInfoVisible] = useState(true);
+
+  // ---- Role-based visibility (matches OneDev PullRequestDetailPage.java) ----
+  const currentUserId = currentUser?.id;
+  const isSubmitter = currentUserId != null && pr?.submitter?.id === currentUserId;
+  const isAssignee = currentUserId != null && assignments.some((a) => a.user?.id === currentUserId);
+  // canModifyPullRequest: submitter, assignee, or has ManagePullRequests permission.
+  // Used for: Discard, Reopen, Delete/Restore Source Branch, title/description edit,
+  //           target branch change, merge strategy, auto-merge toggle, sync/delete.
+  const canModify = isSubmitter || isAssignee;
+  // canWriteCode: WriteCode project permission — SEPARATE from canModifyPullRequest.
+  // Used for: Merge, Update Source Branch.
+  // TODO: replace with server-provided permission via API when available.
+  // Conservative approximation: exclude the submitter so they cannot self-merge.
+  const canWriteCode = canModify && !isSubmitter;
+  // User is a reviewer with PENDING status (Approve / Request For Changes)
+  const isPendingReviewer =
+    currentUserId != null &&
+    reviews.some((r) => r.user?.id === currentUserId && r.status === "PENDING");
 
   function handleTitleSave() {
     const trimmed = editedTitle.trim();
@@ -110,62 +147,89 @@ export function PullRequestDetailShell({
     setEditingDescription(false);
   }
 
+  const isOpen = pr?.status === "OPEN";
+  const isCalculatingMergePreview = isOpen && mergePreview === null && !loading;
+  const hasMergeConflict = mergePreview?.conflicted;
+  const mergeable = mergePreview && !mergePreview.conflicted;
+
   return (
     <div className="pull-request-detail card m-2 m-sm-5">
+      {/* Header */}
       <div className="card-header align-items-center justify-content-start flex-nowrap d-flex">
         <div className="d-flex align-items-center flex-grow-1">
-          <div className="card-title mr-3">
-            {editingTitle && pr ? (
-              <span className="d-inline-flex align-items-center">
+          {editingTitle && pr ? (
+            <form
+              className="form flex-grow-1 d-flex align-items-center"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleTitleSave();
+              }}
+            >
+              <div className="clearable-wrapper mr-3 flex-grow-1">
                 <input
                   type="text"
-                  className="form-control form-control-sm d-inline-block"
-                  style={{ width: "400px" }}
+                  className="form-control"
+                  placeholder="Input title"
                   value={editedTitle}
                   onChange={(e) => setEditedTitle(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleTitleSave();
                     if (e.key === "Escape") setEditingTitle(false);
                   }}
                   autoFocus
                 />
+              </div>
+              <div className="flex-shrink-0 text-nowrap">
                 <button
-                  type="button"
-                  className="btn btn-sm btn-primary ml-1"
-                  onClick={handleTitleSave}
+                  type="submit"
+                  className="btn btn-primary btn-icon mr-1"
+                  title="Save"
                 >
-                  Save
+                  <Icon name="tick" />
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary ml-1"
-                  onClick={() => setEditingTitle(false)}
+                <a
+                  className="btn btn-secondary btn-icon"
+                  title="Cancel"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setEditingTitle(false);
+                  }}
                 >
-                  Cancel
-                </button>
-              </span>
-            ) : (
-              <span>
-                {pr?.title ?? (loading ? "Loading…" : "Pull Request")}
+                  <Icon name="times" />
+                </a>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="card-title mr-3">
+                <span>{pr?.title ?? (loading ? "Loading…" : "Pull Request")}</span>
                 <span className="text-muted ml-1">#{requestNumber}</span>
-                {pr?.status === "OPEN" && onTitleChange && (
-                  <a
-                    href="#"
-                    className="ml-2 text-muted"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setEditedTitle(pr.title);
-                      setEditingTitle(true);
-                    }}
-                    title="Edit title"
-                  >
-                    <Icon name="edit" />
-                  </a>
-                )}
-              </span>
-            )}
-          </div>
+              </div>
+              {isOpen && onTitleChange && canModify && (
+                <a
+                  className="btn btn-xs btn-icon btn-light btn-hover-primary edit mr-3"
+                  title="Edit title"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setEditedTitle(pr!.title);
+                    setEditingTitle(true);
+                  }}
+                >
+                  <Icon name="edit" />
+                </a>
+              )}
+            </>
+          )}
         </div>
+        <a
+          className="side-info flex-shrink-0 ml-3"
+          title="More info"
+          onClick={(e) => {
+            e.preventDefault();
+            setSideInfoVisible((v) => !v);
+          }}
+        >
+          <Icon name="ellipsis" />
+        </a>
       </div>
 
       <div className="card-body d-flex">
@@ -179,12 +243,15 @@ export function PullRequestDetailShell({
                 <div className={`badge status mr-3 ${pullRequestStatusBadge(pr.status)}`}>
                   {pullRequestStatusLabel(pr.status)}
                 </div>
-                <div className="branches text-muted font-size-sm mr-3">
-                  <Icon name="branch" />
-                  <span className="mx-1">{pr.sourceBranch}</span>
-                  <span className="mx-1">&rarr;</span>
-                  <span className="mx-1">{pr.targetBranch}</span>
-                </div>
+                <a className="btn btn-outline-secondary btn-sm mr-3" title="Workspaces on source branch">
+                  Workspaces <Icon name="arrow" className="icon rotate-90" />
+                </a>
+                <a
+                  className="btn btn-outline-secondary btn-icon mr-3"
+                  title="Check out to local directory"
+                >
+                  <Icon name="download2" />
+                </a>
                 <Link
                   to={`/${projectPath}/~pulls/new`}
                   className="btn btn-primary btn-icon flex-shrink-0 ml-auto"
@@ -194,11 +261,12 @@ export function PullRequestDetailShell({
                 </Link>
               </div>
 
-              {/* Description area */}
+              {/* Primary (description + summary) */}
               <div className="primary border border-dashed border-primary rounded p-4 mb-4">
                 <div className="description">
-                  <div className="mb-3 text-muted font-size-sm">
-                    <strong>{pr.submitter?.name ?? "Unknown"}</strong> opened {formatWhenISO(pr.submitDate)}
+                  <div className="mb-3">
+                    <span>{pr.submitter?.name ?? "Unknown"}</span>{" "}
+                    opened <span>{formatWhenISO(pr.submitDate)}</span>
                   </div>
                   {editingDescription ? (
                     <div>
@@ -213,14 +281,14 @@ export function PullRequestDetailShell({
                         className="btn btn-sm btn-primary mr-1"
                         onClick={handleDescriptionSave}
                       >
-                        Save
+                        <Icon name="tick" /> Save
                       </button>
                       <button
                         type="button"
                         className="btn btn-sm btn-secondary"
                         onClick={() => setEditingDescription(false)}
                       >
-                        Cancel
+                        <Icon name="times" /> Cancel
                       </button>
                     </div>
                   ) : (
@@ -230,7 +298,7 @@ export function PullRequestDetailShell({
                       ) : (
                         <div className="content text-muted font-italic">No description</div>
                       )}
-                      {pr.status === "OPEN" && onDescriptionChange && (
+                      {isOpen && onDescriptionChange && canModify && (
                         <a
                           href="#"
                           className="text-muted font-size-sm mt-1 d-inline-block"
@@ -248,143 +316,186 @@ export function PullRequestDetailShell({
                 </div>
 
                 {/* Merge condition summary */}
-                {pr.status === "OPEN" && (
-                  <div className="summary font-size-h6 border-top pt-4 mt-4">
-                    {isWIP && (
-                      <div className="text-warning">
-                        <Icon name="exclamation-circle" /> Work in progress — title starts with WIP
-                      </div>
-                    )}
-                    {mergePreview?.conflicted && (
-                      <div className="has-merge-conflict text-warning">
-                        <Icon name="exclamation-circle" /> There are merge conflicts.
-                      </div>
-                    )}
-                    {!mergePreview?.conflicted && mergePreview && (
-                      <div className="calculated-merge-preview text-success">
-                        <Icon name="tick-circle" /> Able to merge without conflicts
-                      </div>
-                    )}
-                    {changesRequested && (
-                      <div className="requested-for-changes text-warning mt-2">
-                        <Icon name="diff" /> Pull request cannot be merged as it was requested for changes
-                      </div>
-                    )}
-                    {pendingReviews && (
-                      <div className="waiting-for-reviews text-warning mt-2">
-                        <Icon name="clock" /> Pull request cannot be merged as it is pending review
-                      </div>
-                    )}
-                  </div>
-                )}
+                <div className="summary font-size-h6 border-top pt-4 mt-4">
+                  {/* WIP */}
+                  {isOpen && isWIP && (
+                    <div className="work-in-progress text-warning">
+                      <Icon name="clock" /> Pull request is still a work in progress
+                    </div>
+                  )}
 
-                {pr.status === "MERGED" && (
-                  <div className="summary font-size-h6 border-top pt-4 mt-4 merged text-success">
-                    <Icon name="tick-circle" /> Commits were merged into target branch
-                  </div>
-                )}
-                {pr.status === "DISCARDED" && (
-                  <div className="summary font-size-h6 border-top pt-4 mt-4 discarded text-info">
-                    <Icon name="info-circle" /> This pull request has been discarded
-                  </div>
-                )}
+                  {/* Calculating merge preview */}
+                  {isCalculatingMergePreview && (
+                    <div className="calculating-merge-preview text-warning d-flex align-items-center">
+                      <Icon name="loading" className="icon spin mr-2" /> Calculating merge preview...
+                    </div>
+                  )}
+
+                  {/* Merge conflict */}
+                  {isOpen && hasMergeConflict && (
+                    <div className="has-merge-conflict text-warning">
+                      <Icon name="exclamation-circle" /> There are merge conflicts.
+                    </div>
+                  )}
+
+                  {/* Mergeable */}
+                  {isOpen && mergeable && (
+                    <div className="calculated-merge-preview text-success">
+                      <Icon name="tick-circle" /> Able to merge without conflicts
+                    </div>
+                  )}
+
+                  {/* Source branch outdated */}
+                  {isOpen && sourceBranchOutdated && !hasMergeConflict && (
+                    <div className="source-branch-outdated text-primary">
+                      <Icon name="info-circle" /> Source branch is outdated{" "}
+                      <a className="link-primary" title="Show changes">
+                        <Icon name="diff" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Requested for changes */}
+                  {isOpen && changesRequested && (
+                    <div className="requested-for-changes text-warning">
+                      <Icon name="diff" /> Pull request cannot be merged now as it was requested for changes
+                    </div>
+                  )}
+
+                  {/* Waiting for reviews */}
+                  {isOpen && pendingReviews && (
+                    <div className="waiting-for-reviews text-warning">
+                      <Icon name="clock" /> Pull request cannot be merged now as it is pending review
+                    </div>
+                  )}
+
+                  {/* Merged */}
+                  {pr.status === "MERGED" && (
+                    <div className="merged text-success">
+                      <Icon name="tick-circle" /> Commits were merged into target branch
+                    </div>
+                  )}
+
+                  {/* Discarded */}
+                  {pr.status === "DISCARDED" && (
+                    <div className="discarded text-info">
+                      <Icon name="info-circle" /> This pull request has been discarded
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Operations bar */}
-              <div className="operations mb-3">
-                {pr.status === "OPEN" && onMerge && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-success btn-hover-success mr-2"
-                    disabled={actionPending || mergePreview?.conflicted || pendingReviews || changesRequested}
-                    onClick={onMerge}
+              {/* Operations bar — visibility matches OneDev PullRequestDetailPage#newOperationsContainer */}
+              <div className="operations d-flex flex-wrap align-items-center">
+                {/* Merge: requires WriteCode permission + merge conditions met */}
+                {isOpen && onMerge && canWriteCode && mergeable && !hasMergeConflict && (
+                  <a
+                    className="btn btn-sm btn-light-success btn-hover-success"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onMerge(); }}
                   >
                     Merge
-                  </button>
+                  </a>
                 )}
-                {pr.status === "OPEN" && onDiscard && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-info btn-hover-info mr-2"
-                    disabled={actionPending}
-                    onClick={onDiscard}
+                {/* Discard: submitter, assignee, or manage permission */}
+                {isOpen && onDiscard && canModify && (
+                  <a
+                    className="btn btn-sm btn-light-info btn-hover-info"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onDiscard(); }}
                   >
                     Discard
-                  </button>
+                  </a>
                 )}
-                {pr.status === "OPEN" && onApprove && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-success btn-hover-success mr-2"
-                    disabled={actionPending}
-                    onClick={onApprove}
+                {/* Approve: user has a pending review */}
+                {isOpen && onApprove && isPendingReviewer && (
+                  <a
+                    className="btn btn-sm btn-light-success btn-hover-success"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onApprove(); }}
                   >
                     Approve
-                  </button>
+                  </a>
                 )}
-                {pr.status === "OPEN" && onRequestChanges && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-warning btn-hover-warning mr-2"
-                    disabled={actionPending}
-                    onClick={onRequestChanges}
+                {/* Request For Changes: user has a pending review */}
+                {isOpen && onRequestChanges && isPendingReviewer && (
+                  <a
+                    className="btn btn-sm btn-light-warning btn-hover-warning"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onRequestChanges(); }}
                   >
                     Request For Changes
-                  </button>
+                  </a>
                 )}
-                {pr.status === "DISCARDED" && onReopen && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-primary btn-hover-primary mr-2"
-                    disabled={actionPending}
-                    onClick={onReopen}
+                {/* Reopen: can modify PR + discarded */}
+                {pr.status === "DISCARDED" && onReopen && canModify && (
+                  <a
+                    className="btn btn-sm btn-light-primary btn-hover-primary"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onReopen(); }}
                   >
                     Reopen
-                  </button>
+                  </a>
                 )}
-                {pr.status === "OPEN" && onDeleteSourceBranch && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-danger btn-hover-danger mr-2"
-                    disabled={actionPending}
-                    onClick={onDeleteSourceBranch}
+                {/* Update Source Branch: WriteCode + source outdated */}
+                {isOpen && onUpdateSourceBranch && canWriteCode && sourceBranchOutdated && (
+                  <InlineDropdown
+                    label={
+                      <>
+                        <span>Update Source Branch</span>{" "}
+                        <Icon name="arrow" className="icon rotate-90" />
+                      </>
+                    }
+                    className="btn btn-sm btn-light-primary btn-hover-primary"
+                    wrapperClassName="mb-1-2"
+                  >
+                    {({ close }) => (
+                      <div className="dropdown-menu-content">
+                        <a
+                          className="dropdown-item"
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onUpdateSourceBranch("merge");
+                            close();
+                          }}
+                        >
+                          Merge
+                        </a>
+                        <a
+                          className="dropdown-item"
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onUpdateSourceBranch("rebase");
+                            close();
+                          }}
+                        >
+                          Rebase
+                        </a>
+                      </div>
+                    )}
+                  </InlineDropdown>
+                )}
+                {/* Delete Source Branch: can modify PR + can delete branch */}
+                {isOpen && onDeleteSourceBranch && canModify && (
+                  <a
+                    className="btn btn-sm btn-light-primary btn-hover-primary"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onDeleteSourceBranch(); }}
                   >
                     Delete Source Branch
-                  </button>
+                  </a>
                 )}
-                {pr.status === "OPEN" && onRestoreSourceBranch && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-success btn-hover-success mr-2"
-                    disabled={actionPending}
-                    onClick={onRestoreSourceBranch}
+                {/* Restore Source Branch: can modify PR + can write code */}
+                {isOpen && onRestoreSourceBranch && canModify && canWriteCode && (
+                  <a
+                    className="btn btn-sm btn-light-primary btn-hover-primary"
+                    role="button"
+                    onClick={(e) => { e.preventDefault(); onRestoreSourceBranch(); }}
                   >
                     Restore Source Branch
-                  </button>
-                )}
-                {pr.status === "OPEN" && onSynchronize && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-primary btn-hover-primary mr-2"
-                    disabled={actionPending}
-                    onClick={onSynchronize}
-                  >
-                    Sync
-                  </button>
-                )}
-                {onDelete && (
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light-danger btn-hover-danger mr-2"
-                    disabled={actionPending}
-                    onClick={() => {
-                      if (confirm("Are you sure you want to delete this pull request?")) {
-                        onDelete();
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
+                  </a>
                 )}
               </div>
             </>
@@ -405,7 +516,7 @@ export function PullRequestDetailShell({
             <li className="nav-item">
               <Link
                 to={`${base}/code-comments`}
-                className={`nav-link${activeTab === "code-comments" ? " active" : ""}`}
+                className={`code-comments nav-link d-flex align-items-center${activeTab === "code-comments" ? " active" : ""}`}
               >
                 Code Comments
               </Link>
@@ -416,18 +527,28 @@ export function PullRequestDetailShell({
         </div>
 
         {/* Sidebar */}
-        {pr && (
+        {pr && sideInfoVisible && (
           <PullRequestMoreInfoPanel
             pr={pr}
             reviews={reviews}
             assignments={assignments}
             mergePreview={mergePreview}
             actionPending={actionPending}
+            currentUser={currentUser}
+            autoMergeEnabled={autoMergeEnabled}
             onMergeStrategyChange={onMergeStrategyChange}
             onRemoveReviewer={onRemoveReviewer}
             onRequestReviewAgain={onRequestReviewAgain}
-            addReviewerSlot={addReviewerSlot}
+            onAssignToMe={onAssignToMe}
+            onSynchronize={onSynchronize}
+            onDelete={onDelete}
+            onAutoMergeChange={onAutoMergeChange}
             onChangeTargetBranch={onChangeTargetBranch}
+            onUpdateSourceBranch={onUpdateSourceBranch}
+            sourceBranchOutdated={sourceBranchOutdated}
+            addReviewerSlot={addReviewerSlot}
+            canModify={canModify}
+            canWriteCode={canWriteCode}
           />
         )}
       </div>

@@ -25,6 +25,7 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/server/api"
 	bxmiddleware "github.com/hitzhangjie/buildx/buildx-server/internal/server/middleware"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/version"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/workspace"
 )
 
 // Server is the BuildX application server.
@@ -84,8 +85,22 @@ func (s *Server) routes() chi.Router {
 	tokenHandler := &api.AccessTokensHandler{Security: sec}
 	userAuthzHandler := &api.UserAuthorizationsHandler{Security: sec}
 	rolesHandler := &api.RolesHandler{Security: sec}
+	avatarHandler := &api.AvatarHandler{Projects: projects, Security: sec}
 	invitationsStore := invitation.NewDBStore(s.store.DB())
 	invitationsHandler := &api.InvitationsHandler{Invitations: invitationsStore, Security: sec}
+	workspacesStore := workspace.NewDBStore(s.store.DB())
+	workspacesHandler := &api.WorkspacesHandler{Workspaces: workspacesStore, Projects: projects, Security: sec}
+	codeStatsHandler := &api.CodeStatsHandler{Projects: projects, Security: sec}
+
+	// CI engine handlers (job service and agent store may be nil until wired).
+	var jobService api.JobService
+	var logService api.LogService
+	var agentStore api.AgentStore
+	jobRunHandler := &api.JobRunHandler{Jobs: jobService, Builds: buildsStore, Projects: projects, Security: sec}
+	buildLogHandler := &api.BuildLogHandler{Jobs: logService, Builds: buildsStore, Security: sec}
+	agentsHandler := &api.AgentsHandler{Agents: agentStore, Security: sec}
+	// Update buildsHandler with optional job service for run/cancel.
+	buildsHandler.Jobs = jobService
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -169,6 +184,52 @@ func (s *Server) routes() chi.Router {
 			}
 			projectHandler.Delete(w, r, id)
 		})
+			// Project update (general info) — mirrors OneDev POST /~api/projects/{projectId}
+			r.Post("/projects/{projectId}", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+				if err != nil {
+					http.Error(w, "invalid project id", http.StatusBadRequest)
+					return
+				}
+				projectHandler.Update(w, r, id)
+			})
+
+			// Project settings — mirrors OneDev GET/POST /~api/projects/{projectId}/setting
+			r.Get("/projects/{projectId}/setting", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+				if err != nil {
+					http.Error(w, "invalid project id", http.StatusBadRequest)
+					return
+				}
+				projectHandler.GetSetting(w, r, id)
+			})
+			r.Post("/projects/{projectId}/setting", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+				if err != nil {
+					http.Error(w, "invalid project id", http.StatusBadRequest)
+					return
+				}
+				projectHandler.UpdateSetting(w, r, id)
+			})
+
+			// Project avatar — file-based storage, mirrors OneDev's AvatarService
+			r.Post("/projects/{projectId}/avatar", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+				if err != nil {
+					http.Error(w, "invalid project id", http.StatusBadRequest)
+					return
+				}
+				avatarHandler.Upload(w, r, id)
+			})
+			r.Get("/projects/{projectId}/avatar", func(w http.ResponseWriter, r *http.Request) {
+				id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+				if err != nil {
+					http.Error(w, "invalid project id", http.StatusBadRequest)
+					return
+				}
+				avatarHandler.Serve(w, r, id)
+			})
+
 
 		r.Get("/repositories/{projectId}/branches", repoHandler.ListBranches)
 		r.Get("/repositories/{projectId}/default-branch", repoHandler.GetDefaultBranch)
@@ -179,6 +240,32 @@ func (s *Server) routes() chi.Router {
 		r.Get("/repositories/{projectId}/commits/{commitHash}", repoHandler.GetCommit)
 		r.Get("/repositories/{projectId}/compare", repoHandler.Compare)
 		r.Get("/repositories/{projectId}/compare/patch", repoHandler.ComparePatch)
+
+		// Code statistics (contributions, source lines, top contributors).
+		r.Get("/projects/{projectId}/stats/code/overall-contributions", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			codeStatsHandler.OverallContributions(w, r, id)
+		})
+		r.Get("/projects/{projectId}/stats/code/line-increments", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			codeStatsHandler.LineIncrements(w, r, id)
+		})
+		r.Get("/projects/{projectId}/stats/code/top-contributors", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			codeStatsHandler.TopContributors(w, r, id)
+		})
 
 		// Access token management.
 		r.Get("/access-tokens", tokenHandler.List)
@@ -515,6 +602,60 @@ func (s *Server) routes() chi.Router {
 				if !ok { return }
 				pullRequestsHandler.DeletePullRequest(w, r, id)
 			})
+		r.Get("/workspaces", workspacesHandler.Query)
+		r.Get("/projects/{projectId}/workspaces", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			workspacesHandler.QueryByProject(w, r, id)
+		})
+		r.Post("/projects/{projectId}/workspaces", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			workspacesHandler.Create(w, r, id)
+		})
+		r.Get("/projects/{projectId}/workspaces/{workspaceNumber}", func(w http.ResponseWriter, r *http.Request) {
+			projectID, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			wsNum, ok := api.ParseWorkspaceNumber(w, r)
+			if !ok {
+				return
+			}
+			workspacesHandler.Get(w, r, projectID, wsNum)
+		})
+		r.Delete("/projects/{projectId}/workspaces/{workspaceNumber}", func(w http.ResponseWriter, r *http.Request) {
+			projectID, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			wsNum, ok := api.ParseWorkspaceNumber(w, r)
+			if !ok {
+				return
+			}
+			workspacesHandler.Delete(w, r, projectID, wsNum)
+		})
+		r.Post("/projects/{projectId}/workspaces/{workspaceNumber}/reset", func(w http.ResponseWriter, r *http.Request) {
+			projectID, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			wsNum, ok := api.ParseWorkspaceNumber(w, r)
+			if !ok {
+				return
+			}
+			workspacesHandler.Reset(w, r, projectID, wsNum)
+		})
+
 		r.Get("/builds", buildsHandler.Query)
 		r.Get("/builds/{buildId}", func(w http.ResponseWriter, r *http.Request) {
 			id, ok := api.ParseBuildID(w, r)
@@ -571,6 +712,118 @@ func (s *Server) routes() chi.Router {
 				return
 			}
 			buildsHandler.Delete(w, r, id)
+		})
+
+		// Job run routes (CI engine)
+		r.Post("/job-runs", func(w http.ResponseWriter, r *http.Request) {
+			jobRunHandler.SubmitBuild(w, r)
+		})
+		r.Post("/job-runs/rebuild", func(w http.ResponseWriter, r *http.Request) {
+			jobRunHandler.Rebuild(w, r)
+		})
+		r.Delete("/job-runs/{buildId}", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			jobRunHandler.CancelBuild(w, r, id)
+		})
+		r.Post("/job-runs/{buildId}/pause", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			jobRunHandler.PauseBuild(w, r, id)
+		})
+		r.Post("/job-runs/{buildId}/resume", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			jobRunHandler.ResumeBuild(w, r, id)
+		})
+
+		// Build log routes
+		r.Get("/builds/{buildId}/log", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			buildLogHandler.GetLog(w, r, id)
+		})
+		r.Get("/builds/{buildId}/log-stream", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			buildLogHandler.StreamLog(w, r, id)
+		})
+
+		// Build rerun/cancel on existing build resource
+		r.Post("/builds/{buildId}/run", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			buildsHandler.Run(w, r, id)
+		})
+		r.Post("/builds/{buildId}/cancel", func(w http.ResponseWriter, r *http.Request) {
+			id, ok := api.ParseBuildID(w, r)
+			if !ok {
+				return
+			}
+			buildsHandler.Cancel(w, r, id)
+		})
+
+		// Agent management routes (admin only)
+		r.Get("/agents", agentsHandler.Query)
+		r.Get("/agents/{agentId}", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "agentId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid agent id", http.StatusBadRequest)
+				return
+			}
+			agentsHandler.Get(w, r, id)
+		})
+		r.Get("/agents/{agentId}/attributes", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "agentId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid agent id", http.StatusBadRequest)
+				return
+			}
+			agentsHandler.GetAttributes(w, r, id)
+		})
+		r.Post("/agents/{agentId}/attributes", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "agentId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid agent id", http.StatusBadRequest)
+				return
+			}
+			agentsHandler.UpdateAttributes(w, r, id)
+		})
+		r.Get("/agents/{agentId}/token", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "agentId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid agent id", http.StatusBadRequest)
+				return
+			}
+			agentsHandler.GetToken(w, r, id)
+		})
+		r.Post("/agents/{agentId}/token", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "agentId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid agent id", http.StatusBadRequest)
+				return
+			}
+			agentsHandler.RegenerateToken(w, r, id)
+		})
+		r.Delete("/agents/{agentId}", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "agentId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid agent id", http.StatusBadRequest)
+				return
+			}
+			agentsHandler.Delete(w, r, id)
 		})
 	})
 

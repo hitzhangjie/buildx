@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { ProjectLayout } from "../../layout/ProjectLayout";
+import "../../pages/project/settings/project-setting.css";
 
 type SettingsLayoutProps = {
   projectPath: string;

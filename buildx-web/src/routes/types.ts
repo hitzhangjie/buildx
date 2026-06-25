@@ -39,6 +39,11 @@ export type KnownPage =
   | "mailService"
   | "branding"
   | "agentList"
+  | "agentOverview"
+  | "agentBuilds"
+  | "agentWorkspaces"
+  | "agentLog"
+  | "jobExecutors"
   | "issueFieldList"
   | "issueStateList"
   // Wave 11 help
@@ -89,8 +94,24 @@ export type KnownProjectPage =
   | "buildChanges"
   | "buildFixedIssues"
   | "buildArtifacts"
+  | "buildReport"
   // Project settings
-  | "projectUserAuthorizations";
+  | "generalSetting"
+  | "avatarEdit"
+  | "projectUserAuthorizations"
+  // Workspaces
+  | "projectWorkspaces"
+  | "workspaceDashboard"
+  | "workspaceChanges"
+  | "workspaceLog"
+  // Packages
+  | "projectPacks"
+  | "packDetail"
+  | "buildPacks"
+  // Statistics
+  | "codeContribs"
+  | "sourceLines"
+  | "buildMetricStats";
 
 export type RouteDefinition = {
   path: string;

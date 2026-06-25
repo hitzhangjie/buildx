@@ -16,10 +16,16 @@ type projectService interface {
 	List(ctx context.Context) ([]*model.Project, error)
 	Create(ctx context.Context, userID int64, p *model.Project) (*model.Project, error)
 	Setup(ctx context.Context, userID int64, path string) (*model.Project, error)
+	Move(ctx context.Context, projectID int64, newParentID *int64) (*model.Project, error)
+	ListChildren(ctx context.Context, parentID int64) ([]*model.Project, error)
+	CountChildren(ctx context.Context, parentID int64) (int, error)
 	Delete(ctx context.Context, id int64) error
 	ProjectDir(projectID int64) string
 	GitDir(projectID int64) string
 	Stats(ctx context.Context, projectID int64) (*git.ProjectStats, error)
+	Update(ctx context.Context, p *model.Project) error
+	GetSetting(ctx context.Context, id int64) (*model.ProjectSetting, error)
+	UpdateSetting(ctx context.Context, id int64, setting *model.ProjectSetting) error
 }
 
 // securityService is the interface API handlers need from the security package.
@@ -53,4 +59,14 @@ type securityService interface {
 	SyncUserAuthorizations(ctx context.Context, userID int64, beans []model.UserAuthorizationInput) error
 	ListProjectUserAuthorizations(ctx context.Context, projectID int64) ([]model.ProjectUserAuthorizationView, error)
 	SyncProjectUserAuthorizations(ctx context.Context, projectID int64, beans []model.ProjectUserAuthorizationInput) error
+}
+
+// agentRuntimeService is the interface for agent runtime operations.
+// This is a subset of AgentStore used by higher-level orchestrators.
+type agentRuntimeService interface {
+	Get(ctx context.Context, id int64) (*model.Agent, error)
+	Query(ctx context.Context, filter AgentQueryFilter, offset, count int) ([]*model.Agent, error)
+	GetAttributes(ctx context.Context, agentID int64) (map[string]string, error)
+	UpdateAttributes(ctx context.Context, agentID int64, attrs map[string]string) error
+	CreateToken(ctx context.Context, agentID int64) (*model.AgentToken, error)
 }

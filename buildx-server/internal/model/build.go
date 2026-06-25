@@ -34,13 +34,18 @@ type Build struct {
 	PendingDate     *time.Time  `json:"pendingDate,omitempty"`
 	RunningDate     *time.Time  `json:"runningDate,omitempty"`
 	FinishDate      *time.Time  `json:"finishDate,omitempty"`
+	RetryDate       *time.Time  `json:"retryDate,omitempty"`
 	PendingDuration int64       `json:"pendingDuration"`
 	RunningDuration int64       `json:"runningDuration"`
 	SubmitReason    string      `json:"submitReason"`
+	SubmitSequence  int64       `json:"submitSequence"`
 	Submitter       *User       `json:"submitter,omitempty"`
 	Canceller       *User       `json:"canceller,omitempty"`
 	Paused          bool        `json:"paused"`
 	UUID            string      `json:"uuid"`
+	Token           string      `json:"-"`
+	WorkDirPath     string      `json:"workDirPath,omitempty"`
+	CheckoutPaths   []string    `json:"checkoutPaths,omitempty"`
 }
 
 // BuildParam is a job parameter on a build (maps to o_BuildParam).
@@ -57,4 +62,16 @@ type BuildLabel struct {
 	ID      int64  `json:"id"`
 	BuildID int64  `json:"buildId"`
 	Name    string `json:"name"`
+}
+
+// BuildDependence represents a dependency relationship between two builds.
+// Maps to OneDev's BuildDependence entity.
+// The Dependent build depends on the Dependency build.
+type BuildDependence struct {
+	ID                int64  `json:"id"`
+	DependentID       int64  `json:"dependentId"`
+	DependencyID      int64  `json:"dependencyId"`
+	RequireSuccessful bool   `json:"requireSuccessful"`
+	Artifacts         string `json:"artifacts,omitempty"`
+	DestinationPath   string `json:"destinationPath,omitempty"`
 }

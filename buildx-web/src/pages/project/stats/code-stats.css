@@ -1,0 +1,54 @@
+/* Code stats pages — matches OneDev's code-stats.css */
+
+.code-contribs select {
+  width: 120px;
+}
+.code-contribs .overall {
+  height: 360px;
+}
+.code-contribs .overall .no-data {
+  text-align: center;
+  font-size: 2rem;
+  margin-top: 2rem;
+  font-weight: bold;
+}
+
+.code-contribs .top-contributors .loading {
+  background: url(/~img/ajax-indicator-big.png) no-repeat scroll center center;
+  background-size: 64px 64px;
+  height: 64px;
+}
+.dark-mode .code-contribs .top-contributors .loading {
+  background: url(/~img/dark-ajax-indicator-big.png) no-repeat scroll center center;
+  background-size: 64px 64px;
+}
+
+.code-contribs .top-contributors .head .total-contribution span.additions {
+  color: green;
+}
+.code-contribs .top-contributors .head .total-contribution span.deletions {
+  color: red;
+}
+
+.code-contribs .top-contributors .avatar {
+  width: 36px;
+  height: 36px;
+}
+.code-contribs .top-contributors .body {
+  height: 300px;
+}
+.code-contribs .top-contributors .col-xl-6.left {
+  padding-right: 1rem;
+}
+.code-contribs .top-contributors .col-xl-6.right {
+  padding-left: 1rem;
+}
+
+.source-lines .chart {
+  min-height: 400px;
+}
+.source-lines .no-data {
+  text-align: center;
+  font-size: 3rem;
+  font-style: italic;
+}

@@ -1,133 +1,30 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { fetchProjects, fetchProject, updateProject } from "../../../api/projects";
 
 export default function ServiceDeskSettingPage() {
   const { projectPath } = useProject();
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [feedback, setFeedback] = useState<string[]>([]);
 
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [emailAddress, setEmailAddress] = useState("");
-  const [imapHost, setImapHost] = useState("");
-  const [imapPort, setImapPort] = useState("993");
-  const [imapUsername, setImapUsername] = useState("");
-  const [imapPassword, setImapPassword] = useState("");
-  const [feedback, setFeedback] = useState<{
-    type: "info" | "danger";
-    message: string;
-  } | null>(null);
+  useEffect(() => { let c = false; fetchProjects().then(ps => { if (!c) { const f = ps.find(p => p.path === projectPath); setProjectId(f?.id ?? null); } }).catch(() => {}); return () => { c = true; }; }, [projectPath]);
+  useEffect(() => { if (projectId === null) return; let c = false; setLoading(true); fetchProject(projectId).then(p => { if (!c) { setEmail(p.serviceDeskEmailAddress ?? ""); setLoading(false); } }).catch(() => { if (!c) setLoading(false); }); return () => { c = true; }; }, [projectId]);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    setFeedback({
-      type: "info",
-      message: emailEnabled
-        ? "Service desk email settings saved."
-        : "Service desk disabled.",
-    });
-  };
+  const save = useCallback(async (e: React.FormEvent) => { e.preventDefault(); if (projectId === null) return; setSaving(true); setFeedback([]); try { await updateProject(projectId, { name: "", serviceDeskEmailAddress: email }); setFeedback(["Service desk settings updated."]); } catch (err: unknown) { setFeedback([err instanceof Error ? err.message : String(err)]); } finally { setSaving(false); } }, [projectId, email]);
 
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="Service Desk"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
   return (
     <SettingsLayout projectPath={projectPath} pageTitle="Service Desk">
-      <div className="card">
-        <div className="card-body">
-          <FormFeedbackPanel messages={feedback ? [feedback.message] : []} />
-          <form onSubmit={handleSubmit}>
-            <div className="mb-4">
-              <div className="d-flex align-items-center justify-content-between">
-                <span>Enable Service Desk (Email)</span>
-                <div className="form-check form-switch">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    role="switch"
-                    checked={emailEnabled}
-                    onChange={(e) => setEmailEnabled(e.target.checked)}
-                  />
-                </div>
-              </div>
-              <div className="form-text">
-                When enabled, users can create issues by sending email to the configured address.
-              </div>
-            </div>
-
-            {emailEnabled && (
-              <>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="service-email">
-                    Service Email Address
-                  </label>
-                  <input
-                    id="service-email"
-                    className="form-control"
-                    type="email"
-                    value={emailAddress}
-                    onChange={(e) => setEmailAddress(e.target.value)}
-                    placeholder="issues@yourdomain.com"
-                  />
-                </div>
-                <hr className="my-4" />
-                <h6 className="mb-3">IMAP Settings</h6>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="imap-host">
-                    IMAP Host
-                  </label>
-                  <input
-                    id="imap-host"
-                    className="form-control"
-                    type="text"
-                    value={imapHost}
-                    onChange={(e) => setImapHost(e.target.value)}
-                    placeholder="imap.yourdomain.com"
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="imap-port">
-                    IMAP Port
-                  </label>
-                  <input
-                    id="imap-port"
-                    className="form-control"
-                    type="text"
-                    value={imapPort}
-                    onChange={(e) => setImapPort(e.target.value)}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="imap-username">
-                    IMAP Username
-                  </label>
-                  <input
-                    id="imap-username"
-                    className="form-control"
-                    type="text"
-                    value={imapUsername}
-                    onChange={(e) => setImapUsername(e.target.value)}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label" htmlFor="imap-password">
-                    IMAP Password
-                  </label>
-                  <input
-                    id="imap-password"
-                    className="form-control"
-                    type="password"
-                    value={imapPassword}
-                    onChange={(e) => setImapPassword(e.target.value)}
-                  />
-                </div>
-              </>
-            )}
-
-            <button type="submit" className="btn btn-primary">
-              <Icon name="save" className="me-1" />
-              Save
-            </button>
-          </form>
-        </div>
-      </div>
-    </SettingsLayout>
-  );
+      <div className="card"><div className="card-body">
+        <div className="alert alert-notice bg-white shadow mb-5 text-gray">Configure service desk email to create issues from incoming emails.</div>
+        <FormFeedbackPanel messages={feedback} />
+        <form className="leave-confirm" onSubmit={save}>
+          <div className="mb-3"><label className="form-label">Service Desk Email Address</label><input className="form-control" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="service-desk@example.com" /></div>
+          <button type="submit" className="btn btn-primary dirty-aware" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+        </form>
+      </div></div>
+    </SettingsLayout>);
 }

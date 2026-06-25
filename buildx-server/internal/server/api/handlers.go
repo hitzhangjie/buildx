@@ -156,11 +156,12 @@ func (h *ProjectsHandler) CloneURL(w http.ResponseWriter, r *http.Request, proje
 	writeJSON(w, r, http.StatusOK, cloneURLResponse{HTTP: httpURL, SSH: sshURL})
 }
 
-// projectListItem enriches a Project with aggregate git stats for the
-// project list page.
+// projectListItem enriches a Project with aggregate git stats and child
+// count for the project list page.
 type projectListItem struct {
 	model.Project
-	Stats *git.ProjectStats `json:"stats,omitempty"`
+	Stats      *git.ProjectStats `json:"stats,omitempty"`
+	ChildCount int               `json:"childCount"`
 }
 
 func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +186,9 @@ func (h *ProjectsHandler) List(w http.ResponseWriter, r *http.Request) {
 		item := projectListItem{Project: *p}
 		if stats, err := h.Projects.Stats(r.Context(), p.ID); err == nil && stats != nil {
 			item.Stats = stats
+		}
+		if count, err := h.Projects.CountChildren(r.Context(), p.ID); err == nil {
+			item.ChildCount = count
 		}
 		result = append(result, item)
 	}
@@ -336,6 +340,127 @@ func (h *ProjectsHandler) Setup(w http.ResponseWriter, r *http.Request) {
 	}
 	op.OK(http.StatusOK, "project_id", p.ID, "project_key", p.Key)
 	writeJSON(w, r, http.StatusOK, p)
+}
+
+// Update updates project general information — mirrors OneDev POST /~api/projects/{projectId}.
+func (h *ProjectsHandler) Update(w http.ResponseWriter, r *http.Request, projectID int64) {
+	op := StartOp(r, "ProjectsHandler.Update", "project_id", projectID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	ok, err := h.Security.IsProjectOwner(r.Context(), user.ID, projectID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if !ok {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var p model.Project
+	if err := decodeJSON(r, &p); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid json", err)
+		return
+	}
+	p.ID = projectID
+
+	if err := h.Projects.Update(r.Context(), &p); err != nil {
+		if errors.Is(err, project.ErrAlreadyExists) || errors.Is(err, project.ErrInvalidName) {
+			op.Fail(err, http.StatusNotAcceptable)
+			http.Error(w, err.Error(), http.StatusNotAcceptable)
+			return
+		}
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+
+	updated, err := h.Projects.Get(r.Context(), projectID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	op.OK(http.StatusOK)
+	writeJSON(w, r, http.StatusOK, updated)
+}
+
+// GetSetting returns all project settings — mirrors OneDev GET /~api/projects/{projectId}/setting.
+func (h *ProjectsHandler) GetSetting(w http.ResponseWriter, r *http.Request, projectID int64) {
+	op := StartOp(r, "ProjectsHandler.GetSetting", "project_id", projectID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	ok, err := h.Security.IsProjectOwner(r.Context(), user.ID, projectID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if !ok {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	setting, err := h.Projects.GetSetting(r.Context(), projectID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	op.OK(http.StatusOK)
+	writeJSON(w, r, http.StatusOK, setting)
+}
+
+// UpdateSetting updates all project settings — mirrors OneDev POST /~api/projects/{projectId}/setting.
+func (h *ProjectsHandler) UpdateSetting(w http.ResponseWriter, r *http.Request, projectID int64) {
+	op := StartOp(r, "ProjectsHandler.UpdateSetting", "project_id", projectID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	ok, err := h.Security.IsProjectOwner(r.Context(), user.ID, projectID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if !ok {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var setting model.ProjectSetting
+	if err := decodeJSON(r, &setting); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "invalid json", err)
+		return
+	}
+
+	if err := h.Projects.UpdateSetting(r.Context(), projectID, &setting); err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	op.OK(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *ProjectsHandler) authenticate(r *http.Request) (*security.User, error) {

@@ -64,6 +64,11 @@ export function getProjectSidebarMenu(projectPath: string): ProjectMenuItem[] {
           href: link("/~stats/code/contribs"),
           activeSuffix: "/~stats/code",
         },
+        {
+          label: "Build Metrics",
+          href: link("/~stats/buildmetric"),
+          activeSuffix: "/~stats/buildmetric",
+        },
       ],
     },
     {

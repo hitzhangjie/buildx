@@ -51,10 +51,9 @@ function UserSearchInput({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [searching, setSearching] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (!open) return;
@@ -67,25 +66,32 @@ function UserSearchInput({
     return () => document.removeEventListener("mousedown", click);
   }, [open]);
 
-  const doSearch = useCallback(
-    (q: string) => {
-      if (!q.trim()) {
-        setResults([]);
-        return;
-      }
-      setSearching(true);
-      fetchUsers(q)
-        .then((list) => setResults(list.filter((u) => !excludeIds.includes(u.id))))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    },
-    [excludeIds],
-  );
+  // Fetch all eligible users when dropdown opens.
+  useEffect(() => {
+    if (!open) return;
+    setSearching(true);
+    fetchUsers()
+      .then((list) => {
+        setAllUsers(list.filter((u) => !excludeIds.includes(u.id)));
+      })
+      .catch(() => setAllUsers([]))
+      .finally(() => setSearching(false));
+  }, [open, excludeIds]);
+
+  // Filter locally based on query.
+  const results = query.trim()
+    ? allUsers.filter((u) => {
+        const lower = query.toLowerCase();
+        return (
+          (u.fullName || u.name).toLowerCase().includes(lower) ||
+          u.name.toLowerCase().includes(lower) ||
+          (u.email ?? "").toLowerCase().includes(lower)
+        );
+      })
+    : allUsers;
 
   const handleInput = (val: string) => {
     setQuery(val);
-    clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => doSearch(val), 300);
   };
 
   return (
@@ -97,7 +103,6 @@ function UserSearchInput({
         value={query}
         onFocus={() => {
           setOpen(true);
-          if (query.trim()) doSearch(query);
         }}
         onChange={(e) => handleInput(e.target.value)}
       />
@@ -107,7 +112,7 @@ function UserSearchInput({
           style={{ zIndex: 1060, maxHeight: 200, overflowY: "auto" }}
         >
           {searching && <div className="text-muted p-2">Searching…</div>}
-          {!searching && results.length === 0 && query.trim() && (
+          {!searching && results.length === 0 && (
             <div className="text-muted p-2">No users found</div>
           )}
           {results.map((u) => (

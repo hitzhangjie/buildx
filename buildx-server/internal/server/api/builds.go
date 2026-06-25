@@ -21,6 +21,7 @@ type BuildsHandler struct {
 	Builds   buildStore
 	Projects projectService
 	Security securityService
+	Jobs     JobService // optional, for run/cancel operations
 }
 
 type buildStore interface {
@@ -31,6 +32,8 @@ type buildStore interface {
 	Delete(ctx context.Context, id int64) error
 	ListLabels(ctx context.Context, buildID int64) ([]*model.BuildLabel, error)
 	ListParams(ctx context.Context, buildID int64) ([]*model.BuildParam, error)
+	ListDependencies(ctx context.Context, buildID int64) ([]*model.BuildDependence, error)
+	ListDependents(ctx context.Context, buildID int64) ([]*model.BuildDependence, error)
 }
 
 // Get handles GET /~api/builds/{buildId}.
@@ -162,19 +165,41 @@ func (h *BuildsHandler) ListParams(w http.ResponseWriter, r *http.Request, build
 // ListDependencies handles GET /~api/builds/{buildId}/dependencies.
 func (h *BuildsHandler) ListDependencies(w http.ResponseWriter, r *http.Request, buildID int64) {
 	op := StartOp(r, "BuildsHandler.ListDependencies", "build_id", buildID)
-	h.withBuildAccess(w, r, op, buildID, func(b *model.Build) {
-		op.OK(http.StatusOK)
-		writeJSON(w, r, http.StatusOK, []any{})
-	})
+	if !h.withBuildAccess(w, r, op, buildID, func(b *model.Build) {
+		deps, err := h.Builds.ListDependencies(r.Context(), buildID)
+		if err != nil {
+			op.Fail(err, http.StatusInternalServerError)
+			writeInternalError(w, r, err)
+			return
+		}
+		if deps == nil {
+			deps = []*model.BuildDependence{}
+		}
+		op.OK(http.StatusOK, "count", len(deps))
+		writeJSON(w, r, http.StatusOK, deps)
+	}) {
+		return
+	}
 }
 
 // ListDependents handles GET /~api/builds/{buildId}/dependents.
 func (h *BuildsHandler) ListDependents(w http.ResponseWriter, r *http.Request, buildID int64) {
 	op := StartOp(r, "BuildsHandler.ListDependents", "build_id", buildID)
-	h.withBuildAccess(w, r, op, buildID, func(b *model.Build) {
-		op.OK(http.StatusOK)
-		writeJSON(w, r, http.StatusOK, []any{})
-	})
+	if !h.withBuildAccess(w, r, op, buildID, func(b *model.Build) {
+		deps, err := h.Builds.ListDependents(r.Context(), buildID)
+		if err != nil {
+			op.Fail(err, http.StatusInternalServerError)
+			writeInternalError(w, r, err)
+			return
+		}
+		if deps == nil {
+			deps = []*model.BuildDependence{}
+		}
+		op.OK(http.StatusOK, "count", len(deps))
+		writeJSON(w, r, http.StatusOK, deps)
+	}) {
+		return
+	}
 }
 
 // ListFixedIssueIDs handles GET /~api/builds/{buildId}/fixed-issue-ids.
@@ -269,6 +294,102 @@ func (h *BuildsHandler) Delete(w http.ResponseWriter, r *http.Request, buildID i
 
 	op.OK(http.StatusOK)
 	w.WriteHeader(http.StatusOK)
+}
+
+// Run handles POST /~api/builds/{buildId}/run — Rerun a build.
+func (h *BuildsHandler) Run(w http.ResponseWriter, r *http.Request, buildID int64) {
+	op := StartOp(r, "BuildsHandler.Run", "build_id", buildID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	b, err := h.Builds.Get(r.Context(), buildID)
+	if err != nil {
+		if errors.Is(err, build.ErrNotFound) {
+			op.OK(http.StatusNotFound, "found", false)
+			writeNotFound(w, r, "build", "build_id", buildID)
+			return
+		}
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if !h.canManageBuild(r, user, b) {
+		op.Fail(security.ErrUnauthorized, http.StatusForbidden)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if h.Jobs == nil {
+		op.Fail(errors.New("job service not available"), http.StatusNotImplemented)
+		http.Error(w, "job service not available", http.StatusNotImplemented)
+		return
+	}
+
+	// Read optional reason from request body.
+	var reason string
+	if err := decodeJSON(r, &struct {
+		Reason *string `json:"reason"`
+	}{Reason: &reason}); err != nil {
+		// Body may be empty — that's fine.
+		reason = "rerun"
+	}
+
+	build, err := h.Jobs.Resubmit(r.Context(), buildID, reason)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+
+	op.OK(http.StatusOK, "build_id", build.ID)
+	writeJSON(w, r, http.StatusOK, build)
+}
+
+// Cancel handles POST /~api/builds/{buildId}/cancel — Cancel a build.
+func (h *BuildsHandler) Cancel(w http.ResponseWriter, r *http.Request, buildID int64) {
+	op := StartOp(r, "BuildsHandler.Cancel", "build_id", buildID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+
+	b, err := h.Builds.Get(r.Context(), buildID)
+	if err != nil {
+		if errors.Is(err, build.ErrNotFound) {
+			op.OK(http.StatusNotFound, "found", false)
+			writeNotFound(w, r, "build", "build_id", buildID)
+			return
+		}
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if !h.canManageBuild(r, user, b) {
+		op.Fail(security.ErrUnauthorized, http.StatusForbidden)
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if h.Jobs == nil {
+		op.Fail(errors.New("job service not available"), http.StatusNotImplemented)
+		http.Error(w, "job service not available", http.StatusNotImplemented)
+		return
+	}
+
+	if err := h.Jobs.Cancel(r.Context(), buildID); err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+
+	op.OK(http.StatusOK)
+	writeJSON(w, r, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *BuildsHandler) withBuildAccess(

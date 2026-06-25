@@ -40,13 +40,17 @@ export type Build = {
   pendingDate?: string;
   runningDate?: string;
   finishDate?: string;
+  retryDate?: string;
   pendingDuration?: number;
   runningDuration?: number;
   submitReason?: string;
+  submitSequence?: number;
   submitter?: BuildUser;
   canceller?: BuildUser;
   paused?: boolean;
   uuid?: string;
+  workDirPath?: string;
+  checkoutPaths?: string[];
 };
 
 export type BuildLabel = {
@@ -61,6 +65,15 @@ export type BuildParam = {
   name: string;
   type: string;
   value: string;
+};
+
+export type BuildDependence = {
+  id: number;
+  dependentId: number;
+  dependencyId: number;
+  requireSuccessful: boolean;
+  artifacts?: string;
+  destinationPath?: string;
 };
 
 export type QueryBuildsOptions = {
@@ -139,6 +152,22 @@ export async function getBuildParams(buildId: number): Promise<BuildParam[]> {
   return Array.isArray(data) ? data : [];
 }
 
+export async function getBuildDependencies(buildId: number): Promise<BuildDependence[]> {
+  if (USE_MOCK) {
+    return [];
+  }
+  const data = await apiFetch<BuildDependence[] | null>(`/~api/builds/${buildId}/dependencies`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getBuildDependents(buildId: number): Promise<BuildDependence[]> {
+  if (USE_MOCK) {
+    return [];
+  }
+  const data = await apiFetch<BuildDependence[] | null>(`/~api/builds/${buildId}/dependents`);
+  return Array.isArray(data) ? data : [];
+}
+
 export async function setBuildDescription(buildId: number, description: string): Promise<void> {
   if (USE_MOCK) {
     return;
@@ -155,6 +184,203 @@ export async function deleteBuild(buildId: number): Promise<void> {
     return;
   }
   await apiFetch(`/~api/builds/${buildId}`, { method: "DELETE" });
+}
+
+export type LogEntry = {
+  id: number;
+  stepName?: string;
+  line: number;
+  message: string;
+  level: "info" | "warn" | "error" | "debug";
+  timestamp: string;
+  stream: "stdout" | "stderr";
+};
+
+export type BuildArtifact = {
+  id: number;
+  name: string;
+  path: string;
+  size: number;
+  type: string;
+  buildId: number;
+};
+
+export type BuildChange = {
+  commitHash: string;
+  message: string;
+  author: string;
+  authorDate: string;
+  files: { path: string; type: "added" | "modified" | "deleted" | "renamed" }[];
+};
+
+export type SubmitBuildRequest = {
+  projectId: number;
+  commitHash: string;
+  jobName: string;
+  refName: string;
+  params?: Record<string, string[]>;
+  reason?: string;
+  pullRequestId?: number;
+  issueId?: number;
+};
+
+export async function submitBuild(data: SubmitBuildRequest): Promise<Build> {
+  if (USE_MOCK) {
+    throw new Error("submitBuild not implemented in mock mode");
+  }
+  return apiFetch<Build>("/~api/builds", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function rerunBuild(
+  buildId: number,
+  reason: string,
+): Promise<Build> {
+  if (USE_MOCK) {
+    const found = mockBuilds.find((b) => b.id === buildId);
+    if (!found) throw { status: 404, message: "Build not found" };
+    return { ...found, status: "PENDING" };
+  }
+  return apiFetch<Build>(`/~api/builds/${buildId}/rerun`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function cancelBuild(buildId: number): Promise<void> {
+  if (USE_MOCK) return;
+  await apiFetch<void>(`/~api/builds/${buildId}/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function pauseBuild(buildId: number): Promise<void> {
+  if (USE_MOCK) return;
+  await apiFetch<void>(`/~api/builds/${buildId}/pause`, {
+    method: "POST",
+  });
+}
+
+export async function resumeBuild(buildId: number): Promise<void> {
+  if (USE_MOCK) return;
+  await apiFetch<void>(`/~api/builds/${buildId}/resume`, {
+    method: "POST",
+  });
+}
+
+export async function getBuildLog(buildId: number): Promise<LogEntry[]> {
+  if (USE_MOCK) {
+    return [
+      {
+        id: 1,
+        stepName: "Checkout",
+        line: 1,
+        message: "Cloning repository...",
+        level: "info",
+        timestamp: new Date().toISOString(),
+        stream: "stdout",
+      },
+      {
+        id: 2,
+        stepName: "Build",
+        line: 2,
+        message: "Compiling source code...",
+        level: "info",
+        timestamp: new Date().toISOString(),
+        stream: "stdout",
+      },
+      {
+        id: 3,
+        stepName: "Test",
+        line: 3,
+        message: "Running tests...\nAll tests passed!",
+        level: "info",
+        timestamp: new Date().toISOString(),
+        stream: "stdout",
+      },
+    ];
+  }
+  const data = await apiFetch<LogEntry[] | null>(
+    `/~api/builds/${buildId}/log`,
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export function streamBuildLog(buildId: number): EventSource {
+  return new EventSource(`/~api/builds/${buildId}/log-stream`);
+}
+
+export async function getBuildArtifacts(
+  buildId: number,
+): Promise<BuildArtifact[]> {
+  if (USE_MOCK) {
+    return [
+      {
+        id: 1,
+        name: "app.jar",
+        path: "build/libs/app.jar",
+        size: 24576000,
+        type: "application/java-archive",
+        buildId,
+      },
+      {
+        id: 2,
+        name: "Dockerfile",
+        path: "Dockerfile",
+        size: 512,
+        type: "text/plain",
+        buildId,
+      },
+      {
+        id: 3,
+        name: "reports.zip",
+        path: "build/reports/reports.zip",
+        size: 1048576,
+        type: "application/zip",
+        buildId,
+      },
+    ];
+  }
+  const data = await apiFetch<BuildArtifact[] | null>(
+    `/~api/builds/${buildId}/artifacts`,
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getBuildChanges(
+  buildId: number,
+): Promise<BuildChange[]> {
+  if (USE_MOCK) {
+    return [
+      {
+        commitHash: "a1b2c3d4e5f6789012345678901234567890abcd",
+        message: "Fix bug in CI pipeline",
+        author: "developer@example.com",
+        authorDate: new Date(Date.now() - 3600000).toISOString(),
+        files: [
+          { path: "src/main/java/App.java", type: "modified" },
+          { path: "src/test/java/AppTest.java", type: "modified" },
+        ],
+      },
+      {
+        commitHash: "1234567890abcdef1234567890abcdef12345678",
+        message: "Add new feature",
+        author: "contributor@example.com",
+        authorDate: new Date(Date.now() - 7200000).toISOString(),
+        files: [
+          { path: "src/main/java/Feature.java", type: "added" },
+          { path: "src/main/java/FeatureTest.java", type: "added" },
+          { path: "docs/feature.md", type: "added" },
+        ],
+      },
+    ];
+  }
+  const data = await apiFetch<BuildChange[] | null>(
+    `/~api/builds/${buildId}/changes`,
+  );
+  return Array.isArray(data) ? data : [];
 }
 
 function filterMockBuilds(builds: Build[], opts: QueryBuildsOptions): Build[] {

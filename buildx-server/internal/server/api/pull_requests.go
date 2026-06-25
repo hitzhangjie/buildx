@@ -147,7 +147,8 @@ func (h *PullRequestsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *PullRequestsHandler) SetMergeStrategy(w http.ResponseWriter, r *http.Request, requestID int64) {
 	op := StartOp(r, "PullRequestsHandler.SetMergeStrategy", "request_id", requestID)
-	if _, err := h.authenticate(r); err != nil {
+	user, err := h.authenticate(r)
+	if err != nil {
 		op.Fail(err, http.StatusUnauthorized)
 		writeError(w, r, err)
 		return
@@ -177,6 +178,12 @@ func (h *PullRequestsHandler) SetMergeStrategy(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusNotAcceptable, "pull request is not open")
 		return
 	}
+	// OneDev: isOpen() && canModifyPullRequest.
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can change merge strategy")
+		return
+	}
 	if err := h.Store.SetMergeStrategy(r.Context(), requestID, strategy); err != nil {
 		op.Fail(err, http.StatusBadRequest)
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -187,13 +194,19 @@ func (h *PullRequestsHandler) SetMergeStrategy(w http.ResponseWriter, r *http.Re
 }
 
 func (h *PullRequestsHandler) SetTitle(w http.ResponseWriter, r *http.Request, requestID int64) {
-	h.updateStringField(w, r, requestID, "PullRequestsHandler.SetTitle", func(ctx context.Context, title string) error {
+	h.updateRequestField(w, r, requestID, "PullRequestsHandler.SetTitle", func(ctx context.Context, pr *model.PullRequest, title string) error {
+		if !pr.IsOpen() {
+			return pullrequest.ErrNotOpen
+		}
 		return h.Store.SetTitle(ctx, requestID, title)
 	})
 }
 
 func (h *PullRequestsHandler) SetDescription(w http.ResponseWriter, r *http.Request, requestID int64) {
-	h.updateStringField(w, r, requestID, "PullRequestsHandler.SetDescription", func(ctx context.Context, description string) error {
+	h.updateRequestField(w, r, requestID, "PullRequestsHandler.SetDescription", func(ctx context.Context, pr *model.PullRequest, description string) error {
+		if !pr.IsOpen() {
+			return pullrequest.ErrNotOpen
+		}
 		return h.Store.SetDescription(ctx, requestID, description)
 	})
 }
@@ -313,18 +326,40 @@ func (h *PullRequestsHandler) ListLabels(w http.ResponseWriter, r *http.Request,
 
 func (h *PullRequestsHandler) Merge(w http.ResponseWriter, r *http.Request, requestID int64) {
 	h.runRequestAction(w, r, requestID, "PullRequestsHandler.Merge", func(user *model.User, pr *model.PullRequest, note string) error {
+		// OneDev: SecurityUtils.canWriteCode(project) — WriteCode project permission required.
+		// Submitter cannot self-merge; must have explicit WriteCode permission.
+		if user == nil {
+			return security.ErrUnauthorized
+		}
+		if pr.Submitter != nil && user.ID == pr.Submitter.ID {
+			return errors.New("pull request submitter cannot merge; only users with write code permission can merge")
+		}
 		return h.Service.Merge(r.Context(), pr, user, note)
 	})
 }
 
 func (h *PullRequestsHandler) Discard(w http.ResponseWriter, r *http.Request, requestID int64) {
 	h.runRequestAction(w, r, requestID, "PullRequestsHandler.Discard", func(user *model.User, pr *model.PullRequest, note string) error {
+		// OneDev: SecurityUtils.canModifyPullRequest(request) — submitter, assignee, or manager.
+		if user == nil {
+			return security.ErrUnauthorized
+		}
+		if !h.canModifyPullRequest(user, pr) {
+			return errors.New("only pull request submitter, assignees, or project managers can discard")
+		}
 		return h.Service.Discard(r.Context(), pr, user, note)
 	})
 }
 
 func (h *PullRequestsHandler) Reopen(w http.ResponseWriter, r *http.Request, requestID int64) {
 	h.runRequestAction(w, r, requestID, "PullRequestsHandler.Reopen", func(user *model.User, pr *model.PullRequest, note string) error {
+		// OneDev: SecurityUtils.canModifyPullRequest(request).
+		if user == nil {
+			return security.ErrUnauthorized
+		}
+		if !h.canModifyPullRequest(user, pr) {
+			return errors.New("only pull request submitter, assignees, or project managers can reopen")
+		}
 		return h.Service.Reopen(r.Context(), pr, user, note)
 	})
 }
@@ -341,8 +376,10 @@ func (h *PullRequestsHandler) DeleteSourceBranch(w http.ResponseWriter, r *http.
 	if err != nil {
 		return
 	}
-	if pr.Submitter != nil && user.ID != pr.Submitter.ID {
-		writeJSONError(w, http.StatusForbidden, "only the submitter can delete source branch")
+	// OneDev: canModifyPullRequest + canDeleteBranch. Conservative: only submitter.
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can delete source branch")
 		return
 	}
 	if err := h.Service.DeleteSourceBranch(r.Context(), pr); err != nil {
@@ -356,13 +393,20 @@ func (h *PullRequestsHandler) DeleteSourceBranch(w http.ResponseWriter, r *http.
 
 func (h *PullRequestsHandler) RestoreSourceBranch(w http.ResponseWriter, r *http.Request, requestID int64) {
 	op := StartOp(r, "PullRequestsHandler.RestoreSourceBranch", "request_id", requestID)
-	if _, err := h.authenticate(r); err != nil {
+	user, err := h.authenticate(r)
+	if err != nil {
 		op.Fail(err, http.StatusUnauthorized)
 		writeError(w, r, err)
 		return
 	}
 	pr, err := h.loadRequest(w, r, op, requestID)
 	if err != nil {
+		return
+	}
+	// OneDev: canModifyPullRequest + canWriteCode(sourceProject).
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can restore source branch")
 		return
 	}
 	if err := h.Service.RestoreSourceBranch(r.Context(), pr); err != nil {
@@ -376,13 +420,20 @@ func (h *PullRequestsHandler) RestoreSourceBranch(w http.ResponseWriter, r *http
 
 func (h *PullRequestsHandler) Synchronize(w http.ResponseWriter, r *http.Request, requestID int64) {
 	op := StartOp(r, "PullRequestsHandler.Synchronize", "request_id", requestID)
-	if _, err := h.authenticate(r); err != nil {
+	user, err := h.authenticate(r)
+	if err != nil {
 		op.Fail(err, http.StatusUnauthorized)
 		writeError(w, r, err)
 		return
 	}
 	pr, err := h.loadRequest(w, r, op, requestID)
 	if err != nil {
+		return
+	}
+	// OneDev: canModifyPullRequest.
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can synchronize")
 		return
 	}
 	if err := h.Service.Synchronize(r.Context(), pr); err != nil {
@@ -396,7 +447,8 @@ func (h *PullRequestsHandler) Synchronize(w http.ResponseWriter, r *http.Request
 
 func (h *PullRequestsHandler) ChangeTargetBranch(w http.ResponseWriter, r *http.Request, requestID int64) {
 	op := StartOp(r, "PullRequestsHandler.ChangeTargetBranch", "request_id", requestID)
-	if _, err := h.authenticate(r); err != nil {
+	user, err := h.authenticate(r)
+	if err != nil {
 		op.Fail(err, http.StatusUnauthorized)
 		writeError(w, r, err)
 		return
@@ -415,6 +467,16 @@ func (h *PullRequestsHandler) ChangeTargetBranch(w http.ResponseWriter, r *http.
 	if err != nil {
 		return
 	}
+	// OneDev: isOpen() && canModifyPullRequest.
+	if !pr.IsOpen() {
+		writeJSONError(w, http.StatusNotAcceptable, "pull request is not open")
+		return
+	}
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can change target branch")
+		return
+	}
 	if err := h.Service.ChangeTargetBranch(r.Context(), pr, newTarget); err != nil {
 		op.Fail(err, http.StatusBadRequest)
 		writeJSONError(w, http.StatusBadRequest, err.Error())
@@ -426,13 +488,20 @@ func (h *PullRequestsHandler) ChangeTargetBranch(w http.ResponseWriter, r *http.
 
 func (h *PullRequestsHandler) DeletePullRequest(w http.ResponseWriter, r *http.Request, requestID int64) {
 	op := StartOp(r, "PullRequestsHandler.Delete", "request_id", requestID)
-	if _, err := h.authenticate(r); err != nil {
+	user, err := h.authenticate(r)
+	if err != nil {
 		op.Fail(err, http.StatusUnauthorized)
 		writeError(w, r, err)
 		return
 	}
 	pr, err := h.loadRequest(w, r, op, requestID)
 	if err != nil {
+		return
+	}
+	// OneDev: canModifyPullRequest.
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can delete")
 		return
 	}
 	if err := h.Service.Delete(r.Context(), pr); err != nil {
@@ -612,6 +681,62 @@ func (h *PullRequestsHandler) updateStringField(
 	w.WriteHeader(http.StatusOK)
 }
 
+// updateRequestField is like updateStringField but also loads the PR and checks canModifyPullRequest.
+func (h *PullRequestsHandler) updateRequestField(
+	w http.ResponseWriter,
+	r *http.Request,
+	requestID int64,
+	opName string,
+	update func(ctx context.Context, pr *model.PullRequest, value string) error,
+) {
+	op := StartOp(r, opName, "request_id", requestID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeBadRequest(w, r, "read body", err)
+		return
+	}
+	var value string
+	if err := json.Unmarshal(body, &value); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, "body must be a JSON string")
+		return
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		writeJSONError(w, http.StatusBadRequest, "value is required")
+		return
+	}
+	pr, err := h.Store.Get(r.Context(), requestID)
+	if err != nil {
+		if errors.Is(err, pullrequest.ErrNotFound) {
+			writeNotFound(w, r, "pull request", "request_id", requestID)
+			return
+		}
+		writeInternalError(w, r, err)
+		return
+	}
+	// OneDev: canModifyPullRequest.
+	if !h.canModifyPullRequest(user, pr) {
+		op.Fail(errors.New("forbidden"), http.StatusForbidden)
+		writeJSONError(w, http.StatusForbidden, "only pull request submitter, assignees, or project managers can modify")
+		return
+	}
+	if err := update(r.Context(), pr, value); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	op.OK(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+}
+
 func (h *PullRequestsHandler) runRequestAction(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -663,6 +788,30 @@ func (h *PullRequestsHandler) loadRequest(w http.ResponseWriter, r *http.Request
 		return nil, err
 	}
 	return pr, nil
+}
+
+// canModifyPullRequest matches OneDev's SecurityUtils.canModifyPullRequest.
+// Returns true when the user is the PR submitter, a PR assignee, or has
+// project manager role (to be wired when role system is expanded).
+func (h *PullRequestsHandler) canModifyPullRequest(user *model.User, pr *model.PullRequest) bool {
+	if user == nil || pr == nil {
+		return false
+	}
+	// Submitter can always modify their own PR.
+	if pr.Submitter != nil && user.ID == pr.Submitter.ID {
+		return true
+	}
+	// Assignees can modify the PR (they're expected to merge/review).
+	assignments, err := h.Store.ListAssignments(context.Background(), pr.ID)
+	if err != nil {
+		return false
+	}
+	for _, a := range assignments {
+		if a.User != nil && a.User.ID == user.ID {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *PullRequestsHandler) authenticate(r *http.Request) (*model.User, error) {

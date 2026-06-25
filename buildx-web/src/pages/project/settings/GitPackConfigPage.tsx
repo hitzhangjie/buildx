@@ -1,112 +1,32 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { fetchProjects, fetchProjectSettings, updateProjectSettings, type GitPackConfig } from "../../../api/projects";
 
 export default function GitPackConfigPage() {
   const { projectPath } = useProject();
-  const [packConfig, setPackConfig] = useState({
-    windowMemory: "32m",
-    window: "10",
-    depth: "50",
-    threads: "4",
-    packSizeLimit: "0",
-  });
-  const [feedback, setFeedback] = useState<{
-    type: "info" | "danger";
-    message: string;
-  } | null>(null);
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [config, setConfig] = useState<GitPackConfig>({});
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [feedback, setFeedback] = useState<string[]>([]);
 
-  const handleChange = (field: string, value: string) => {
-    setPackConfig((prev) => ({ ...prev, [field]: value }));
-  };
+  useEffect(() => { let c = false; fetchProjects().then(ps => { if (!c) { const f = ps.find(p => p.path === projectPath); setProjectId(f?.id ?? null); } }).catch(() => {}); return () => { c = true; }; }, [projectPath]);
+  useEffect(() => { if (projectId === null) return; let c = false; setLoading(true); fetchProjectSettings(projectId).then(s => { if (!c) { setConfig(s.gitPackConfig ?? {}); setLoading(false); } }).catch(() => { if (!c) setLoading(false); }); return () => { c = true; }; }, [projectId]);
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    setFeedback({ type: "info", message: "Git pack configuration saved." });
-  };
+  const save = useCallback(async (e: React.FormEvent) => { e.preventDefault(); if (projectId === null) return; setSaving(true); setFeedback([]); try { await updateProjectSettings(projectId, { gitPackConfig: config }); setFeedback(["Git pack config updated."]); } catch (err: unknown) { setFeedback([err instanceof Error ? err.message : String(err)]); } finally { setSaving(false); } }, [projectId, config]);
 
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="Git Pack Config"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
   return (
-    <SettingsLayout projectPath={projectPath} pageTitle="Git Pack">
-      <div className="card">
-        <div className="card-body">
-          <FormFeedbackPanel messages={feedback ? [feedback.message] : []} />
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="window-memory">
-                Window Memory
-              </label>
-              <input
-                id="window-memory"
-                className="form-control"
-                type="text"
-                value={packConfig.windowMemory}
-                onChange={(e) => handleChange("windowMemory", e.target.value)}
-                placeholder="e.g. 32m"
-              />
-              <div className="form-text">Maximum memory per pack window (e.g. 32m, 128m).</div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="window">
-                Window
-              </label>
-              <input
-                id="window"
-                className="form-control"
-                type="text"
-                value={packConfig.window}
-                onChange={(e) => handleChange("window", e.target.value)}
-              />
-              <div className="form-text">Window size for delta compression.</div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="depth">
-                Depth
-              </label>
-              <input
-                id="depth"
-                className="form-control"
-                type="text"
-                value={packConfig.depth}
-                onChange={(e) => handleChange("depth", e.target.value)}
-              />
-              <div className="form-text">Maximum delta depth.</div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="threads">
-                Threads
-              </label>
-              <input
-                id="threads"
-                className="form-control"
-                type="text"
-                value={packConfig.threads}
-                onChange={(e) => handleChange("threads", e.target.value)}
-              />
-              <div className="form-text">Number of threads for pack operations.</div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="pack-size-limit">
-                Pack Size Limit
-              </label>
-              <input
-                id="pack-size-limit"
-                className="form-control"
-                type="text"
-                value={packConfig.packSizeLimit}
-                onChange={(e) => handleChange("packSizeLimit", e.target.value)}
-                placeholder="0 for unlimited"
-              />
-              <div className="form-text">Maximum size of a single pack file (0 = unlimited).</div>
-            </div>
-            <button type="submit" className="btn btn-primary">
-              <Icon name="save" className="me-1" />
-              Save
-            </button>
-          </form>
-        </div>
-      </div>
-    </SettingsLayout>
-  );
+    <SettingsLayout projectPath={projectPath} pageTitle="Git Pack Config">
+      <div className="card"><div className="card-body">
+        <FormFeedbackPanel messages={feedback} />
+        <form className="leave-confirm" onSubmit={save}>
+          <div className="mb-3"><label className="form-label">Window Memory</label><input className="form-control" value={config.windowMemory ?? ""} onChange={e => setConfig({ ...config, windowMemory: e.target.value })} placeholder="e.g. 512m" /></div>
+          <div className="mb-3"><label className="form-label">Pack Size Limit</label><input className="form-control" value={config.packSizeLimit ?? ""} onChange={e => setConfig({ ...config, packSizeLimit: e.target.value })} placeholder="e.g. 2g" /></div>
+          <div className="mb-3"><label className="form-label">Threads</label><input className="form-control" value={config.threads ?? ""} onChange={e => setConfig({ ...config, threads: e.target.value })} placeholder="e.g. 4" /></div>
+          <div className="mb-3"><label className="form-label">Window</label><input className="form-control" value={config.window ?? ""} onChange={e => setConfig({ ...config, window: e.target.value })} /></div>
+          <button type="submit" className="btn btn-primary dirty-aware" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+        </form>
+      </div></div>
+    </SettingsLayout>);
 }

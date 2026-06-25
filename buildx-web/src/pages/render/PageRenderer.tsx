@@ -285,20 +285,6 @@ function PageBody(props: TemplateProps) {
         </ProjectLayout>
       );
 
-    case "stats":
-      if (!projectPath) {
-        return null;
-      }
-      return (
-        <ProjectLayout projectPath={projectPath} pageTitle={title}>
-          <div className="card card-custom m-3">
-            <div className="card-body text-center py-10 text-muted">
-              Statistics chart placeholder — {title}
-            </div>
-          </div>
-        </ProjectLayout>
-      );
-
     default:
       if (projectPath) {
         return (

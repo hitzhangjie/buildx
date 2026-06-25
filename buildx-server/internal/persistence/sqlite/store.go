@@ -56,6 +56,10 @@ func (s *Store) Migrate(ctx context.Context) error {
 		"migrations/008_pull_request_assignment.sql",
 		"migrations/009_pull_request_labels.sql",
 		"migrations/010_pull_request_extra.sql",
+		"migrations/011_workspace.sql",
+		"migrations/012_project_parent_index.sql",
+			"migrations/013_project_settings.sql",
+		"migrations/014_agent_extended.sql",
 	}
 	for _, name := range migrations {
 		content, err := migrationFS.ReadFile(name)

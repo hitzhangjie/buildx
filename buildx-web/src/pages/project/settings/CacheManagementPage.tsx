@@ -1,94 +1,29 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
-
-interface CacheEntry {
-  id: string;
-  name: string;
-  size: string;
-  lastUsed: string;
-}
+import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { fetchProjects, fetchProjectSettings, updateProjectSettings } from "../../../api/projects";
 
 export default function CacheManagementPage() {
   const { projectPath } = useProject();
-  const [cacheEntries, setCacheEntries] = useState<CacheEntry[]>([
-    { id: "1", name: "node_modules", size: "245 MB", lastUsed: "2 hours ago" },
-    { id: "2", name: "go-modules", size: "120 MB", lastUsed: "1 day ago" },
-    { id: "3", name: "docker-layers", size: "1.2 GB", lastUsed: "3 days ago" },
-    { id: "4", name: "maven-repository", size: "890 MB", lastUsed: "1 week ago" },
-  ]);
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [cacheDays, setCacheDays] = useState<number | undefined>();
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [feedback, setFeedback] = useState<string[]>([]);
 
-  const handleClear = (id: string) => {
-    setCacheEntries((prev) => prev.filter((e) => e.id !== id));
-  };
+  useEffect(() => { let c = false; fetchProjects().then(ps => { if (!c) { const f = ps.find(p => p.path === projectPath); setProjectId(f?.id ?? null); } }).catch(() => {}); return () => { c = true; }; }, [projectPath]);
+  useEffect(() => { if (projectId === null) return; let c = false; setLoading(true); fetchProjectSettings(projectId).then(s => { if (!c) { setCacheDays(s.buildSetting?.cachePreserveDays); setLoading(false); } }).catch(() => { if (!c) setLoading(false); }); return () => { c = true; }; }, [projectId]);
 
-  const handleClearAll = () => {
-    setCacheEntries([]);
-  };
+  const save = useCallback(async (e: React.FormEvent) => { e.preventDefault(); if (projectId === null) return; setSaving(true); setFeedback([]); try { await updateProjectSettings(projectId, { buildSetting: { cachePreserveDays: cacheDays } }); setFeedback(["Cache settings updated."]); } catch (err: unknown) { setFeedback([err instanceof Error ? err.message : String(err)]); } finally { setSaving(false); } }, [projectId, cacheDays]);
 
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="Cache Management"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
   return (
     <SettingsLayout projectPath={projectPath} pageTitle="Cache Management">
-      <div className="card">
-        <div className="card-body">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Cache Name</th>
-                <th>Size</th>
-                <th>Last Used</th>
-                <th className="text-end">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cacheEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>
-                    <code>{entry.name}</code>
-                  </td>
-                  <td>{entry.size}</td>
-                  <td className="text-muted">{entry.lastUsed}</td>
-                  <td className="text-end">
-                    <button
-                      className="btn btn-sm btn-link text-danger"
-                      onClick={() => handleClear(entry.id)}
-                    >
-                      <Icon name="trash" className="me-1" />
-                      Clear
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {cacheEntries.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="text-muted text-center">
-                    No cached entries.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          {cacheEntries.length > 0 && (
-            <div className="d-flex justify-content-between align-items-center">
-              <div className="text-muted small">
-                Total:{" "}
-                {cacheEntries.reduce((acc, e) => {
-                  const match = e.size.match(/([\d.]+)\s*(MB|GB)/);
-                  if (!match) return acc;
-                  const val = parseFloat(match[1]);
-                  const unit = match[2];
-                  return acc + (unit === "GB" ? val * 1024 : val);
-                }, 0).toFixed(0)}{" "}
-                MB
-              </div>
-              <button className="btn btn-danger btn-sm" onClick={handleClearAll}>
-                <Icon name="trash" className="me-1" />
-                Clear All
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    </SettingsLayout>
-  );
+      <div className="card"><div className="card-body">
+        <FormFeedbackPanel messages={feedback} />
+        <form className="leave-confirm" onSubmit={save}>
+          <div className="mb-3"><label className="form-label">Cache Preserve Days</label><input className="form-control" type="number" value={cacheDays ?? ""} onChange={e => setCacheDays(e.target.value ? parseInt(e.target.value) : undefined)} placeholder="Leave blank for default" /></div>
+          <button type="submit" className="btn btn-primary dirty-aware" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+        </form>
+      </div></div>
+    </SettingsLayout>);
 }

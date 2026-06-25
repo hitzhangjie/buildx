@@ -1,96 +1,72 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { fetchProjects, fetchProjectSettings, updateProjectSettings, type PullRequestSetting } from "../../../api/projects";
 
-const MERGE_STRATEGY_OPTIONS = [
-  { value: "CREATE_MERGE_COMMIT", label: "Create merge commit" },
-  { value: "CREATE_MERGE_COMMIT_IF_NECESSARY", label: "Create merge commit if necessary" },
-  { value: "SQUASH_SOURCE_BRANCH_COMMITS", label: "Squash source branch commits" },
-  { value: "REBASE_SOURCE_BRANCH_COMMITS", label: "Rebase source branch commits" },
-] as const;
-
-export function PullRequestSettingPage() {
+export default function PullRequestSettingPage() {
   const { projectPath } = useProject();
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [settings, setSettings] = useState<PullRequestSetting>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string[]>([]);
 
-  const [requiredApprovals, setRequiredApprovals] = useState("1");
-  const [defaultTargetBranch, setDefaultTargetBranch] = useState("main");
-  const [mergeStrategy, setMergeStrategy] = useState("CREATE_MERGE_COMMIT_IF_NECESSARY");
-  const [feedback, setFeedback] = useState<{
-    type: "info" | "danger";
-    message: string;
-  } | null>(null);
+  useEffect(() => {
+    let c = false;
+    fetchProjects().then(ps => { if (!c) { const f = ps.find(p => p.path === projectPath); setProjectId(f?.id ?? null); } }).catch(() => {});
+    return () => { c = true; };
+  }, [projectPath]);
 
-  const handleSubmit = (e: FormEvent) => {
+  useEffect(() => {
+    if (projectId === null) return;
+    let c = false; setLoading(true);
+    fetchProjectSettings(projectId).then(s => {
+      if (!c) { setSettings(s.pullRequestSetting ?? {}); setLoading(false); }
+    }).catch(() => { if (!c) setLoading(false); });
+    return () => { c = true; };
+  }, [projectId]);
+
+  const save = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback({ type: "info", message: "Pull request settings saved (local UI only — server persistence pending)." });
-  };
+    if (projectId === null) return;
+    setSaving(true); setFeedback([]);
+    try {
+      await updateProjectSettings(projectId, { pullRequestSetting: settings });
+      setFeedback(["Pull request settings updated."]);
+    } catch (err: unknown) {
+      setFeedback([err instanceof Error ? err.message : String(err)]);
+    } finally { setSaving(false); }
+  }, [projectId, settings]);
+
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="Pull Request Settings"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
 
   return (
-    <SettingsLayout projectPath={projectPath} pageTitle="Pull Request">
-      <div className="card">
-        <div className="card-body">
-          <FormFeedbackPanel messages={feedback ? [feedback.message] : []} />
-          <form onSubmit={handleSubmit}>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="required-approvals">
-                Required Approvals
-              </label>
-              <input
-                id="required-approvals"
-                className="form-control"
-                type="number"
-                min="0"
-                value={requiredApprovals}
-                onChange={(e) => setRequiredApprovals(e.target.value)}
-              />
-              <div className="form-text">
-                Number of approvals required before merge is allowed.
-              </div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="default-target-branch">
-                Default Target Branch
-              </label>
-              <input
-                id="default-target-branch"
-                className="form-control"
-                type="text"
-                value={defaultTargetBranch}
-                onChange={(e) => setDefaultTargetBranch(e.target.value)}
-              />
-              <div className="form-text">
-                Default branch new pull requests target.
-              </div>
-            </div>
-            <div className="mb-3">
-              <label className="form-label" htmlFor="merge-strategy">
-                Merge Strategy
-              </label>
-              <select
-                id="merge-strategy"
-                className="form-select"
-                value={mergeStrategy}
-                onChange={(e) => setMergeStrategy(e.target.value)}
-              >
-                {MERGE_STRATEGY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <div className="form-text">
-                Strategy used when merging pull requests.
-              </div>
-            </div>
-            <button type="submit" className="btn btn-primary">
-              <Icon name="save" className="me-1" />
-              Save
-            </button>
-          </form>
-        </div>
-      </div>
+    <SettingsLayout projectPath={projectPath} pageTitle="Pull Request Settings">
+      <div className="card"><div className="card-body">
+        <div className="alert alert-notice bg-white shadow mb-5 text-gray">Configure default pull request behavior for this project.</div>
+        <FormFeedbackPanel messages={feedback} />
+        <form className="leave-confirm" onSubmit={save}>
+          <div className="mb-3">
+            <label className="form-label">Default Merge Strategy</label>
+            <select className="form-control" value={settings.defaultMergeStrategy ?? ""} onChange={e => setSettings({ ...settings, defaultMergeStrategy: e.target.value })}>
+              <option value="">(default)</option>
+              <option value="MERGE_COMMIT">Merge Commit</option>
+              <option value="SQUASH">Squash</option>
+              <option value="REBASE">Rebase</option>
+            </select>
+          </div>
+          <div className="mb-3">
+            <label className="form-label">Default Assignees</label>
+            <input className="form-control" value={settings.defaultAssignees?.join(", ") ?? ""} onChange={e => setSettings({ ...settings, defaultAssignees: e.target.value ? e.target.value.split(",").map(s => s.trim()).filter(Boolean) : [] })} placeholder="user1, user2" />
+          </div>
+          <div className="form-check form-switch mb-3">
+            <input className="form-check-input" type="checkbox" checked={settings.deleteSourceBranchAfterMerge ?? false} onChange={e => setSettings({ ...settings, deleteSourceBranchAfterMerge: e.target.checked })} id="pr-del-src" />
+            <label className="form-check-label" htmlFor="pr-del-src">Delete source branch after merge</label>
+          </div>
+          <button type="submit" className="btn btn-primary dirty-aware" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+        </form>
+      </div></div>
     </SettingsLayout>
   );
 }

@@ -3,14 +3,16 @@ import { Icon } from "../../../components/onedev/Icon";
 import { PullRequestDetailShell } from "../../../components/onedev/panels/PullRequestDetailShell";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
+import { useAuth } from "../../../context/AuthContext";
 import { usePullRequestDetail } from "../../../hooks/usePullRequestDetail";
 import { fetchProjectCodeComments, type CodeComment } from "../../../api/codeComments";
 import { formatWhenISO } from "../../../util/time";
 
 export function PullRequestCodeCommentsPage() {
   const { projectPath, params } = useProject();
+  const { user: currentUser } = useAuth();
   const request = params.request as string | undefined;
-  const { pr, reviews, mergePreview, loading, error } = usePullRequestDetail(projectPath);
+  const { pr, reviews, assignments, mergePreview, loading, error } = usePullRequestDetail(projectPath);
   const [comments, setComments] = useState<CodeComment[]>([]);
 
   useEffect(() => {
@@ -40,11 +42,12 @@ export function PullRequestCodeCommentsPage() {
         requestNumber={request ?? ""}
         pr={pr}
         reviews={reviews}
-        assignments={[]}
+        assignments={assignments}
         activeTab="code-comments"
         mergePreview={mergePreview}
         loading={loading}
         error={error}
+        currentUser={currentUser}
       >
         <table className="table">
           <thead>

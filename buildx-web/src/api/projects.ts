@@ -134,3 +134,256 @@ export async function deleteProject(projectId: number): Promise<void> {
   }
   await apiFetch<void>(`/~api/projects/${projectId}`, { method: "DELETE" });
 }
+
+// --- Project detail and update (OneDev ProjectData DTO) ---
+
+export type ProjectDetail = Project & {
+  codeManagement: boolean;
+  packManagement: boolean;
+  issueManagement: boolean;
+  timeTracking: boolean;
+  serviceDeskEmailAddress?: string;
+  parentId?: number;
+};
+
+export type UpdateProjectRequest = {
+  name: string;
+  key?: string;
+  description?: string;
+  codeManagement?: boolean;
+  packManagement?: boolean;
+  issueManagement?: boolean;
+  timeTracking?: boolean;
+  serviceDeskEmailAddress?: string;
+  parentId?: number | null;
+};
+
+/**
+ * Fetch a single project with all fields. Matches OneDev GET /~api/projects/{projectId}.
+ */
+export async function fetchProject(projectId: number): Promise<ProjectDetail> {
+  if (USE_MOCK) {
+    const project = mockProjects.find((p) => p.id === projectId);
+    if (!project) throw { status: 404, message: "Project not found" };
+    return {
+      ...project,
+      codeManagement: true,
+      packManagement: true,
+      issueManagement: true,
+      timeTracking: false,
+    };
+  }
+  return apiFetch<ProjectDetail>(`/~api/projects/${projectId}`);
+}
+
+/**
+ * Update project general info. Matches OneDev POST /~api/projects/{projectId}.
+ */
+export async function updateProject(
+  projectId: number,
+  data: UpdateProjectRequest
+): Promise<ProjectDetail> {
+  if (USE_MOCK) {
+    const idx = mockProjects.findIndex((p) => p.id === projectId);
+    if (idx === -1) throw { status: 404, message: "Project not found" };
+    const existing = mockProjects[idx];
+    if (data.name) existing.name = data.name;
+    if (data.key !== undefined) existing.key = data.key;
+    if (data.description !== undefined) existing.description = data.description;
+    return {
+      ...existing,
+      codeManagement: data.codeManagement ?? true,
+      packManagement: data.packManagement ?? true,
+      issueManagement: data.issueManagement ?? true,
+      timeTracking: data.timeTracking ?? false,
+      serviceDeskEmailAddress: data.serviceDeskEmailAddress,
+      parentId: data.parentId ?? undefined,
+    };
+  }
+  return apiFetch<ProjectDetail>(`/~api/projects/${projectId}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// --- Settings types (mirrors Go model/project_setting.go) ---
+
+export type ProjectSetting = {
+  branchProtections?: BranchProtection[];
+  tagProtections?: TagProtection[];
+  issueSetting?: IssueSetting;
+  buildSetting?: BuildSetting;
+  pullRequestSetting?: PullRequestSetting;
+  packSetting?: PackSetting;
+  workspaceSetting?: WorkspaceSetting;
+  namedCommitQueries?: NamedCommitQuery[];
+  namedCodeCommentQueries?: NamedCodeCommentQuery[];
+  webHooks?: WebHook[];
+  contributedSettings?: Record<string, unknown>;
+  gitPackConfig?: GitPackConfig;
+  codeAnalysisSetting?: CodeAnalysisSetting;
+  aiSetting?: AiSetting;
+  workspaceSpecs?: WorkspaceSpec[];
+};
+
+export type BranchProtection = {
+  enabled: boolean;
+  branches: string;
+  userMatch?: string;
+  preventForcedPush: boolean;
+  preventDeletion: boolean;
+  preventCreation: boolean;
+  commitSignatureRequired: boolean;
+  reviewRequirement?: string;
+  jobNames?: string[];
+  requireStrictBuilds: boolean;
+};
+
+export type TagProtection = {
+  enabled: boolean;
+  tags: string;
+  userMatch?: string;
+  preventUpdate: boolean;
+  preventDeletion: boolean;
+  preventCreation: boolean;
+  commitSignatureRequired: boolean;
+};
+
+export type IssueSetting = {
+  listFields?: string[];
+  listLinks?: string[];
+  boardSpecs?: { name: string; baseQuery?: string; backlogBaseQuery?: string; identifyField: string; columns: string[] }[];
+  namedQueries?: { name: string; query: string }[];
+  transitionSpecs?: { fromStates: string[]; toState: string; trigger?: string; authorized?: string }[];
+  branchPrefix?: string;
+};
+
+export type JobProperty = { name: string; value: string };
+export type JobSecret = { name: string; value?: string; authorization?: string; archived: boolean };
+export type BuildPreservation = { condition: string; count: number };
+export type DefaultFixedIssueFilter = { query: string };
+
+export type BuildSetting = {
+  listParams?: string[];
+  namedQueries?: { name: string; query: string }[];
+  jobProperties?: JobProperty[];
+  jobSecrets?: JobSecret[];
+  buildPreservations?: BuildPreservation[];
+  defaultFixedIssueFilters?: DefaultFixedIssueFilter[];
+  cachePreserveDays?: number;
+};
+
+export type PullRequestSetting = {
+  namedQueries?: { name: string; query: string }[];
+  defaultMergeStrategy?: string;
+  defaultAssignees?: string[];
+  deleteSourceBranchAfterMerge?: boolean;
+};
+
+export type PackSetting = {
+  namedQueries?: { name: string; query: string }[];
+};
+
+export type WorkspaceSetting = {
+  namedQueries?: { name: string; query: string }[];
+};
+
+export type WebHook = {
+  id: number;
+  postUrl: string;
+  eventTypes: string[];
+  secret?: string;
+  headers?: { name: string; value: string }[];
+  enabled: boolean;
+};
+
+export type GitPackConfig = {
+  windowMemory?: string;
+  packSizeLimit?: string;
+  threads?: string;
+  window?: string;
+};
+
+export type CodeAnalysisSetting = {
+  analysisFiles?: string;
+};
+
+export type AiSetting = {
+  enabled: boolean;
+  model?: string;
+};
+
+export type WorkspaceSpec = {
+  name: string;
+  description?: string;
+  image: string;
+  shell?: string;
+  runInContainer?: boolean;
+};
+
+export type NamedCommitQuery = {
+  name: string;
+  query?: string;
+};
+
+export type NamedCodeCommentQuery = {
+  name: string;
+  query?: string;
+};
+
+/**
+ * Fetch all project settings. Matches OneDev GET /~api/projects/{projectId}/setting.
+ */
+export async function fetchProjectSettings(
+  projectId: number
+): Promise<ProjectSetting> {
+  if (USE_MOCK) {
+    return {};
+  }
+  return apiFetch<ProjectSetting>(`/~api/projects/${projectId}/setting`);
+}
+
+/**
+ * Update all project settings. Matches OneDev POST /~api/projects/{projectId}/setting.
+ */
+export async function updateProjectSettings(
+  projectId: number,
+  settings: ProjectSetting
+): Promise<void> {
+  if (USE_MOCK) {
+    return;
+  }
+  await apiFetch<void>(`/~api/projects/${projectId}/setting`, {
+    method: "POST",
+    body: JSON.stringify(settings),
+  });
+}
+
+/**
+ * Upload a project avatar. POST /~api/projects/{projectId}/avatar (multipart).
+ */
+export async function uploadProjectAvatar(
+  projectId: number,
+  file: File
+): Promise<void> {
+  if (USE_MOCK) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("avatar", file);
+  await apiFetch<void>(`/~api/projects/${projectId}/avatar`, {
+    method: "POST",
+    body: formData,
+    // Don't set Content-Type — browser will set it with boundary for multipart.
+  });
+}
+
+/**
+ * Get the project avatar URL.
+ */
+export function projectAvatarUrl(projectId: number): string {
+  if (USE_MOCK) {
+    return "/~img/default-avatar.png";
+  }
+  return `/~api/projects/${projectId}/avatar?t=${Date.now()}`;
+}

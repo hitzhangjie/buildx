@@ -1,123 +1,35 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useProject } from "../../../context/ProjectContext";
 import { SettingsLayout } from "../../../components/onedev/SettingsLayout";
-import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
-
-interface PropertyPair {
-  id: string;
-  key: string;
-  value: string;
-}
+import { Icon } from "../../../components/onedev/Icon";
+import { fetchProjects, fetchProjectSettings, updateProjectSettings, type JobProperty } from "../../../api/projects";
 
 export default function JobPropertiesPage() {
   const { projectPath } = useProject();
+  const [projectId, setProjectId] = useState<number | null>(null);
+  const [props, setProps] = useState<JobProperty[]>([]);
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [feedback, setFeedback] = useState<string[]>([]);
 
-  const [properties, setProperties] = useState<PropertyPair[]>([
-    { id: "1", key: "BUILD_ENV", value: "production" },
-    { id: "2", key: "LOG_LEVEL", value: "info" },
-  ]);
-  const [feedback, setFeedback] = useState<{
-    type: "info" | "danger";
-    message: string;
-  } | null>(null);
+  useEffect(() => { let c = false; fetchProjects().then(ps => { if (!c) { const f = ps.find(p => p.path === projectPath); setProjectId(f?.id ?? null); } }).catch(() => {}); return () => { c = true; }; }, [projectPath]);
+  useEffect(() => { if (projectId === null) return; let c = false; setLoading(true); fetchProjectSettings(projectId).then(s => { if (!c) { setProps(s.buildSetting?.jobProperties ?? []); setLoading(false); } }).catch(() => { if (!c) setLoading(false); }); return () => { c = true; }; }, [projectId]);
 
-  const handleKeyChange = (id: string, value: string) => {
-    setProperties((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, key: value } : p))
-    );
-  };
+  const saveAll = useCallback(async (items: JobProperty[]) => { setSaving(true); setFeedback([]); try { await updateProjectSettings(projectId!, { buildSetting: { jobProperties: items } }); setFeedback(["Job properties updated."]); } catch (err: unknown) { setFeedback([err instanceof Error ? err.message : String(err)]); } finally { setSaving(false); } }, [projectId]);
 
-  const handleValueChange = (id: string, value: string) => {
-    setProperties((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, value } : p))
-    );
-  };
+  const add = () => setProps([...props, { name: "", value: "" }]);
+  const upd = (i: number, f: Partial<JobProperty>) => { const a = [...props]; a[i] = { ...a[i], ...f }; setProps(a); };
+  const del = (i: number) => { const items = props.filter((_, idx) => idx !== i); setProps(items); saveAll(items); };
 
-  const handleRemove = (id: string) => {
-    setProperties((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  const handleAdd = () => {
-    const newPair: PropertyPair = {
-      id: String(Date.now()),
-      key: "",
-      value: "",
-    };
-    setProperties((prev) => [...prev, newPair]);
-  };
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    setFeedback({ type: "info", message: "Job properties saved." });
-  };
-
+  if (loading) return <SettingsLayout projectPath={projectPath} pageTitle="Job Properties"><div className="card"><div className="card-body text-center py-5">Loading...</div></div></SettingsLayout>;
   return (
     <SettingsLayout projectPath={projectPath} pageTitle="Job Properties">
-      <div className="card">
-        <div className="card-body">
-          <FormFeedbackPanel messages={feedback ? [feedback.message] : []} />
-          <form onSubmit={handleSubmit}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Value</th>
-                  <th className="text-end">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {properties.map((prop) => (
-                  <tr key={prop.id}>
-                    <td>
-                      <input
-                        className="form-control form-control-sm"
-                        type="text"
-                        value={prop.key}
-                        onChange={(e) => handleKeyChange(prop.id, e.target.value)}
-                        placeholder="Property key"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="form-control form-control-sm"
-                        type="text"
-                        value={prop.value}
-                        onChange={(e) => handleValueChange(prop.id, e.target.value)}
-                        placeholder="Property value"
-                      />
-                    </td>
-                    <td className="text-end">
-                      <button
-                        className="btn btn-sm btn-link text-danger"
-                        onClick={() => handleRemove(prop.id)}
-                      >
-                        <Icon name="remove" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {properties.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="text-muted text-center">
-                      No properties defined. Click "Add Property" to create one.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <button type="button" className="btn btn-primary btn-sm mb-3" onClick={handleAdd}>
-              <Icon name="plus" className="me-1" />
-              Add Property
-            </button>
-            <br />
-            <button type="submit" className="btn btn-primary">
-              <Icon name="save" className="me-1" />
-              Save
-            </button>
-          </form>
-        </div>
-      </div>
-    </SettingsLayout>
-  );
+      <div className="card"><div className="card-body">
+        <FormFeedbackPanel messages={feedback} />
+        <div className="mb-3"><a className="btn btn-primary" onClick={add} role="button"><Icon name="plus" className="mr-1" /> Add Property</a></div>
+        <table className="table"><thead><tr><th>Name</th><th>Value</th><th></th></tr></thead><tbody>
+          {props.map((p, i) => (<tr key={i}><td><input className="form-control form-control-sm" value={p.name} onChange={e => upd(i, { name: e.target.value })} /></td><td><input className="form-control form-control-sm" value={p.value} onChange={e => upd(i, { value: e.target.value })} /></td><td><a className="btn btn-sm btn-light-danger" onClick={() => del(i)} role="button"><Icon name="trash" /></a></td></tr>))}
+        </tbody></table>
+        <button className="btn btn-primary dirty-aware" onClick={() => saveAll(props)} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+      </div></div>
+    </SettingsLayout>);
 }
