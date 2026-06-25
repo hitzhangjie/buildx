@@ -173,6 +173,7 @@ export function PullRequestFilterPanel({
         <input
           type="date"
           className="form-control form-control-sm"
+          style={{ maxWidth: "14rem" }}
           value={activeSince}
           onChange={(e) => {
             setActiveSince(e.target.value);
@@ -187,6 +188,7 @@ export function PullRequestFilterPanel({
         <input
           type="date"
           className="form-control form-control-sm"
+          style={{ maxWidth: "14rem" }}
           value={notActiveSince}
           onChange={(e) => {
             setNotActiveSince(e.target.value);

@@ -140,6 +140,7 @@ export function IterationEditPage() {
               <input
                 type="date"
                 className="form-control"
+                style={{ maxWidth: "14rem" }}
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 required
@@ -150,6 +151,7 @@ export function IterationEditPage() {
               <input
                 type="date"
                 className="form-control"
+                style={{ maxWidth: "14rem" }}
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 required
