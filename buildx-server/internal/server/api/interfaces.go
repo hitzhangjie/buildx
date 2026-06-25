@@ -46,4 +46,11 @@ type securityService interface {
 	CreateSession(ctx context.Context, userID int64, rememberMe bool) (*security.Session, error)
 	ValidateSession(ctx context.Context, token string) (*model.User, error)
 	DeleteSession(ctx context.Context, token string) error
+
+	// Role and authorization management.
+	ListRoles(ctx context.Context) ([]*model.Role, error)
+	ListUserAuthorizations(ctx context.Context, userID int64) ([]model.UserAuthorizationView, error)
+	SyncUserAuthorizations(ctx context.Context, userID int64, beans []model.UserAuthorizationInput) error
+	ListProjectUserAuthorizations(ctx context.Context, projectID int64) ([]model.ProjectUserAuthorizationView, error)
+	SyncProjectUserAuthorizations(ctx context.Context, projectID int64, beans []model.ProjectUserAuthorizationInput) error
 }

@@ -1,0 +1,4 @@
+/* Matches OneDev project-setting.css: column widths for authorization bean-list */
+.user-authorizations .bean-list td.property-userName {
+  width: 50%;
+}

@@ -82,6 +82,8 @@ func (s *Server) routes() chi.Router {
 	repoHandler := &api.RepositoryHandler{Projects: projects, Security: sec, PullRequests: pullRequestsStore}
 	gitHandler := &api.GitHandler{Projects: projects, Security: sec}
 	tokenHandler := &api.AccessTokensHandler{Security: sec}
+	userAuthzHandler := &api.UserAuthorizationsHandler{Security: sec}
+	rolesHandler := &api.RolesHandler{Security: sec}
 	invitationsStore := invitation.NewDBStore(s.store.DB())
 	invitationsHandler := &api.InvitationsHandler{Invitations: invitationsStore, Security: sec}
 
@@ -106,9 +108,28 @@ func (s *Server) routes() chi.Router {
 	r.Post("/~api/v1/logout", authHandler.Logout)
 
 	r.Route("/~api", func(r chi.Router) {
+		r.Get("/roles", rolesHandler.List)
+
 		r.Get("/users", userHandler.List)
 		r.Post("/users", userHandler.Create)
 		r.Get("/users/me", userHandler.Me)
+
+		r.Get("/users/{userId}/authorizations", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "userId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid user id", http.StatusBadRequest)
+				return
+			}
+			userAuthzHandler.List(w, r, id)
+		})
+		r.Put("/users/{userId}/authorizations", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "userId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid user id", http.StatusBadRequest)
+				return
+			}
+			userAuthzHandler.Sync(w, r, id)
+		})
 
 		r.Get("/invitations", invitationsHandler.List)
 		r.Post("/invitations", invitationsHandler.Create)
@@ -195,6 +216,24 @@ func (s *Server) routes() chi.Router {
 				return
 			}
 			projectHandler.CloneURL(w, r, id)
+		})
+
+		// Project-level user authorization management.
+		r.Get("/projects/{projectId}/user-authorizations", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			userAuthzHandler.ListByProject(w, r, id)
+		})
+		r.Put("/projects/{projectId}/user-authorizations", func(w http.ResponseWriter, r *http.Request) {
+			id, err := strconv.ParseInt(chi.URLParam(r, "projectId"), 10, 64)
+			if err != nil {
+				http.Error(w, "invalid project id", http.StatusBadRequest)
+				return
+			}
+			userAuthzHandler.SyncByProject(w, r, id)
 		})
 
 		// Blob: wildcard catches project paths with optional slashes (nested projects).

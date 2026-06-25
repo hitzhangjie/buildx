@@ -62,7 +62,7 @@ export const PROJECT_ROUTE_SUFFIXES: ProjectRouteDefinition[] = [
   { suffix: "/~no-storage", page: "NoProjectStoragePage", title: "No Storage", ref: "web/page/project/NoProjectStoragePage" },
 
   { suffix: "/~settings/general", page: "GeneralProjectSettingPage", title: "General Settings", ref: "web/page/project/setting/general/GeneralProjectSettingPage" },
-  { suffix: "/~settings/user-authorizations", page: "UserAuthorizationsPage", title: "User Authorizations", ref: "web/page/project/setting/authorization/UserAuthorizationsPage" },
+  { suffix: "/~settings/user-authorizations", page: "UserAuthorizationsPage", title: "User Authorizations", ref: "web/page/project/setting/authorization/UserAuthorizationsPage", known: "projectUserAuthorizations" },
   { suffix: "/~settings/group-authorizations", page: "GroupAuthorizationsPage", title: "Group Authorizations", ref: "web/page/project/setting/authorization/GroupAuthorizationsPage" },
   { suffix: "/~settings/avatar-edit", page: "AvatarEditPage", title: "Edit Avatar", ref: "web/page/project/setting/avatar/AvatarEditPage" },
   { suffix: "/~settings/branch-protection", page: "BranchProtectionsPage", title: "Branch Protection", ref: "web/page/project/setting/code/branchprotection/BranchProtectionsPage" },

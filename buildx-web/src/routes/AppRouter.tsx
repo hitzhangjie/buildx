@@ -61,6 +61,9 @@ import { PullRequestCodeCommentsPage } from "../pages/project/pullrequests/PullR
 import { InvalidPullRequestPage } from "../pages/project/pullrequests/InvalidPullRequestPage";
 import { PullRequestSettingPage } from "../pages/project/settings/PullRequestSettingPage";
 
+// --- Project settings pages ---
+import ProjectUserAuthorizationsPage from "../pages/project/settings/UserAuthorizationsPage";
+
 // --- Wave 5 project build pages ---
 import { ProjectBuildsPage } from "../pages/project/builds/ProjectBuildsPage";
 import { BuildDashboardPage } from "../pages/project/builds/BuildDashboardPage";
@@ -77,6 +80,9 @@ import { MyPasswordPage } from "../pages/my/MyPasswordPage";
 import { MyAccessTokensPage } from "../pages/my/MyAccessTokensPage";
 import { MySshKeysPage } from "../pages/my/MySshKeysPage";
 import { MyAvatarPage } from "../pages/my/MyAvatarPage";
+
+// --- User pages ---
+import { UserAuthorizationsPage } from "../pages/user/UserAuthorizationsPage";
 
 // --- Wave 10 admin pages ---
 import { UserListPage } from "../pages/admin/UserListPage";
@@ -153,6 +159,9 @@ const GLOBAL_KNOWN: Partial<Record<NonNullable<RouteDefinition["known"]>, () => 
   incompatibilities: () => <IncompatibilitiesPage />,
   resourceList: () => <ResourceListPage />,
   resourceDetail: () => <ResourceDetailPage />,
+
+	// User pages
+	userAuthorizations: () => <UserAuthorizationsPage />,
 };
 
 /**
@@ -203,6 +212,9 @@ const PROJECT_KNOWN: Partial<Record<NonNullable<import("./types").ProjectRouteDe
   buildChanges: () => <BuildChangesPage />,
   buildFixedIssues: () => <FixedIssuesPage />,
   buildArtifacts: () => <BuildArtifactsPage />,
+
+  // Project settings
+  projectUserAuthorizations: () => <ProjectUserAuthorizationsPage />,
 };
 
 function GlobalRouteElement({ def }: { def: RouteDefinition }) {

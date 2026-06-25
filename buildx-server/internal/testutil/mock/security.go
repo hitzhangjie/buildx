@@ -26,6 +26,11 @@ type SecurityService struct {
 	FindAccessTokenByOwnerAndNameFunc func(ctx context.Context, ownerID int64, name string) (*model.AccessToken, error)
 	DeleteAccessTokenFunc          func(ctx context.Context, id int64) error
 	UpdateAccessTokenFunc          func(ctx context.Context, token *model.AccessToken) error
+	ListRolesFunc                       func(ctx context.Context) ([]*model.Role, error)
+	ListUserAuthorizationsFunc          func(ctx context.Context, userID int64) ([]model.UserAuthorizationView, error)
+	SyncUserAuthorizationsFunc          func(ctx context.Context, userID int64, beans []model.UserAuthorizationInput) error
+	ListProjectUserAuthorizationsFunc   func(ctx context.Context, projectID int64) ([]model.ProjectUserAuthorizationView, error)
+	SyncProjectUserAuthorizationsFunc   func(ctx context.Context, projectID int64, beans []model.ProjectUserAuthorizationInput) error
 }
 
 func (m *SecurityService) Authenticate(ctx context.Context, username, password string) (*model.User, error) {
@@ -145,4 +150,39 @@ func (m *SecurityService) UpdateAccessToken(ctx context.Context, token *model.Ac
 		panic("mock.SecurityService.UpdateAccessTokenFunc not set")
 	}
 	return m.UpdateAccessTokenFunc(ctx, token)
+}
+
+func (m *SecurityService) ListRoles(ctx context.Context) ([]*model.Role, error) {
+	if m.ListRolesFunc == nil {
+		panic("mock.SecurityService.ListRolesFunc not set")
+	}
+	return m.ListRolesFunc(ctx)
+}
+
+func (m *SecurityService) ListUserAuthorizations(ctx context.Context, userID int64) ([]model.UserAuthorizationView, error) {
+	if m.ListUserAuthorizationsFunc == nil {
+		panic("mock.SecurityService.ListUserAuthorizationsFunc not set")
+	}
+	return m.ListUserAuthorizationsFunc(ctx, userID)
+}
+
+func (m *SecurityService) SyncUserAuthorizations(ctx context.Context, userID int64, beans []model.UserAuthorizationInput) error {
+	if m.SyncUserAuthorizationsFunc == nil {
+		panic("mock.SecurityService.SyncUserAuthorizationsFunc not set")
+	}
+	return m.SyncUserAuthorizationsFunc(ctx, userID, beans)
+}
+
+func (m *SecurityService) ListProjectUserAuthorizations(ctx context.Context, projectID int64) ([]model.ProjectUserAuthorizationView, error) {
+	if m.ListProjectUserAuthorizationsFunc == nil {
+		panic("mock.SecurityService.ListProjectUserAuthorizationsFunc not set")
+	}
+	return m.ListProjectUserAuthorizationsFunc(ctx, projectID)
+}
+
+func (m *SecurityService) SyncProjectUserAuthorizations(ctx context.Context, projectID int64, beans []model.ProjectUserAuthorizationInput) error {
+	if m.SyncProjectUserAuthorizationsFunc == nil {
+		panic("mock.SecurityService.SyncProjectUserAuthorizationsFunc not set")
+	}
+	return m.SyncProjectUserAuthorizationsFunc(ctx, projectID, beans)
 }

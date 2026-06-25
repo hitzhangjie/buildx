@@ -44,7 +44,9 @@ export type KnownPage =
   // Wave 11 help
   | "incompatibilities"
   | "resourceList"
-  | "resourceDetail";
+  | "resourceDetail"
+  // User pages
+  | "userAuthorizations";
 
 export type KnownProjectPage =
   // Wave 0
@@ -86,7 +88,9 @@ export type KnownProjectPage =
   | "buildLog"
   | "buildChanges"
   | "buildFixedIssues"
-  | "buildArtifacts";
+  | "buildArtifacts"
+  // Project settings
+  | "projectUserAuthorizations";
 
 export type RouteDefinition = {
   path: string;

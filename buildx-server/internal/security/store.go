@@ -423,6 +423,195 @@ func (s *DBStore) UpdateAccessToken(ctx context.Context, token *model.AccessToke
 	return err
 }
 
+// ListRoles returns all defined roles.
+func (s *DBStore) ListRoles(ctx context.Context) ([]*model.Role, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT o_id, o_name FROM o_Role ORDER BY o_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var roles []*model.Role
+	for rows.Next() {
+		var r model.Role
+		if err := rows.Scan(&r.ID, &r.Name); err != nil {
+			return nil, err
+		}
+		roles = append(roles, &r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if roles == nil {
+		roles = []*model.Role{}
+	}
+	return roles, nil
+}
+
+// ListUserAuthorizations returns all project authorizations for a user,
+// grouped by project path with their role names.
+func (s *DBStore) ListUserAuthorizations(ctx context.Context, userID int64) ([]model.UserAuthorizationView, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT p.o_path, r.o_name
+		FROM o_UserAuthorization ua
+		JOIN o_Project p ON p.o_id = ua.o_project_id
+		JOIN o_Role r ON r.o_id = ua.o_role_id
+		WHERE ua.o_user_id = ?
+		ORDER BY p.o_path, r.o_name
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Group roles by project path.
+	type entry struct {
+		projectPath string
+		roleName    string
+	}
+	var entries []entry
+	for rows.Next() {
+		var e entry
+		if err := rows.Scan(&e.projectPath, &e.roleName); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Merge consecutive rows with the same project path.
+	var result []model.UserAuthorizationView
+	for _, e := range entries {
+		if n := len(result); n > 0 && result[n-1].ProjectPath == e.projectPath {
+			result[n-1].RoleNames = append(result[n-1].RoleNames, e.roleName)
+		} else {
+			result = append(result, model.UserAuthorizationView{
+				ProjectPath: e.projectPath,
+				RoleNames:   []string{e.roleName},
+			})
+		}
+	}
+	if result == nil {
+		result = []model.UserAuthorizationView{}
+	}
+	return result, nil
+}
+
+// SyncUserAuthorizations replaces all authorizations for a user in a single transaction.
+func (s *DBStore) SyncUserAuthorizations(ctx context.Context, userID int64, beans []model.UserAuthorizationInput) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM o_UserAuthorization WHERE o_user_id = ?`, userID); err != nil {
+		return err
+	}
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO o_UserAuthorization (o_user_id, o_project_id, o_role_id)
+		VALUES (?, (SELECT o_id FROM o_Project WHERE o_path = ?), (SELECT o_id FROM o_Role WHERE o_name = ?))
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, bean := range beans {
+		for _, roleName := range bean.RoleNames {
+			if _, err := stmt.ExecContext(ctx, userID, bean.ProjectPath, roleName); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// ListProjectUserAuthorizations returns all user authorizations for a project,
+// grouped by user name with their role names.
+func (s *DBStore) ListProjectUserAuthorizations(ctx context.Context, projectID int64) ([]model.ProjectUserAuthorizationView, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT u.o_name, r.o_name
+		FROM o_UserAuthorization ua
+		JOIN o_User u ON u.o_id = ua.o_user_id
+		JOIN o_Role r ON r.o_id = ua.o_role_id
+		WHERE ua.o_project_id = ?
+		ORDER BY u.o_name, r.o_name
+	`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Group roles by user name.
+	type entry struct {
+		userName string
+		roleName string
+	}
+	var entries []entry
+	for rows.Next() {
+		var e entry
+		if err := rows.Scan(&e.userName, &e.roleName); err != nil {
+			return nil, err
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Merge consecutive rows with the same user name.
+	var result []model.ProjectUserAuthorizationView
+	for _, e := range entries {
+		if n := len(result); n > 0 && result[n-1].UserName == e.userName {
+			result[n-1].RoleNames = append(result[n-1].RoleNames, e.roleName)
+		} else {
+			result = append(result, model.ProjectUserAuthorizationView{
+				UserName:  e.userName,
+				RoleNames: []string{e.roleName},
+			})
+		}
+	}
+	if result == nil {
+		result = []model.ProjectUserAuthorizationView{}
+	}
+	return result, nil
+}
+
+// SyncProjectUserAuthorizations replaces all user authorizations for a project
+// in a single transaction.
+func (s *DBStore) SyncProjectUserAuthorizations(ctx context.Context, projectID int64, beans []model.ProjectUserAuthorizationInput) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM o_UserAuthorization WHERE o_project_id = ?`, projectID); err != nil {
+		return err
+	}
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO o_UserAuthorization (o_user_id, o_project_id, o_role_id)
+		VALUES ((SELECT o_id FROM o_User WHERE o_name = ?), ?, (SELECT o_id FROM o_Role WHERE o_name = ?))
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, bean := range beans {
+		for _, roleName := range bean.RoleNames {
+			if _, err := stmt.ExecContext(ctx, bean.UserName, projectID, roleName); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
 // Authorize checks whether a user may perform an action on a project.
 func (s *DBStore) Authorize(ctx context.Context, userID, projectID int64, action string) (bool, error) {
 	switch action {

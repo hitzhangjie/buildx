@@ -1,11 +1,23 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+
+export type ChoiceOption = { value: string; label: string };
+
+function choiceValue(c: string | ChoiceOption): string {
+  return typeof c === "string" ? c : c.value;
+}
+
+function choiceLabel(c: string | ChoiceOption): string {
+  return typeof c === "string" ? c : c.label;
+}
 
 type Select2SingleChoiceProps = {
   value: string;
   onChange: (value: string) => void;
-  choices: string[];
+  choices: readonly (string | ChoiceOption)[];
   placeholder?: string;
   allowClear?: boolean;
+  /** Enable text search/filter within the dropdown. Default true. */
+  filterable?: boolean;
 };
 
 /**
@@ -18,23 +30,59 @@ export function Select2SingleChoice({
   choices,
   placeholder = "",
   allowClear = true,
+  filterable = true,
 }: Select2SingleChoiceProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setQuery("");
       }
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const display = value || placeholder;
+  // Focus search input when dropdown opens.
+  useEffect(() => {
+    if (open && filterable && searchRef.current) {
+      searchRef.current.focus();
+    }
+  }, [open, filterable]);
+
+  const filtered = filterable
+    ? choices.filter((c) =>
+        choiceLabel(c).toLowerCase().includes(query.toLowerCase()) ||
+        choiceValue(c).toLowerCase().includes(query.toLowerCase()),
+      )
+    : choices;
+
+  // Compute display label for the currently selected value.
+  const selectedOption = choices.find((c) => choiceValue(c) === value);
+  const display = value ? (selectedOption ? choiceLabel(selectedOption) : value) : placeholder;
   const isPlaceholder = !value;
+
+  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      setOpen(false);
+      setQuery("");
+      return;
+    }
+    // Select first filtered item on Enter.
+    if (e.key === "Enter" && filterable && filtered.length > 0 && query) {
+      e.preventDefault();
+      const v = choiceValue(filtered[0]);
+      onChange(v);
+      setQuery("");
+      setOpen(false);
+    }
+  }
 
   return (
     <div ref={rootRef} className="select2-choice-editor">
@@ -48,6 +96,7 @@ export function Select2SingleChoice({
           onClick={(e) => {
             e.preventDefault();
             setOpen((v) => !v);
+            setQuery("");
           }}
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -62,6 +111,7 @@ export function Select2SingleChoice({
                 e.stopPropagation();
                 onChange("");
                 setOpen(false);
+                setQuery("");
               }}
             />
           ) : null}
@@ -72,7 +122,18 @@ export function Select2SingleChoice({
         {open ? (
           <div className="select2-drop select2-drop-active" style={{ display: "block", width: "100%" }}>
             <div className="select2-search">
-              <input type="text" autoComplete="off" className="select2-input" tabIndex={-1} readOnly />
+              <input
+                ref={searchRef}
+                type="text"
+                autoComplete="off"
+                className="select2-input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={filterable ? "Search..." : undefined}
+                readOnly={!filterable}
+                tabIndex={filterable ? 0 : -1}
+              />
             </div>
             <ul id={listId} className="select2-results" role="listbox">
               {allowClear && placeholder ? (
@@ -85,29 +146,36 @@ export function Select2SingleChoice({
                     onClick={() => {
                       onChange("");
                       setOpen(false);
+                      setQuery("");
                     }}
                   >
                     {placeholder}
                   </div>
                 </li>
               ) : null}
-              {choices.map((choice) => (
+              {filtered.map((choice) => (
                 <li
-                  key={choice}
-                  className={`select2-results-dept-0 select2-result-selectable${choice === value ? " select2-highlighted" : ""}`}
+                  key={choiceValue(choice)}
+                  className={`select2-results-dept-0 select2-result-selectable${choiceValue(choice) === value ? " select2-highlighted" : ""}`}
                   role="option"
                 >
                   <div
                     className="select2-result-label"
                     onClick={() => {
-                      onChange(choice);
+                      onChange(choiceValue(choice));
                       setOpen(false);
+                      setQuery("");
                     }}
                   >
-                    {choice}
+                    {choiceLabel(choice)}
                   </div>
                 </li>
               ))}
+              {filtered.length === 0 && query ? (
+                <li className="select2-results-dept-0 select2-result-unselectable">
+                  <div className="select2-result-label text-muted">No matches</div>
+                </li>
+              ) : null}
             </ul>
           </div>
         ) : null}
