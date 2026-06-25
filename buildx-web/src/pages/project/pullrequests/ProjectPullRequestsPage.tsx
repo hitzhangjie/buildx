@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
 import { QueryListLayout } from "../../../components/onedev/panels/QueryListLayout";
+import { PullRequestFilterPanel } from "../../../components/onedev/panels/PullRequestFilterPanel";
 import type { ListToolbarAction } from "../../../components/onedev/panels/ResourcefulListPanel";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
@@ -15,10 +16,13 @@ import { buildProjectScopedHref } from "../../../data/queryPresets";
 import { formatWhenISO } from "../../../util/time";
 import "./project-pull-requests-page.css";
 
-const DEFAULT_TOOLBAR: ListToolbarAction[] = [
-  { icon: "filter", label: "Filter", className: "opacity-50" },
-  { icon: "sort", label: "Order By", className: "opacity-50" },
-  { icon: "ellipsis-circle", label: "Operations", className: "opacity-50" },
+const ORDER_FIELDS = [
+  { value: "", label: "Submit Date (newest)" },
+  { value: `"Submit Date" asc`, label: "Submit Date (oldest)" },
+  { value: `"Title" asc`, label: "Title (A-Z)" },
+  { value: `"Title" desc`, label: "Title (Z-A)" },
+  { value: `"Number" desc`, label: "Number (newest)" },
+  { value: `"Number" asc`, label: "Number (oldest)" },
 ];
 
 export function ProjectPullRequestsPage() {
@@ -29,6 +33,28 @@ export function ProjectPullRequestsPage() {
   const [pulls, setPulls] = useState<PullRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Filter / Order By dropdowns.
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const orderRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on outside click.
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+      if (orderRef.current && !orderRef.current.contains(e.target as Node)) {
+        setOrderOpen(false);
+      }
+    }
+    if (filterOpen || orderOpen) {
+      document.addEventListener("mousedown", handleClick);
+    }
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [filterOpen, orderOpen]);
 
   useEffect(() => {
     setLocalQuery(query);
@@ -62,21 +88,61 @@ export function ProjectPullRequestsPage() {
 
   function handleQueryChange(nextQuery: string) {
     setLocalQuery(nextQuery);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (nextQuery.trim()) {
-        next.set("query", nextQuery.trim());
-      } else {
-        next.delete("query");
-      }
-      return next;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (nextQuery.trim()) {
+          next.set("query", nextQuery.trim());
+        } else {
+          next.delete("query");
+        }
+        return next;
+      },
+      { replace: true },
+    );
+    setFilterOpen(false);
   }
 
   function handleQuerySubmit(e: React.FormEvent) {
     e.preventDefault();
     handleQueryChange(localQuery);
   }
+
+  // Build the filter query (without the project clause, which is added by fetchProjectPullRequests).
+  function handleFilterChange(filterQuery: string) {
+    if (filterQuery.trim()) {
+      handleQueryChange(filterQuery);
+    } else {
+      handleQueryChange("");
+    }
+  }
+
+  function handleOrderBy(orderQuery: string) {
+    const current = query || "";
+    // Remove existing order clause if present.
+    const baseQuery = current.replace(/"Submit Date" (asc|desc)/gi, "")
+      .replace(/"Title" (asc|desc)/gi, "")
+      .replace(/"Number" (asc|desc)/gi, "")
+      .trim();
+    const newQuery = orderQuery ? `${baseQuery} ${orderQuery}`.trim() : baseQuery;
+    handleQueryChange(newQuery);
+    setOrderOpen(false);
+  }
+
+  // Toolbar actions: filter, order-by, operations.
+  const toolbarActions: ListToolbarAction[] = [
+    {
+      icon: "filter",
+      label: "Filter",
+      onClick: () => setFilterOpen((v) => !v),
+    },
+    {
+      icon: "sort",
+      label: "Order By",
+      onClick: () => setOrderOpen((v) => !v),
+    },
+    { icon: "ellipsis-circle", label: "Operations", className: "opacity-50" },
+  ];
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="Pull Requests">
@@ -103,7 +169,11 @@ export function ProjectPullRequestsPage() {
                         onChange={(e) => setLocalQuery(e.target.value)}
                       />
                       <span className="input-group-append">
-                        <button type="submit" className="btn btn-outline-secondary btn-icon" title="Query">
+                        <button
+                          type="submit"
+                          className="btn btn-outline-secondary btn-icon"
+                          title="Query"
+                        >
                           <Icon name="magnify" />
                         </button>
                       </span>
@@ -117,24 +187,88 @@ export function ProjectPullRequestsPage() {
                     <Icon name="plus" /> New Pull Request
                   </Link>
                 </div>
-                <div className="operations mb-5">
-                  {[...savedQueries.toolbarActions, ...DEFAULT_TOOLBAR].map((action) => (
-                    <a
+
+                {/* Toolbar */}
+                <div className="operations mb-3 d-flex align-items-center">
+                  {[...savedQueries.toolbarActions, ...toolbarActions].map((action) => (
+                    <span
                       key={action.label}
-                      href={action.href ?? "#"}
-                      className={`text-gray d-inline-block mb-2 mr-4 ${action.className ?? ""}`}
-                      onClick={(e) => {
-                        if (!action.href) {
-                          e.preventDefault();
-                        }
-                        action.onClick?.();
-                      }}
+                      className="d-inline-block position-relative mr-4"
                     >
-                      <Icon name={action.icon} /> {action.label}
-                    </a>
+                      {action.label === "Filter" ? (
+                        <div ref={filterRef}>
+                          <a
+                            href={action.href ?? "#"}
+                            className={`text-gray d-inline-block mb-2 ${action.className ?? ""}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              action.onClick?.();
+                            }}
+                          >
+                            <Icon name={action.icon} /> {action.label}
+                          </a>
+                          {filterOpen && (
+                            <div
+                              className="floating dropdown-menu show position-absolute p-0"
+                              style={{ zIndex: 1050, top: "100%", left: 0 }}
+                            >
+                              <PullRequestFilterPanel
+                                currentQuery={query}
+                                onQueryChange={handleFilterChange}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ) : action.label === "Order By" ? (
+                        <div ref={orderRef}>
+                          <a
+                            href={action.href ?? "#"}
+                            className={`text-gray d-inline-block mb-2 ${action.className ?? ""}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              action.onClick?.();
+                            }}
+                          >
+                            <Icon name={action.icon} /> {action.label}
+                          </a>
+                          {orderOpen && (
+                            <div
+                              className="floating dropdown-menu show position-absolute p-2"
+                              style={{ zIndex: 1050, top: "100%", left: 0, minWidth: "220px" }}
+                            >
+                              {ORDER_FIELDS.map((f) => (
+                                <a
+                                  key={f.value}
+                                  className="dropdown-item"
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    handleOrderBy(f.value);
+                                  }}
+                                >
+                                  {f.label}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <a
+                          href={action.href ?? "#"}
+                          className={`text-gray d-inline-block mb-2 ${action.className ?? ""}`}
+                          onClick={(e) => {
+                            if (!action.href) e.preventDefault();
+                            action.onClick?.();
+                          }}
+                        >
+                          <Icon name={action.icon} /> {action.label}
+                        </a>
+                      )}
+                    </span>
                   ))}
-                  <span className="float-right text-gray">{pulls.length}</span>
+                  <span className="ml-auto text-gray">{pulls.length}</span>
                 </div>
+
                 {error && <div className="alert alert-danger">{error}</div>}
                 <div className="body">
                   {loading ? (
@@ -156,7 +290,9 @@ export function ProjectPullRequestsPage() {
                                     </Link>
                                     <span className="number ml-1 text-muted">#{pr.number}</span>
                                   </span>
-                                  <span className={`badge badge-sm font-size-xs mr-2 status ${pullRequestStatusBadge(pr.status)}`}>
+                                  <span
+                                    className={`badge badge-sm font-size-xs mr-2 status ${pullRequestStatusBadge(pr.status)}`}
+                                  >
                                     {pullRequestStatusLabel(pr.status)}
                                   </span>
                                 </div>
@@ -181,7 +317,9 @@ export function ProjectPullRequestsPage() {
                         ))}
                         {!pulls.length && !loading && (
                           <tr>
-                            <td className="text-center text-muted py-5">No pull requests found</td>
+                            <td className="text-center text-muted py-5">
+                              No pull requests found
+                            </td>
                           </tr>
                         )}
                       </tbody>

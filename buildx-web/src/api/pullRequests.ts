@@ -70,6 +70,8 @@ export type CreatePullRequestRequest = {
   description?: string;
   mergeStrategy?: string;
   reviewerIds?: number[];
+  assigneeIds?: number[];
+  labelIds?: string[];
 };
 
 const STATUS_LABEL: Record<PullRequestStatus, string> = {
@@ -224,6 +226,28 @@ export async function fetchPullRequestReviews(requestId: number): Promise<PullRe
   return Array.isArray(data) ? data : [];
 }
 
+export type PullRequestAssignment = {
+  id: number;
+  requestId: number;
+  user?: PullRequestUser;
+};
+
+export async function fetchPullRequestAssignments(requestId: number): Promise<PullRequestAssignment[]> {
+  if (USE_MOCK) {
+    return [];
+  }
+  const data = await apiFetch<PullRequestAssignment[] | null>(`/~api/pulls/${requestId}/assignments`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchPullRequestLabels(requestId: number): Promise<string[]> {
+  if (USE_MOCK) {
+    return [];
+  }
+  const data = await apiFetch<string[] | null>(`/~api/pulls/${requestId}/labels`);
+  return Array.isArray(data) ? data : [];
+}
+
 export async function fetchMergePreview(requestId: number): Promise<MergePreview> {
   return apiFetch<MergePreview>(`/~api/pulls/${requestId}/merge-preview`);
 }
@@ -300,4 +324,43 @@ export async function updatePullRequestDescription(requestId: number, descriptio
     method: "POST",
     body: description,
   });
+}
+
+// --- Operations (Phase 3) ---
+
+export async function deleteSourceBranch(requestId: number): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}/delete-source-branch`, { method: "POST" });
+}
+
+export async function restoreSourceBranch(requestId: number): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}/restore-source-branch`, { method: "POST" });
+}
+
+export async function synchronizePullRequest(requestId: number): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}/synchronize`, { method: "POST" });
+}
+
+export async function changeTargetBranch(requestId: number, targetBranch: string): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}/change-target-branch`, {
+    method: "POST",
+    body: targetBranch,
+  });
+}
+
+export async function setAutoMerge(requestId: number, enabled: boolean, commitMessage?: string): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}/auto-merge`, {
+    method: "POST",
+    body: JSON.stringify({ enabled, commitMessage: commitMessage ?? "" }),
+  });
+}
+
+export async function updateSourceBranch(requestId: number, method: "merge" | "rebase"): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}/update-source-branch`, {
+    method: "POST",
+    body: method,
+  });
+}
+
+export async function deletePullRequest(requestId: number): Promise<void> {
+  await apiFetch<void>(`/~api/pulls/${requestId}`, { method: "DELETE" });
 }

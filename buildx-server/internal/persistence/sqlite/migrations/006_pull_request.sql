@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS o_PullRequest (
     o_baseCommitHash TEXT NOT NULL DEFAULT '',
     o_buildCommitHash TEXT NOT NULL DEFAULT '',
     o_commentCount INTEGER NOT NULL DEFAULT 0,
+    o_lastActivityDate TEXT,
+    o_autoMergeEnabled INTEGER NOT NULL DEFAULT 0,
+    o_autoMergeCommitMessage TEXT NOT NULL DEFAULT '',
+    o_sourceBranchDeleted INTEGER NOT NULL DEFAULT 0,
+    o_checkError TEXT NOT NULL DEFAULT '',
     UNIQUE (o_numberScope_id, o_number)
 );
 

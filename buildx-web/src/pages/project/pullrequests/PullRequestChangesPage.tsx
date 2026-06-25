@@ -57,6 +57,7 @@ export function PullRequestChangesPage() {
         requestNumber={request ?? ""}
         pr={pr}
         reviews={reviews}
+        assignments={[]}
         activeTab="changes"
         mergePreview={mergePreview}
         loading={loading}

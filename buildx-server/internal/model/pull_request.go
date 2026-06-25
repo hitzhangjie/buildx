@@ -82,6 +82,20 @@ type MergePreview struct {
 	Conflicted     bool   `json:"conflicted"`
 }
 
+// PullRequestAssignment tracks who is assigned to a pull request.
+type PullRequestAssignment struct {
+	ID        int64 `json:"id"`
+	RequestID int64 `json:"requestId"`
+	User      *User `json:"user,omitempty"`
+}
+
+// PullRequestLabel is a label attached to a pull request.
+type PullRequestLabel struct {
+	ID        int64  `json:"id"`
+	RequestID int64  `json:"requestId"`
+	Label     string `json:"label"`
+}
+
 // PullRequestOpenData is the create payload for POST /pulls.
 type PullRequestOpenData struct {
 	TargetProjectID int64         `json:"targetProjectId"`
@@ -93,4 +107,5 @@ type PullRequestOpenData struct {
 	MergeStrategy   MergeStrategy `json:"mergeStrategy,omitempty"`
 	ReviewerIDs     []int64       `json:"reviewerIds,omitempty"`
 	AssigneeIDs     []int64       `json:"assigneeIds,omitempty"`
+	LabelIDs        []string      `json:"labelIds,omitempty"`
 }

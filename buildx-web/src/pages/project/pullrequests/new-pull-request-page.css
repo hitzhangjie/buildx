@@ -1,0 +1,69 @@
+.new-pull-request .can-send label {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.new-pull-request .form-group {
+  margin-bottom: 2rem;
+}
+
+.new-pull-request .can-send .merge-strategy .status {
+  margin-top: 0.6rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.new-pull-request .can-send .merge-strategy .status svg,
+.new-pull-request .can-send .merge-strategy .status img {
+  width: 18px;
+  height: 18px;
+}
+
+.new-pull-request .can-send .merge-strategy .status .no-conflict {
+  color: var(--success);
+}
+
+.new-pull-request .can-send .merge-strategy .status .conflict {
+  color: var(--danger);
+}
+
+.new-pull-request .can-send .merge-strategy .status .calculating {
+  color: var(--warning);
+}
+
+/* Revision compare layout */
+.new-pull-request .revision-compare {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.new-pull-request .revision-compare .base.revision.card,
+.new-pull-request .revision-compare .compare.revision.card {
+  flex: 1;
+  max-width: 420px;
+}
+
+.new-pull-request .revision-compare .swap {
+  display: flex;
+  align-items: center;
+  padding-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .new-pull-request .revision-compare {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .new-pull-request .revision-compare .base.revision.card,
+  .new-pull-request .revision-compare .compare.revision.card {
+    max-width: none;
+  }
+
+  .new-pull-request .revision-compare .swap {
+    justify-content: center;
+    padding: 0.5rem 0;
+  }
+}

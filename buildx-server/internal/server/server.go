@@ -392,6 +392,20 @@ func (s *Server) routes() chi.Router {
 			}
 			pullRequestsHandler.ListReviews(w, r, id)
 		})
+			r.Get("/pulls/{requestId}/assignments", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok {
+					return
+				}
+				pullRequestsHandler.ListAssignments(w, r, id)
+			})
+			r.Get("/pulls/{requestId}/labels", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok {
+					return
+				}
+				pullRequestsHandler.ListLabels(w, r, id)
+			})
 		r.Post("/pulls/{requestId}/title", func(w http.ResponseWriter, r *http.Request) {
 			id, ok := api.ParsePullRequestID(w, r)
 			if !ok {
@@ -437,6 +451,31 @@ func (s *Server) routes() chi.Router {
 		r.Post("/pull-request-comments", pullRequestsHandler.CreateComment)
 		r.Post("/pull-request-reviews", pullRequestsHandler.CreateReview)
 
+			r.Post("/pulls/{requestId}/delete-source-branch", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok { return }
+				pullRequestsHandler.DeleteSourceBranch(w, r, id)
+			})
+			r.Post("/pulls/{requestId}/restore-source-branch", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok { return }
+				pullRequestsHandler.RestoreSourceBranch(w, r, id)
+			})
+			r.Post("/pulls/{requestId}/synchronize", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok { return }
+				pullRequestsHandler.Synchronize(w, r, id)
+			})
+			r.Post("/pulls/{requestId}/change-target-branch", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok { return }
+				pullRequestsHandler.ChangeTargetBranch(w, r, id)
+			})
+			r.Delete("/pulls/{requestId}", func(w http.ResponseWriter, r *http.Request) {
+				id, ok := api.ParsePullRequestID(w, r)
+				if !ok { return }
+				pullRequestsHandler.DeletePullRequest(w, r, id)
+			})
 		r.Get("/builds", buildsHandler.Query)
 		r.Get("/builds/{buildId}", func(w http.ResponseWriter, r *http.Request) {
 			id, ok := api.ParseBuildID(w, r)

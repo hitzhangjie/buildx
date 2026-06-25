@@ -85,6 +85,12 @@ func (s *Service) Open(ctx context.Context, data *model.PullRequestOpenData, sub
 			Status:    model.PullRequestReviewPending,
 		})
 	}
+	for _, assigneeID := range data.AssigneeIDs {
+		if assigneeID == submitter.ID {
+			continue
+		}
+		_, _ = s.Store.CreateAssignment(ctx, created.ID, assigneeID)
+	}
 	return created, nil
 }
 
@@ -218,6 +224,81 @@ func (s *Service) Review(ctx context.Context, pr *model.PullRequest, user *model
 	return nil
 }
 
+func (s *Service) DeleteSourceBranch(ctx context.Context, pr *model.PullRequest) error {
+	if pr == nil || pr.Status != model.PullRequestStatusMerged {
+		return errors.New("pull request must be merged to delete source branch")
+	}
+	gitDir := s.Project.GitDir(pr.TargetProject.ID)
+	if err := ensureBranchExists(gitDir, pr.SourceBranch); err != nil {
+		return err
+	}
+	cmd := exec.Command("git", "-C", gitDir, "branch", "-D", pr.SourceBranch)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("delete source branch: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return s.Store.SetSourceBranchDeleted(ctx, pr.ID, true)
+}
+
+func (s *Service) RestoreSourceBranch(ctx context.Context, pr *model.PullRequest) error {
+	if pr == nil || !pr.IsOpen() {
+		return ErrNotOpen
+	}
+	gitDir := s.Project.GitDir(pr.TargetProject.ID)
+	hash := pr.BuildCommitHash
+	if hash == "" {
+		hash = pr.BaseCommitHash
+	}
+	if hash == "" {
+		return errors.New("no commit hash to restore")
+	}
+	cmd := exec.Command("git", "-C", gitDir, "branch", pr.SourceBranch, hash)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("restore source branch: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return s.Store.SetSourceBranchDeleted(ctx, pr.ID, false)
+}
+
+func (s *Service) Synchronize(ctx context.Context, pr *model.PullRequest) error {
+	if pr == nil || !pr.IsOpen() {
+		return ErrNotOpen
+	}
+	gitDir := s.Project.GitDir(pr.TargetProject.ID)
+	repo, err := git.Open(gitDir)
+	if err != nil {
+		return err
+	}
+	buildHash, err := repo.ResolveCommitHash(pr.SourceBranch)
+	if err != nil {
+		return ErrBranchNotFound
+	}
+	return s.Store.SetBuildCommitHash(ctx, pr.ID, buildHash)
+}
+
+func (s *Service) ChangeTargetBranch(ctx context.Context, pr *model.PullRequest, newTarget string) error {
+	if pr == nil || !pr.IsOpen() {
+		return ErrNotOpen
+	}
+	newTarget = strings.TrimSpace(newTarget)
+	if newTarget == "" {
+		return errors.New("target branch is required")
+	}
+	if newTarget == pr.TargetBranch {
+		return errors.New("target branch is the same")
+	}
+	gitDir := s.Project.GitDir(pr.TargetProject.ID)
+	if err := ensureBranchExists(gitDir, newTarget); err != nil {
+		return err
+	}
+	return s.Store.SetTargetBranch(ctx, pr.ID, newTarget)
+}
+
+func (s *Service) Delete(ctx context.Context, pr *model.PullRequest) error {
+	if pr == nil {
+		return ErrNotFound
+	}
+	return s.Store.Delete(ctx, pr.ID)
+}
+
 // ParseQuery converts a subset of OneDev pull request query syntax into options.
 func ParseQuery(query string, projectPathByID map[int64]string) QueryOptions {
 	opts := QueryOptions{Count: 100}
@@ -226,10 +307,22 @@ func ParseQuery(query string, projectPathByID map[int64]string) QueryOptions {
 		return opts
 	}
 	lower := strings.ToLower(q)
+
+	// Keyword-based status.
 	if strings.Contains(lower, "open") && !strings.Contains(lower, "reopen") {
 		open := model.PullRequestStatusOpen
 		opts.Status = &open
 	}
+	if strings.Contains(lower, "merged") {
+		merged := model.PullRequestStatusMerged
+		opts.Status = &merged
+	}
+	if strings.Contains(lower, "discarded") {
+		discarded := model.PullRequestStatusDiscarded
+		opts.Status = &discarded
+	}
+
+	// "Target Project" is "path"
 	projectPath := extractQuotedValue(lower, "target project is")
 	if projectPath == "" {
 		projectPath = extractQuotedValue(lower, `"target project" is`)
@@ -242,6 +335,46 @@ func ParseQuery(query string, projectPathByID map[int64]string) QueryOptions {
 			}
 		}
 	}
+
+	// "Status" is "OPEN"/"MERGED"/"DISCARDED" (can appear multiple times via "and"/"or").
+	statuses := extractMultiValues(lower, "status is")
+	if len(statuses) == 0 {
+		statuses = extractMultiValues(lower, `"status" is`)
+	}
+	for _, s := range statuses {
+		switch strings.ToUpper(s) {
+		case "OPEN":
+			opts.Statuses = append(opts.Statuses, model.PullRequestStatusOpen)
+		case "MERGED":
+			opts.Statuses = append(opts.Statuses, model.PullRequestStatusMerged)
+		case "DISCARDED":
+			opts.Statuses = append(opts.Statuses, model.PullRequestStatusDiscarded)
+		}
+	}
+
+	// "Last Activity Date" is since/until "YYYY-MM-DD"
+	if d := extractQuotedValue(lower, "last activity date\" is since"); d != "" {
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			opts.LastActivitySince = &t
+		}
+	}
+	if d := extractQuotedValue(lower, "last activity date\" is until"); d != "" {
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			opts.LastActivityUntil = &t
+		}
+	}
+	if d := extractQuotedValue(lower, "last activity date is since"); d != "" {
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			opts.LastActivitySince = &t
+		}
+	}
+	if d := extractQuotedValue(lower, "last activity date is until"); d != "" {
+		if t, err := time.Parse("2006-01-02", d); err == nil {
+			opts.LastActivityUntil = &t
+		}
+	}
+
+	// Includes Issue.
 	if path, num, ok := ParseIncludesIssueQuery(query); ok {
 		opts.IncludesIssueNumber = num
 		opts.IncludesIssuePattern = fmt.Sprintf("%%#%d%%", num)
@@ -253,6 +386,35 @@ func ParseQuery(query string, projectPathByID map[int64]string) QueryOptions {
 		}
 	}
 	return opts
+}
+
+// extractMultiValues extracts all quoted values for a given criterion prefix.
+// Handles multiple occurrences joined by "and" or "or".
+func extractMultiValues(query, prefix string) []string {
+	var values []string
+	lower := strings.ToLower(query)
+	idx := 0
+	for {
+		rest := lower[idx:]
+		pos := strings.Index(rest, strings.ToLower(prefix))
+		if pos < 0 {
+			break
+		}
+		after := rest[pos+len(prefix):]
+		after = strings.TrimSpace(after)
+		if !strings.HasPrefix(after, `"`) {
+			idx += pos + len(prefix)
+			continue
+		}
+		after = after[1:]
+		end := strings.Index(after, `"`)
+		if end < 0 {
+			break
+		}
+		values = append(values, after[:end])
+		idx += pos + len(prefix) + 1 + end + 1
+	}
+	return values
 }
 
 func extractQuotedValue(query, prefix string) string {

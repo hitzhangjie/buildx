@@ -265,6 +265,52 @@ func (h *PullRequestsHandler) ListReviews(w http.ResponseWriter, r *http.Request
 	writeJSON(w, r, http.StatusOK, reviews)
 }
 
+func (h *PullRequestsHandler) ListAssignments(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.ListAssignments", "request_id", requestID)
+	if _, err := h.authenticateOptional(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	if _, err := h.loadRequest(w, r, op, requestID); err != nil {
+		return
+	}
+	assignments, err := h.Store.ListAssignments(r.Context(), requestID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if assignments == nil {
+		assignments = []*model.PullRequestAssignment{}
+	}
+	op.OK(http.StatusOK, "count", len(assignments))
+	writeJSON(w, r, http.StatusOK, assignments)
+}
+
+func (h *PullRequestsHandler) ListLabels(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.ListLabels", "request_id", requestID)
+	if _, err := h.authenticateOptional(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	if _, err := h.loadRequest(w, r, op, requestID); err != nil {
+		return
+	}
+	labels, err := h.Store.ListLabels(r.Context(), requestID)
+	if err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	if labels == nil {
+		labels = []string{}
+	}
+	op.OK(http.StatusOK, "count", len(labels))
+	writeJSON(w, r, http.StatusOK, labels)
+}
+
 func (h *PullRequestsHandler) Merge(w http.ResponseWriter, r *http.Request, requestID int64) {
 	h.runRequestAction(w, r, requestID, "PullRequestsHandler.Merge", func(user *model.User, pr *model.PullRequest, note string) error {
 		return h.Service.Merge(r.Context(), pr, user, note)
@@ -281,6 +327,121 @@ func (h *PullRequestsHandler) Reopen(w http.ResponseWriter, r *http.Request, req
 	h.runRequestAction(w, r, requestID, "PullRequestsHandler.Reopen", func(user *model.User, pr *model.PullRequest, note string) error {
 		return h.Service.Reopen(r.Context(), pr, user, note)
 	})
+}
+
+func (h *PullRequestsHandler) DeleteSourceBranch(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.DeleteSourceBranch", "request_id", requestID)
+	user, err := h.authenticate(r)
+	if err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	pr, err := h.loadRequest(w, r, op, requestID)
+	if err != nil {
+		return
+	}
+	if pr.Submitter != nil && user.ID != pr.Submitter.ID {
+		writeJSONError(w, http.StatusForbidden, "only the submitter can delete source branch")
+		return
+	}
+	if err := h.Service.DeleteSourceBranch(r.Context(), pr); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	op.OK(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PullRequestsHandler) RestoreSourceBranch(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.RestoreSourceBranch", "request_id", requestID)
+	if _, err := h.authenticate(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	pr, err := h.loadRequest(w, r, op, requestID)
+	if err != nil {
+		return
+	}
+	if err := h.Service.RestoreSourceBranch(r.Context(), pr); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	op.OK(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PullRequestsHandler) Synchronize(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.Synchronize", "request_id", requestID)
+	if _, err := h.authenticate(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	pr, err := h.loadRequest(w, r, op, requestID)
+	if err != nil {
+		return
+	}
+	if err := h.Service.Synchronize(r.Context(), pr); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	op.OK(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PullRequestsHandler) ChangeTargetBranch(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.ChangeTargetBranch", "request_id", requestID)
+	if _, err := h.authenticate(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "read body")
+		return
+	}
+	newTarget := strings.TrimSpace(string(body))
+	// handle JSON string wrapping
+	if strings.HasPrefix(newTarget, `"`) && strings.HasSuffix(newTarget, `"`) {
+		newTarget = newTarget[1 : len(newTarget)-1]
+	}
+	pr, err := h.loadRequest(w, r, op, requestID)
+	if err != nil {
+		return
+	}
+	if err := h.Service.ChangeTargetBranch(r.Context(), pr, newTarget); err != nil {
+		op.Fail(err, http.StatusBadRequest)
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	op.OK(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *PullRequestsHandler) DeletePullRequest(w http.ResponseWriter, r *http.Request, requestID int64) {
+	op := StartOp(r, "PullRequestsHandler.Delete", "request_id", requestID)
+	if _, err := h.authenticate(r); err != nil {
+		op.Fail(err, http.StatusUnauthorized)
+		writeError(w, r, err)
+		return
+	}
+	pr, err := h.loadRequest(w, r, op, requestID)
+	if err != nil {
+		return
+	}
+	if err := h.Service.Delete(r.Context(), pr); err != nil {
+		op.Fail(err, http.StatusInternalServerError)
+		writeInternalError(w, r, err)
+		return
+	}
+	op.OK(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *PullRequestsHandler) CreateComment(w http.ResponseWriter, r *http.Request) {

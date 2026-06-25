@@ -8,13 +8,21 @@ import { usePullRequestDetail } from "../../../hooks/usePullRequestDetail";
 import {
   addPullRequestReviewer,
   createPullRequestComment,
+  deletePullRequest,
+  deleteSourceBranch,
   discardPullRequest,
+  fetchPullRequestAssignments,
   fetchPullRequestComments,
   mergePullRequest,
   removePullRequestReviewer,
   reopenPullRequest,
+  restoreSourceBranch,
   reviewPullRequest,
+  synchronizePullRequest,
+  updatePullRequestDescription,
   updatePullRequestMergeStrategy,
+  updatePullRequestTitle,
+  type PullRequestAssignment,
   type PullRequestComment,
 } from "../../../api/pullRequests";
 import { fetchUsers } from "../../../api/users";
@@ -25,6 +33,7 @@ export function PullRequestActivitiesPage() {
   const { request } = useParams<{ request: string }>();
   const { pr, reviews, mergePreview, loading, error, reload, setError } = usePullRequestDetail(projectPath);
   const [comments, setComments] = useState<PullRequestComment[]>([]);
+  const [assignments, setAssignments] = useState<PullRequestAssignment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [actionPending, setActionPending] = useState(false);
   const [reviewerQuery, setReviewerQuery] = useState("");
@@ -33,12 +42,17 @@ export function PullRequestActivitiesPage() {
   useEffect(() => {
     if (!pr) {
       setComments([]);
+      setAssignments([]);
       return;
     }
     let cancelled = false;
-    void fetchPullRequestComments(pr.id).then((list) => {
+    Promise.all([
+      fetchPullRequestComments(pr.id),
+      fetchPullRequestAssignments(pr.id),
+    ]).then(([commentList, assignmentList]) => {
       if (!cancelled) {
-        setComments(list);
+        setComments(commentList);
+        setAssignments(assignmentList);
       }
     });
     return () => {
@@ -52,7 +66,12 @@ export function PullRequestActivitiesPage() {
       await action();
       await reload();
       if (pr) {
-        setComments(await fetchPullRequestComments(pr.id));
+        const [c, a] = await Promise.all([
+          fetchPullRequestComments(pr.id),
+          fetchPullRequestAssignments(pr.id),
+        ]);
+        setComments(c);
+        setAssignments(a);
       }
     } catch (err) {
       setError((err as { message?: string }).message ?? "Action failed");
@@ -84,9 +103,13 @@ export function PullRequestActivitiesPage() {
     const users = await fetchUsers(q);
     const existing = new Set(reviews.map((r) => r.user?.id));
     setReviewerOptions(
-      users.filter((u) => !existing.has(u.id) && u.id !== pr?.submitter?.id).map((u) => ({ id: u.id, name: u.name })),
+      users
+        .filter((u) => !existing.has(u.id) && u.id !== pr?.submitter?.id)
+        .map((u) => ({ id: u.id, name: u.name })),
     );
   }
+
+  const isOpen = pr?.status === "OPEN";
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle={`Pull Request #${request}`}>
@@ -95,37 +118,39 @@ export function PullRequestActivitiesPage() {
         requestNumber={request ?? ""}
         pr={pr}
         reviews={reviews}
+        assignments={assignments}
         activeTab="activities"
         mergePreview={mergePreview}
         loading={loading}
         error={error}
         actionPending={actionPending}
-        onMerge={pr?.status === "OPEN" ? () => runAction(() => mergePullRequest(pr.id)) : undefined}
-        onDiscard={pr?.status === "OPEN" ? () => runAction(() => discardPullRequest(pr.id)) : undefined}
-        onReopen={pr?.status === "DISCARDED" ? () => runAction(() => reopenPullRequest(pr.id)) : undefined}
-        onApprove={pr?.status === "OPEN" ? () => runAction(() => reviewPullRequest(pr.id, "APPROVED")) : undefined}
-        onRequestChanges={
-          pr?.status === "OPEN"
-            ? () => runAction(() => reviewPullRequest(pr.id, "REQUESTED_FOR_CHANGES"))
-            : undefined
-        }
-        onRemoveReviewer={
-          pr?.status === "OPEN"
-            ? (userId) => runAction(() => removePullRequestReviewer(pr.id, userId))
-            : undefined
-        }
-        onRequestReviewAgain={
-          pr?.status === "OPEN"
-            ? (userId) => runAction(() => addPullRequestReviewer(pr.id, userId))
-            : undefined
-        }
-        onMergeStrategyChange={
-          pr?.status === "OPEN"
-            ? (strategy) => runAction(() => updatePullRequestMergeStrategy(pr.id, strategy))
-            : undefined
-        }
+        // Lifecycle.
+        onMerge={isOpen ? () => runAction(() => mergePullRequest(pr!.id)) : undefined}
+        onDiscard={isOpen ? () => runAction(() => discardPullRequest(pr!.id)) : undefined}
+        onReopen={pr?.status === "DISCARDED" ? () => runAction(() => reopenPullRequest(pr!.id)) : undefined}
+        // Reviews.
+        onApprove={isOpen ? () => runAction(() => reviewPullRequest(pr!.id, "APPROVED")) : undefined}
+        onRequestChanges={isOpen ? () => runAction(() => reviewPullRequest(pr!.id, "REQUESTED_FOR_CHANGES")) : undefined}
+        onRemoveReviewer={isOpen ? (userId) => runAction(() => removePullRequestReviewer(pr!.id, userId)) : undefined}
+        onRequestReviewAgain={isOpen ? (userId) => runAction(() => addPullRequestReviewer(pr!.id, userId)) : undefined}
+        // Merge strategy.
+        onMergeStrategyChange={isOpen ? (strategy) => runAction(() => updatePullRequestMergeStrategy(pr!.id, strategy)) : undefined}
+        // Title & description.
+        onTitleChange={isOpen ? (title) => runAction(() => updatePullRequestTitle(pr!.id, title)) : undefined}
+        onDescriptionChange={isOpen ? (desc) => runAction(() => updatePullRequestDescription(pr!.id, desc)) : undefined}
+        // Source branch.
+        onDeleteSourceBranch={isOpen ? () => runAction(() => deleteSourceBranch(pr!.id)) : undefined}
+        onRestoreSourceBranch={isOpen ? () => runAction(() => restoreSourceBranch(pr!.id)) : undefined}
+        // Sync.
+        onSynchronize={isOpen ? () => runAction(() => synchronizePullRequest(pr!.id)) : undefined}
+        // Delete PR.
+        onDelete={() => runAction(async () => {
+          await deletePullRequest(pr!.id);
+          window.location.href = `/${projectPath}/~pulls`;
+        })}
+        // Reviewer adder.
         addReviewerSlot={
-          pr?.status === "OPEN" ? (
+          isOpen ? (
             <div>
               <input
                 type="text"
@@ -143,7 +168,7 @@ export function PullRequestActivitiesPage() {
                       className="list-group-item list-group-item-action py-1"
                       onClick={() =>
                         void runAction(async () => {
-                          await addPullRequestReviewer(pr.id, u.id);
+                          await addPullRequestReviewer(pr!.id, u.id);
                           setReviewerQuery("");
                           setReviewerOptions([]);
                         })
@@ -158,6 +183,7 @@ export function PullRequestActivitiesPage() {
           ) : undefined
         }
       >
+        {/* Comments timeline */}
         <div className="activities-list">
           {comments.map((comment) => (
             <div key={comment.id} className="card card-sm mb-3">
@@ -176,7 +202,8 @@ export function PullRequestActivitiesPage() {
           )}
         </div>
 
-        {pr?.status === "OPEN" && (
+        {/* Comment input */}
+        {isOpen && (
           <div className="mt-4">
             <label className="form-label" htmlFor="newComment">
               Add a comment

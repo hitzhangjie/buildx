@@ -133,6 +133,12 @@ func (s *DBStore) GetByNumber(ctx context.Context, projectID int64, number int) 
 type QueryOptions struct {
 	TargetProjectID      *int64
 	Status               *model.PullRequestStatus
+	Statuses             []model.PullRequestStatus // multi-status filter (OR)
+	SubmitterIDs         []int64                   // submitted by these users
+	AssigneeIDs          []int64                   // assigned to these users
+	Labels               []string                  // labeled with these
+	LastActivitySince    *time.Time               // active since date
+	LastActivityUntil    *time.Time               // active until date
 	IncludesIssueNumber  int
 	IncludesIssuePattern string
 	Offset               int
@@ -151,7 +157,7 @@ func (s *DBStore) Query(ctx context.Context, opts QueryOptions) ([]*model.PullRe
 	}
 
 	query := pullRequestSelect + " WHERE 1=1"
-	args := make([]any, 0, 4)
+	args := make([]any, 0, 8)
 	if opts.TargetProjectID != nil {
 		query += " AND pr.o_targetProject_id = ?"
 		args = append(args, *opts.TargetProjectID)
@@ -159,6 +165,45 @@ func (s *DBStore) Query(ctx context.Context, opts QueryOptions) ([]*model.PullRe
 	if opts.Status != nil {
 		query += " AND pr.o_status = ?"
 		args = append(args, *opts.Status)
+	} else if len(opts.Statuses) > 0 {
+		placeholders := make([]string, len(opts.Statuses))
+		for i, st := range opts.Statuses {
+			placeholders[i] = "?"
+			args = append(args, st)
+		}
+		query += " AND pr.o_status IN (" + strings.Join(placeholders, ",") + ")"
+	}
+	if len(opts.SubmitterIDs) > 0 {
+		placeholders := make([]string, len(opts.SubmitterIDs))
+		for i, id := range opts.SubmitterIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += " AND pr.o_submitter_id IN (" + strings.Join(placeholders, ",") + ")"
+	}
+	if len(opts.AssigneeIDs) > 0 {
+		placeholders := make([]string, len(opts.AssigneeIDs))
+		for i, id := range opts.AssigneeIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += " AND pr.o_id IN (SELECT o_request_id FROM o_PullRequestAssignment WHERE o_user_id IN (" + strings.Join(placeholders, ",") + "))"
+	}
+	if len(opts.Labels) > 0 {
+		placeholders := make([]string, len(opts.Labels))
+		for i, l := range opts.Labels {
+			placeholders[i] = "?"
+			args = append(args, l)
+		}
+		query += " AND pr.o_id IN (SELECT o_request_id FROM o_PullRequestLabel WHERE o_label IN (" + strings.Join(placeholders, ",") + "))"
+	}
+	if opts.LastActivitySince != nil {
+		query += " AND (pr.o_lastActivityDate >= ? OR pr.o_submitDate >= ?)"
+		args = append(args, opts.LastActivitySince.Format(time.RFC3339Nano), opts.LastActivitySince.Format(time.RFC3339Nano))
+	}
+	if opts.LastActivityUntil != nil {
+		query += " AND (pr.o_lastActivityDate <= ? OR pr.o_submitDate <= ?)"
+		args = append(args, opts.LastActivityUntil.Format(time.RFC3339Nano), opts.LastActivityUntil.Format(time.RFC3339Nano))
 	}
 	if opts.IncludesIssueNumber > 0 && opts.IncludesIssuePattern != "" {
 		query += " AND (pr.o_description LIKE ? OR pr.o_title LIKE ?)"
@@ -520,6 +565,152 @@ func scanReview(row rowScanner) (*model.PullRequestReview, error) {
 	}
 	rv.User = &user
 	return &rv, nil
+}
+
+func (s *DBStore) SetSourceBranchDeleted(ctx context.Context, id int64, deleted bool) error {
+	var val int
+	if deleted {
+		val = 1
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE o_PullRequest SET o_sourceBranchDeleted = ? WHERE o_id = ?`, val, id)
+	if err != nil {
+		return err
+	}
+	return ensureUpdated(res, ErrNotFound)
+}
+
+func (s *DBStore) SetTargetBranch(ctx context.Context, id int64, branch string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE o_PullRequest SET o_targetBranch = ? WHERE o_id = ?`, branch, id)
+	if err != nil {
+		return err
+	}
+	return ensureUpdated(res, ErrNotFound)
+}
+
+func (s *DBStore) Delete(ctx context.Context, id int64) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM o_PullRequest WHERE o_id = ?`, id)
+	if err != nil {
+		return err
+	}
+	return ensureUpdated(res, ErrNotFound)
+}
+
+// --- Assignments -----------------------------------------------------------
+
+func (s *DBStore) CreateAssignment(ctx context.Context, requestID, userID int64) (*model.PullRequestAssignment, error) {
+	res, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO o_PullRequestAssignment (o_request_id, o_user_id)
+		VALUES (?, ?)`, requestID, userID)
+	if err != nil {
+		return nil, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	return s.GetAssignment(ctx, id)
+}
+
+func (s *DBStore) GetAssignment(ctx context.Context, id int64) (*model.PullRequestAssignment, error) {
+	row := s.db.QueryRowContext(ctx, assignmentSelect+" WHERE a.o_id = ?", id)
+	a, err := scanAssignment(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errors.New("assignment not found")
+	}
+	return a, err
+}
+
+func (s *DBStore) ListAssignments(ctx context.Context, requestID int64) ([]*model.PullRequestAssignment, error) {
+	rows, err := s.db.QueryContext(ctx, assignmentSelect+`
+		WHERE a.o_request_id = ?
+		ORDER BY a.o_id`, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var assignments []*model.PullRequestAssignment
+	for rows.Next() {
+		a, err := scanAssignment(rows)
+		if err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, a)
+	}
+	return assignments, rows.Err()
+}
+
+func (s *DBStore) DeleteAssignment(ctx context.Context, requestID, userID int64) error {
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM o_PullRequestAssignment
+		WHERE o_request_id = ? AND o_user_id = ?`, requestID, userID)
+	if err != nil {
+		return err
+	}
+	return ensureUpdated(res, errors.New("assignment not found"))
+}
+
+// --- Labels ----------------------------------------------------------------
+
+func (s *DBStore) AddLabel(ctx context.Context, requestID int64, label string) error {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return errors.New("label is required")
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO o_PullRequestLabel (o_request_id, o_label)
+		VALUES (?, ?)`, requestID, label)
+	return err
+}
+
+func (s *DBStore) RemoveLabel(ctx context.Context, requestID int64, label string) error {
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM o_PullRequestLabel
+		WHERE o_request_id = ? AND o_label = ?`, requestID, label)
+	if err != nil {
+		return err
+	}
+	return ensureUpdated(res, errors.New("label not found"))
+}
+
+func (s *DBStore) ListLabels(ctx context.Context, requestID int64) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT o_label FROM o_PullRequestLabel
+		WHERE o_request_id = ?
+		ORDER BY o_label`, requestID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var labels []string
+	for rows.Next() {
+		var label string
+		if err := rows.Scan(&label); err != nil {
+			return nil, err
+		}
+		labels = append(labels, label)
+	}
+	return labels, rows.Err()
+}
+
+const assignmentSelect = `
+	SELECT a.o_id, a.o_request_id,
+		u.o_id, u.o_name, u.o_fullName, u.o_type, u.o_disabled
+	FROM o_PullRequestAssignment a
+	JOIN o_User u ON u.o_id = a.o_user_id`
+
+func scanAssignment(row rowScanner) (*model.PullRequestAssignment, error) {
+	var a model.PullRequestAssignment
+	var user model.User
+	if err := row.Scan(
+		&a.ID, &a.RequestID,
+		&user.ID, &user.Name, &user.FullName, &user.Type, &user.Disabled,
+	); err != nil {
+		return nil, err
+	}
+	a.User = &user
+	return &a, nil
 }
 
 func ensureUpdated(res sql.Result, notFound error) error {

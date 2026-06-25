@@ -41,6 +41,7 @@ export function PullRequestCodeCommentsPage() {
         requestNumber={request ?? ""}
         pr={pr}
         reviews={reviews}
+        assignments={[]}
         activeTab="code-comments"
         mergePreview={mergePreview}
         loading={loading}

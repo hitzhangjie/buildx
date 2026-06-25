@@ -53,6 +53,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		"migrations/006_build.sql",
 		"migrations/006_pull_request.sql",
 		"migrations/007_user_invitation.sql",
+		"migrations/008_pull_request_assignment.sql",
+		"migrations/009_pull_request_labels.sql",
+		"migrations/010_pull_request_extra.sql",
 	}
 	for _, name := range migrations {
 		content, err := migrationFS.ReadFile(name)
@@ -61,6 +64,11 @@ func (s *Store) Migrate(ctx context.Context) error {
 		}
 		for _, stmt := range splitSQL(string(content)) {
 			if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+				// ALTER TABLE ADD COLUMN is not idempotent in SQLite;
+				// skip "duplicate column name" errors so migrations can re-run safely.
+				if strings.Contains(err.Error(), "duplicate column name") {
+					continue
+				}
 				return fmt.Errorf("migrate %s: %w\nstatement: %s", name, err, stmt)
 			}
 		}
