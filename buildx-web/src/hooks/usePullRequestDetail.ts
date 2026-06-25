@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext";
 import {
   fetchMergePreview,
   fetchPullRequestByNumber,
@@ -10,7 +11,8 @@ import {
 } from "../api/pullRequests";
 
 export function usePullRequestDetail(projectPath: string) {
-  const { request } = useParams<{ request: string }>();
+  const { params } = useProject();
+  const request = params.request as string | undefined;
   const navigate = useNavigate();
   const [pr, setPr] = useState<PullRequest | null>(null);
   const [reviews, setReviews] = useState<PullRequestReview[]>([]);

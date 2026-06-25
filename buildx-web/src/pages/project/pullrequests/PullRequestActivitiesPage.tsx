@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
 import { PullRequestDetailShell } from "../../../components/onedev/panels/PullRequestDetailShell";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
@@ -29,8 +28,8 @@ import { fetchUsers } from "../../../api/users";
 import { formatWhenISO } from "../../../util/time";
 
 export function PullRequestActivitiesPage() {
-  const { projectPath } = useProject();
-  const { request } = useParams<{ request: string }>();
+  const { projectPath, params } = useProject();
+  const request = params.request as string | undefined;
   const { pr, reviews, mergePreview, loading, error, reload, setError } = usePullRequestDetail(projectPath);
   const [comments, setComments] = useState<PullRequestComment[]>([]);
   const [assignments, setAssignments] = useState<PullRequestAssignment[]>([]);

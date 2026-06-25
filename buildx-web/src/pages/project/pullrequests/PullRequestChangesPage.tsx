@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
 import { PullRequestDetailShell } from "../../../components/onedev/panels/PullRequestDetailShell";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
@@ -15,8 +14,8 @@ function diffStatus(additions: number, deletions: number): string {
 }
 
 export function PullRequestChangesPage() {
-  const { projectPath } = useProject();
-  const { request } = useParams<{ request: string }>();
+  const { projectPath, params } = useProject();
+  const request = params.request as string | undefined;
   const { pr, reviews, mergePreview, loading, error } = usePullRequestDetail(projectPath);
   const [compare, setCompare] = useState<CompareResult | null>(null);
 

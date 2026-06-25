@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
 import { useProject } from "../../../context/ProjectContext";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
@@ -8,8 +8,8 @@ import { ProjectLayout } from "../../../layout/ProjectLayout";
  * Reference: references/onedev/.../web/page/project/pullrequests/detail/InvalidPullRequestPage.html
  */
 export function InvalidPullRequestPage() {
-  const { projectPath } = useProject();
-  const { request } = useParams<{ request: string }>();
+  const { projectPath, params } = useProject();
+  const request = params.request as string | undefined;
 
   return (
     <ProjectLayout projectPath={projectPath} pageTitle={`Pull Request #${request}`}>
