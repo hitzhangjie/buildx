@@ -1,6 +1,6 @@
 /*
  * Search modals — OneDev/Bootstrap: backdrop + modal as body siblings.
- * Explicit viewport positioning; overrides generic modal-backdrop rules from ConfirmModal.css.
+ * Explicit viewport positioning for search modals.
  */
 .search-modal-backdrop.modal-backdrop.show {
   position: fixed !important;

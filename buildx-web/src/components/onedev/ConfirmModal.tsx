@@ -34,6 +34,11 @@ export function ConfirmModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const okEnabled = !confirmInput || inputValue === confirmInput;
 
+  useEffect(() => {
+    document.body.classList.add("modal-open");
+    return () => document.body.classList.remove("modal-open");
+  }, []);
+
   // Focus the confirm input on mount
   useEffect(() => {
     if (confirmInput && inputRef.current) {
@@ -41,7 +46,7 @@ export function ConfirmModal({
     }
   }, [confirmInput]);
 
-  // Close on Escape
+  // Close on Escape (OneDev confirm modal uses static backdrop; Escape still closes)
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onCancel();
@@ -55,56 +60,61 @@ export function ConfirmModal({
     if (okEnabled) onConfirm();
   }
 
-  function handleBackdropClick(e: React.MouseEvent) {
-    if (e.target === e.currentTarget) onCancel();
-  }
-
   return createPortal(
-    <div className="modal-backdrop show" onClick={handleBackdropClick}>
-      <div className="modal show d-block" tabIndex={-1} role="dialog">
-        <div className="confirm">
-          <form onSubmit={handleSubmit}>
-            <div className="modal-header">
-              <h5 className="modal-title">Please Confirm</h5>
-              <button type="button" className="close" onClick={onCancel} aria-label="Close">
-                <Icon name="times" />
-              </button>
+    <>
+      <div className="modal-backdrop fade show confirm-modal-backdrop" />
+      <div
+        className="modal fade show confirm-modal"
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="confirm">
+              <form onSubmit={handleSubmit}>
+                <div className="modal-header">
+                  <h5 className="modal-title">Please Confirm</h5>
+                  <button type="button" className="close" onClick={onCancel} aria-label="Close">
+                    <Icon name="times" />
+                  </button>
+                </div>
+                <div className="modal-body">
+                  <div className="message" dangerouslySetInnerHTML={{ __html: message }} />
+                  <FormFeedbackPanel messages={error ? [error] : []} />
+                  {confirmInput && (
+                    <input
+                      ref={inputRef}
+                      className="form-control confirm"
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
+                    />
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <input
+                    type="submit"
+                    className="btn btn-primary"
+                    value="Ok"
+                    disabled={!okEnabled}
+                  />
+                  <a
+                    className="btn btn-secondary"
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onCancel();
+                    }}
+                  >
+                    Cancel
+                  </a>
+                </div>
+              </form>
             </div>
-            <div className="modal-body">
-              <div className="message" dangerouslySetInnerHTML={{ __html: message }} />
-              <FormFeedbackPanel messages={error ? [error] : []} />
-              {confirmInput && (
-                <input
-                  ref={inputRef}
-                  className="form-control confirm"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={confirmInput}
-                />
-              )}
-            </div>
-            <div className="modal-footer">
-              <input
-                type="submit"
-                className="btn btn-primary"
-                value="Ok"
-                disabled={!okEnabled}
-              />
-              <a
-                className="btn btn-secondary"
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onCancel();
-                }}
-              >
-                Cancel
-              </a>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
-    </div>,
+    </>,
     document.body,
   );
 }

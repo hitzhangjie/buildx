@@ -1,29 +1,41 @@
 /*
- * ConfirmModal styles — matches OneDev modal/confirm pattern.
- * Scoped to nested confirm layout only; do not affect search modals (sibling backdrop).
+ * ConfirmModal — OneDev/Bootstrap modal layout (backdrop + modal as body siblings).
+ * Reference: references/onedev/.../web/component/modal/confirm/confirm.css
  */
-.modal-backdrop.show:has(> .modal .confirm) {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
+.confirm-modal-backdrop.modal-backdrop.show {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1050 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  display: block !important;
   opacity: 1 !important;
-  z-index: 1050;
+  background-color: rgba(0, 0, 0, 0.5) !important;
 }
 
-.modal-backdrop.show:has(> .modal .confirm) > .modal {
-  position: relative;
+.confirm-modal.modal.show {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1055 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+  opacity: 1 !important;
+  pointer-events: none;
+}
+
+.confirm-modal .modal-dialog {
+  pointer-events: auto;
   max-width: 540px;
-  width: 100%;
-  margin: 1.75rem;
-  opacity: 1 !important;
+  margin: 1.75rem auto !important;
 }
 
-.confirm .modal-body .form-control.confirm {
-  margin-top: 1rem;
+.confirm .feedbackPanel {
+  margin-top: 16px;
+}
+
+.confirm input.confirm {
+  margin-top: 16px;
 }
