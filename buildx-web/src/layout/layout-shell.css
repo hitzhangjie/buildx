@@ -1,18 +1,44 @@
 /* Layout shell overrides — menu structure/styling comes from onedev/css/layout.css */
 
+/*
+ * Viewport-fill main content (OneDev layout.css: .LayoutPage>body>.main).
+ * Without a bounded height, flex children cannot shrink and the search result
+ * resize handle has no visible effect.
+ */
 .LayoutPage > .main {
+  position: fixed;
+  top: var(--topbar-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 0;
+  overflow: hidden;
   margin-left: 0;
-  padding-top: var(--topbar-height);
-  min-height: 100vh;
-  transition: margin-left var(--transition-duration) ease;
+  padding-top: 0;
+  transition: left var(--transition-duration) ease;
 }
 .LayoutPage > .main.sidebar-docked {
-  margin-left: var(--sidebar-width);
+  left: var(--sidebar-width);
 }
 @media (max-width: 991.98px) {
   .LayoutPage > .main.sidebar-docked {
-    margin-left: 0;
+    left: 0;
   }
+}
+
+/* Innermost scroll container inside the fixed main column */
+.LayoutPage > .main.autofit {
+  overflow: auto;
+}
+
+/* OneDev base.js removes fit-content from autofit parents so flex children can shrink */
+.LayoutPage > .main.autofit > .project.fit-content {
+  min-height: 0;
+}
+
+.LayoutPage > .main.autofit > .project {
+  min-height: 0;
+  flex: 1 1 auto;
 }
 
 /* OneDev side-main: inner .main is the list panel column, not the page shell */

@@ -1,8 +1,50 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import { fileIcon } from "../../util/blobPath";
 import { Icon } from "../onedev/Icon";
 import type { SearchFileHit, SearchTextHit, SearchSymbolHit } from "../../api/search";
 import "./search-result.css";
+
+const SEARCH_RESULT_HEIGHT_KEY = "projectBlob.searchResult.height";
+const MIN_PANEL_HEIGHT = 100;
+const MIN_BLOB_CONTENT_HEIGHT = 150;
+
+function readStoredPanelHeight(): number {
+  try {
+    const raw = localStorage.getItem(SEARCH_RESULT_HEIGHT_KEY);
+    if (raw) {
+      const height = Number.parseInt(raw, 10);
+      if (!Number.isNaN(height) && height >= MIN_PANEL_HEIGHT) {
+        return height;
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return 200;
+}
+
+function clampPanelHeight(panel: HTMLElement, height: number): number {
+  let next = Math.max(MIN_PANEL_HEIGHT, height);
+  const projectBlob = panel.parentElement;
+  const blobContent = projectBlob?.querySelector<HTMLElement>(":scope > .blob-content");
+  if (projectBlob && blobContent) {
+    const headHeight =
+      projectBlob.querySelector<HTMLElement>(":scope > .head")?.offsetHeight ?? 0;
+    const maxHeight = projectBlob.clientHeight - headHeight - MIN_BLOB_CONTENT_HEIGHT;
+    if (maxHeight >= MIN_PANEL_HEIGHT) {
+      next = Math.min(next, maxHeight);
+    }
+    // OneDev project-blob.js: stop shrinking when blob-content would drop below 150px.
+    if (blobContent.offsetHeight < MIN_BLOB_CONTENT_HEIGHT) {
+      next = panel.offsetHeight;
+    }
+  }
+  return next;
+}
+
+function applyPanelHeight(panel: HTMLElement, height: number) {
+  panel.style.height = `${height}px`;
+}
 
 export type SearchResultPanelProps = {
   textHits?: SearchTextHit[];
@@ -138,43 +180,62 @@ export function SearchResultPanel({
     onNavigateToLine(filePath, lineNo);
   };
 
-  // Resize handling.
+  // Resize handling — mirrors OneDev project-blob.js (jQuery UI resizable, north handle).
   const gripRef = useRef<HTMLDivElement>(null);
-  const [panelHeight, setPanelHeight] = useState(200);
+  const panelHeightRef = useRef(readStoredPanelHeight());
+  const [panelHeight, setPanelHeight] = useState(() => panelHeightRef.current);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    applyPanelHeight(panel, panelHeightRef.current);
+  }, []);
 
   useEffect(() => {
+    const panel = panelRef.current;
     const grip = gripRef.current;
-    if (!grip) return;
-
-    let startY = 0;
-    let startHeight = 0;
+    if (!panel || !grip) return;
 
     const onMouseDown = (e: MouseEvent) => {
       e.preventDefault();
-      startY = e.clientY;
-      startHeight = panelHeight;
+      e.stopPropagation();
+
+      const startY = e.clientY;
+      const startHeight = panel.offsetHeight;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        ev.preventDefault();
+        const delta = startY - ev.clientY;
+        const nextHeight = clampPanelHeight(panel, startHeight + delta);
+        applyPanelHeight(panel, nextHeight);
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+
+        const finalHeight = panel.offsetHeight;
+        panelHeightRef.current = finalHeight;
+        setPanelHeight(finalHeight);
+        try {
+          localStorage.setItem(SEARCH_RESULT_HEIGHT_KEY, String(finalHeight));
+        } catch {
+          // ignore storage errors
+        }
+        window.dispatchEvent(new Event("resize"));
+      };
+
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
       document.body.style.cursor = "n-resize";
       document.body.style.userSelect = "none";
     };
 
-    const onMouseMove = (e: MouseEvent) => {
-      const delta = startY - e.clientY;
-      const newHeight = Math.max(100, Math.min(window.innerHeight * 0.5, startHeight + delta));
-      setPanelHeight(newHeight);
-    };
-
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
     grip.addEventListener("mousedown", onMouseDown);
     return () => grip.removeEventListener("mousedown", onMouseDown);
-  }, [panelHeight]);
+  }, []);
 
   const hasResults =
     (searchType === "text" && textHits && textHits.length > 0) ||
@@ -188,7 +249,10 @@ export function SearchResultPanel({
       style={{ height: panelHeight }}
     >
       {/* Resize grip */}
-      <div ref={gripRef} className="ui-resizable-handle" />
+      <div
+        ref={gripRef}
+        className="ui-resizable-handle ui-resizable-n flex-shrink-0"
+      />
 
       {/* Header */}
       <div className="head d-flex align-items-center px-3 py-2 flex-shrink-0">

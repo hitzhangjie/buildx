@@ -40,6 +40,7 @@ import { CloneDialog } from "../components/onedev/panels/CloneDialog";
 import { QuickSearchPanel } from "../components/search/QuickSearchPanel";
 import { AdvancedSearchPanel } from "../components/search/AdvancedSearchPanel";
 import { SearchResultPanel } from "../components/search/SearchResultPanel";
+import "./project-blob-page.css";
 import { bindBlobSearchShortcuts } from "../util/blobSearchShortcuts";
 
 function isMarkdownFile(path: string) {

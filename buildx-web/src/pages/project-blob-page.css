@@ -1,0 +1,21 @@
+/*
+ * Project blob page layout — mirrors OneDev autofit-parent + flex height chain
+ * so the search result panel resize redistributes space with blob-content.
+ */
+.project.flex-grow-1 {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.project-blob.flex-grow-1 {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.project-blob > .blob-content {
+  min-height: 0;
+}
+
+.project-blob > .search-result > .ui-resizable-handle {
+  touch-action: none;
+}
