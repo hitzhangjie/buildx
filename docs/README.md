@@ -27,6 +27,7 @@ Reference submodules under `references/` are **read-only** — use them for comp
 | [pull-request-migration.md](pull-request-migration.md) | **PR 专项任务书**（端点/页面/推荐批次 A–E） |
 | [code-compare-migration.md](code-compare-migration.md) | Code Compare 专项（PR Changes 内联 diff 依赖） |
 | [code-search-symbol-indexing.md](code-search-symbol-indexing.md) | **Code Search / Symbol 索引调研**（OneDev Lucene + commons-jsymbol vs BuildX 现状） |
+| [onedev-builds-concepts.md](onedev-builds-concepts.md) | **OneDev Builds / CI 概念**（Job、Services、Step Templates、Properties、Imports） |
 
 ## Changelog
 
