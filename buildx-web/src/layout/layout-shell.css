@@ -26,20 +26,51 @@
   padding: 1.5rem 2rem;
 }
 
-/*
- * Keep long sidebar menus scrollable while preserving footer visibility.
- * min-height: 0 is required for overflow to work inside a flex column.
- */
 .sidebar {
   height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
+/*
+ * Keep long sidebar menus scrollable while preserving footer visibility.
+ * min-height: 0 is required for overflow to work inside a flex column.
+ *
+ * Sidebar scrollbar — thin, unobtrusive, visible on hover only.
+ * Matches OneDev perfect-scrollbar look (4px rail, muted gray thumb).
+ */
 .sidebar-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+
+  /* Firefox: thin, colors switch on hover */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.sidebar-body:hover {
+  scrollbar-color: var(--gray) transparent;
+}
+.dark-mode .sidebar-body:hover {
+  scrollbar-color: rgb(78, 82, 103) transparent;
+}
+
+/* WebKit: invisible track, thin thumb that appears on hover */
+.sidebar-body::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-body::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+}
+.sidebar-body:hover::-webkit-scrollbar-thumb {
+  background: var(--gray);
+}
+.dark-mode .sidebar-body:hover::-webkit-scrollbar-thumb {
+  background: rgb(78, 82, 103);
 }
 
 .sidebar-footer {
