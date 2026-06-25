@@ -66,13 +66,37 @@ export function buildCommitQueryString(f: CommitFilterState): string {
 
 /** Extract `until branch(...)` names from a commit query string. */
 export function parseUntilBranches(query: string): string[] {
-  const branches: string[] = [];
-  const re = /\buntil\s+branch\(([^)]+)\)/g;
+  return parseCriteriaValues(query, "until branch");
+}
+
+function parseCriteriaValues(query: string, keyword: string): string[] {
+  const values: string[] = [];
+  const re = new RegExp(`\\b${keyword.replace(/\s+/g, "\\s+")}\\(([^)]+)\\)`, "g");
   let match: RegExpExecArray | null;
   while ((match = re.exec(query)) !== null) {
-    branches.push(match[1].trim());
+    values.push(match[1].trim());
   }
-  return branches;
+  return values;
+}
+
+/** Parse a commit query string into filter panel fields (common criteria only). */
+export function parseCommitFilterState(query: string): CommitFilterState {
+  const trimmed = query.trim();
+  if (!trimmed) {
+    return { ...EMPTY_FILTER };
+  }
+
+  const tagValues = parseCriteriaValues(trimmed, "until tag");
+
+  return {
+    branches: parseUntilBranches(trimmed),
+    tag: tagValues[0] ?? "",
+    touchedFile: parseCriteriaValues(trimmed, "path")[0] ?? "",
+    authoredBy: parseCriteriaValues(trimmed, "author"),
+    committedBy: parseCriteriaValues(trimmed, "committer"),
+    committedAfter: parseCriteriaValues(trimmed, "after")[0] ?? "",
+    committedBefore: parseCriteriaValues(trimmed, "before")[0] ?? "",
+  };
 }
 
 // ── Props ──
@@ -82,19 +106,24 @@ export interface CommitFilterPanelProps {
   onChange: (state: CommitFilterState) => void;
   /** Project ID for fetching branch/tag lists. */
   projectId: number;
+  /** Current commit query string — kept in sync with the search box. */
+  query: string;
 }
 
 // ── Component ──
 
-/**
- * Commit filter panel — manages its own state internally so that parent
- * re-renders (e.g. from query-string updates) don't reset the inputs.
- */
 export function CommitFilterPanel({
   onChange,
   projectId,
+  query,
 }: CommitFilterPanelProps) {
-  const [state, setState] = useState<CommitFilterState>(EMPTY_FILTER);
+  const [state, setState] = useState<CommitFilterState>(() =>
+    parseCommitFilterState(query),
+  );
+
+  useEffect(() => {
+    setState(parseCommitFilterState(query));
+  }, [query]);
   const [branches, setBranches] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
 
@@ -183,6 +212,7 @@ export function CommitFilterPanel({
           onChange={(v) => update({ authoredBy: v })}
           choices={[]}
           placeholder="Any author"
+          creatable
         />
       </div>
 
@@ -194,6 +224,7 @@ export function CommitFilterPanel({
           onChange={(v) => update({ committedBy: v })}
           choices={[]}
           placeholder="Any committer"
+          creatable
         />
       </div>
 

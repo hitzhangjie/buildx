@@ -32,8 +32,13 @@ export function ProjectCommitsPage() {
   const [branchLabelsByHash, setBranchLabelsByHash] = useState<
     Map<string, string[]>
   >(new Map());
+  const [draftQuery, setDraftQuery] = useState(query);
 
   const selectedBranches = useMemo(() => parseUntilBranches(query), [query]);
+
+  useEffect(() => {
+    setDraftQuery(query);
+  }, [query]);
 
   // Load project ID once.
   useEffect(() => {
@@ -158,8 +163,7 @@ export function ProjectCommitsPage() {
                     className="clearable-wrapper flex-grow-1"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      const input = e.currentTarget.querySelector("input") as HTMLInputElement | null;
-                      if (input) handleQueryChange(input.value);
+                      handleQueryChange(draftQuery);
                     }}
                   >
                     <div className="input-group">
@@ -168,12 +172,13 @@ export function ProjectCommitsPage() {
                         autoComplete="off"
                         className="form-control"
                         placeholder="Query/order commits"
-                        defaultValue={query}
-                        onBlur={(e) => handleQueryChange(e.target.value)}
+                        value={draftQuery}
+                        onChange={(e) => setDraftQuery(e.target.value)}
+                        onBlur={() => handleQueryChange(draftQuery)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
                             e.preventDefault();
-                            handleQueryChange((e.target as HTMLInputElement).value);
+                            handleQueryChange(draftQuery);
                           }
                         }}
                       />
@@ -212,6 +217,7 @@ export function ProjectCommitsPage() {
                         <CommitFilterPanel
                           onChange={handleFilterChange}
                           projectId={projectId ?? 0}
+                          query={query}
                         />
                       </div>
                     )}

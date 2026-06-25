@@ -7,6 +7,8 @@ type Select2MultiChoiceProps = {
   placeholder?: string;
   /** Show all choices with checkboxes; dropdown stays open while selecting. */
   checkboxList?: boolean;
+  /** Allow Enter to add typed text when it does not match a single choice. */
+  creatable?: boolean;
 };
 
 function summaryText(values: string[], placeholder: string): string {
@@ -28,6 +30,7 @@ export function Select2MultiChoice({
   choices,
   placeholder = "",
   checkboxList = false,
+  creatable = false,
 }: Select2MultiChoiceProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -77,9 +80,17 @@ export function Select2MultiChoice({
     if (e.key === "Backspace" && !query && values.length > 0) {
       onChange(values.slice(0, -1));
     }
-    if (!checkboxList && e.key === "Enter" && filtered.length === 1) {
-      e.preventDefault();
-      addValue(filtered[0]);
+    if (e.key === "Enter") {
+      if (!checkboxList && filtered.length === 1) {
+        e.preventDefault();
+        addValue(filtered[0]);
+        return;
+      }
+      const text = query.trim();
+      if (creatable && text && !values.includes(text)) {
+        e.preventDefault();
+        addValue(text);
+      }
     }
   }
 
@@ -213,7 +224,7 @@ export function Select2MultiChoice({
             />
           </li>
         </ul>
-        {open && filtered.length > 0 ? (
+        {open && (filtered.length > 0 || (creatable && query.trim())) ? (
           <div className="select2-drop select2-drop-active" style={{ display: "block", width: "100%" }}>
             <ul className="select2-results">
               {filtered.filter((c) => !values.includes(c)).map((choice) => (
@@ -223,6 +234,16 @@ export function Select2MultiChoice({
                   </div>
                 </li>
               ))}
+              {creatable && query.trim() && !values.includes(query.trim()) ? (
+                <li className="select2-results-dept-0 select2-result-selectable">
+                  <div
+                    className="select2-result-label"
+                    onMouseDown={() => addValue(query.trim())}
+                  >
+                    Add &quot;{query.trim()}&quot;
+                  </div>
+                </li>
+              ) : null}
             </ul>
           </div>
         ) : null}
