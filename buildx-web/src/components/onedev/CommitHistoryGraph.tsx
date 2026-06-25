@@ -1,11 +1,17 @@
-import { useMemo, useRef, useEffect, useState } from "react";
+import {
+  useMemo,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useCallback,
+} from "react";
 import { Link } from "react-router-dom";
 import type { RepositoryCommit } from "../../api/repositories";
 import {
   layoutCommitGraph,
   getLaneColor,
   linkPath,
-  nodeCenterX,
   type CommitGraphLayout,
   type GraphLayoutNode,
 } from "../../util/commitGraphLayout";
@@ -17,14 +23,6 @@ import styles from "./CommitHistoryGraph.module.css";
 
 const LANE_WIDTH = 16;
 const GRAPH_PADDING = 8;
-const DOT_RADIUS = 4;
-
-/** Fixed row height for commit rows (kept consistent via CSS). */
-const ROW_HEIGHT = 52;
-/** Fixed height for date separator rows. */
-const DATE_ROW_HEIGHT = 48;
-/** Extra graph height at the bottom so the last dot isn't clipped. */
-const GRAPH_BOTTOM_PAD = 20;
 
 // ── Helpers ──
 
@@ -33,10 +31,6 @@ function formatDay(ts: number): string {
   return formatDate(ts);
 }
 
-/**
- * Group commits by committer date and return an array of rows.
- * Each row is either a DateSeparator or a CommitRow.
- */
 interface DateSeparator {
   kind: "date";
   date: string;
@@ -46,8 +40,6 @@ interface CommitRowData {
   kind: "commit";
   commit: RepositoryCommit;
   node: GraphLayoutNode;
-  /** Cumulative Y offset (px) from the top of the list. */
-  topY: number;
 }
 
 type TimelineRow = DateSeparator | CommitRowData;
@@ -63,7 +55,6 @@ function buildTimeline(
 
   const rows: TimelineRow[] = [];
   let prevDay = "";
-  let y = 0;
 
   for (const commit of commits) {
     const ts = commit.committer?.when ?? commit.author?.when ?? 0;
@@ -71,18 +62,21 @@ function buildTimeline(
 
     if (day !== prevDay) {
       rows.push({ kind: "date", date: day });
-      y += DATE_ROW_HEIGHT;
       prevDay = day;
     }
 
     const node = nodeByHash.get(commit.hash);
     if (node) {
-      rows.push({ kind: "commit", commit, node, topY: y });
-      y += ROW_HEIGHT;
+      rows.push({ kind: "commit", commit, node });
     }
   }
 
   return rows;
+}
+
+interface DotCenter {
+  x: number;
+  y: number;
 }
 
 // ── Props ──
@@ -99,7 +93,33 @@ export function CommitHistoryGraph({
   projectPath,
 }: CommitHistoryGraphProps) {
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
+  const [dotCenters, setDotCenters] = useState<Map<string, DotCenter>>(
+    new Map(),
+  );
+  const [graphHeight, setGraphHeight] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+
+  const measureDotPositions = useCallback(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+
+    const bodyRect = body.getBoundingClientRect();
+    const centers = new Map<string, DotCenter>();
+
+    body.querySelectorAll<HTMLElement>("[data-graph-dot]").forEach((el) => {
+      const hash = el.dataset.graphDot;
+      if (!hash) return;
+      const rect = el.getBoundingClientRect();
+      centers.set(hash, {
+        x: rect.left - bodyRect.left + rect.width / 2,
+        y: rect.top - bodyRect.top + rect.height / 2,
+      });
+    });
+
+    setDotCenters(centers);
+    setGraphHeight(body.offsetHeight);
+  }, []);
 
   const layout = useMemo(
     () => layoutCommitGraph(commits),
@@ -116,12 +136,21 @@ export function CommitHistoryGraph({
     [timeline],
   );
 
-  const totalHeight =
-    commitRows.length > 0
-      ? commitRows[commitRows.length - 1].topY + ROW_HEIGHT + GRAPH_BOTTOM_PAD
-      : 0;
-
   const graphWidth = layout.columnCount * LANE_WIDTH + GRAPH_PADDING * 2;
+  const positionsReady =
+    dotCenters.size === commitRows.length && commitRows.length > 0;
+
+  useLayoutEffect(() => {
+    measureDotPositions();
+  }, [timeline, graphWidth, measureDotPositions]);
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    const observer = new ResizeObserver(() => measureDotPositions());
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [measureDotPositions]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -136,26 +165,30 @@ export function CommitHistoryGraph({
     }
   }, [hoveredHash]);
 
-  const svgElements = useMemo(() => {
-    const nodeByHash = new Map<string, GraphLayoutNode>();
-    for (const n of layout.nodes) nodeByHash.set(n.hash, n);
+  const getDotCenter = useCallback(
+    (hash: string): DotCenter | undefined => dotCenters.get(hash),
+    [dotCenters],
+  );
 
-    const rowCY = (topY: number) => topY + ROW_HEIGHT / 2;
+  const svgElements = useMemo(() => {
+    if (!positionsReady) return [];
 
     const laneLines = layout.laneSegments.map((seg) => {
       const fromRow = commitRows[seg.fromRow];
       const toRow = commitRows[seg.toRow];
       if (!fromRow || !toRow) return null;
-      const x = nodeCenterX(seg.column, LANE_WIDTH, GRAPH_PADDING);
-      const y1 = rowCY(fromRow.topY);
-      const y2 = rowCY(toRow.topY);
+
+      const from = getDotCenter(fromRow.commit.hash);
+      const to = getDotCenter(toRow.commit.hash);
+      if (!from || !to) return null;
+
       return (
         <line
           key={`lane-${seg.column}-${seg.fromRow}-${seg.toRow}`}
-          x1={x}
-          y1={y1}
-          x2={x}
-          y2={y2}
+          x1={from.x}
+          y1={from.y}
+          x2={to.x}
+          y2={to.y}
           stroke={getLaneColor(seg.colorIndex)}
           strokeWidth={2}
           strokeOpacity={0.3}
@@ -165,25 +198,23 @@ export function CommitHistoryGraph({
 
     const linkPaths = layout.links
       .map((link) => {
-        const child = nodeByHash.get(link.childHash);
-        const parent = nodeByHash.get(link.parentHash);
-        if (!child || !parent) return null;
-        const childRow = commitRows[child.row];
-        const parentRow = commitRows[parent.row];
-        if (!childRow || !parentRow) return null;
+        const from = getDotCenter(link.childHash);
+        const to = getDotCenter(link.parentHash);
+        if (!from || !to) return null;
 
-        const x1 = nodeCenterX(child.column, LANE_WIDTH, GRAPH_PADDING);
-        const y1 = rowCY(childRow.topY);
-        const x2 = nodeCenterX(parent.column, LANE_WIDTH, GRAPH_PADDING);
-        const y2 = rowCY(parentRow.topY);
+        const childNode = layout.nodes.find((n) => n.hash === link.childHash);
         const isMerge = link.type === "merge";
 
         return (
           <path
             key={`link-${link.childHash}-${link.parentHash}-${link.parentIndex}`}
-            d={linkPath(x1, y1, x2, y2)}
+            d={linkPath(from.x, from.y, to.x, to.y)}
             fill="none"
-            stroke={isMerge ? "#e36209" : getLaneColor(child.colorIndex)}
+            stroke={
+              isMerge
+                ? "#e36209"
+                : getLaneColor(childNode?.colorIndex ?? 0)
+            }
             strokeWidth={isMerge ? 2 : 1.5}
             strokeOpacity={isMerge ? 0.85 : 0.55}
           />
@@ -191,66 +222,46 @@ export function CommitHistoryGraph({
       })
       .filter(Boolean);
 
-    const dots = commitRows.map((row) => {
-      const node = row.node;
-      const cx = nodeCenterX(node.column, LANE_WIDTH, GRAPH_PADDING);
-      const cy = rowCY(row.topY);
-      const color = getLaneColor(node.colorIndex);
-      const isHovered = hoveredHash === node.hash;
-
-      return (
-        <circle
-          key={node.hash}
-          cx={cx}
-          cy={cy}
-          r={isHovered ? 6 : DOT_RADIUS}
-          fill={color}
-          stroke="#fff"
-          strokeWidth={isHovered ? 2.5 : 1.5}
-          style={{ transition: "r 0.15s, stroke-width 0.15s" }}
-          onMouseEnter={() => setHoveredHash(node.hash)}
-          onMouseLeave={() => setHoveredHash(null)}
-        />
-      );
-    });
-
-    return [...laneLines, ...linkPaths, ...dots];
-  }, [layout, commitRows, hoveredHash]);
+    return [...laneLines, ...linkPaths];
+  }, [layout, commitRows, positionsReady, getDotCenter]);
 
   return (
     <div className={styles.historyGraph}>
-      <div className={styles.graphBody}>
-        <div className={styles.graphLane} style={{ width: graphWidth }}>
-          <svg
-            className={styles.graphSvg}
-            width={graphWidth}
-            height={totalHeight}
-            aria-hidden
-          >
-            {svgElements}
-          </svg>
-        </div>
-
-        <ul
-          ref={listRef}
-          className={styles.commitList}
-          style={{ marginLeft: graphWidth + 12 }}
+      <div ref={bodyRef} className={styles.graphBody}>
+        <svg
+          className={styles.graphLines}
+          width={graphWidth}
+          height={graphHeight}
+          aria-hidden
         >
+          {svgElements}
+        </svg>
+
+        <ul ref={listRef} className={styles.commitList}>
           {timeline.map((row) => {
             if (row.kind === "date") {
               return (
                 <li key={`date-${row.date}`} className={styles.dateRow}>
-                  <Icon name="calendar" className={styles.dateIcon} />
-                  {row.date}
+                  <div
+                    className={styles.graphCell}
+                    style={{ width: graphWidth }}
+                    aria-hidden
+                  />
+                  <div className={styles.listCell}>
+                    <Icon name="calendar" className={styles.dateIcon} />
+                    {row.date}
+                  </div>
                 </li>
               );
             }
 
-            const { commit } = row;
+            const { commit, node } = row;
             const subject = commit.subject || commit.hash.slice(0, 8);
             const authorName = commit.author?.name ?? "Unknown";
             const when = commit.committer?.when ?? commit.author?.when ?? 0;
             const relativeTime = formatWhen(when);
+            const color = getLaneColor(node.colorIndex);
+            const isHovered = hoveredHash === commit.hash;
 
             return (
               <li
@@ -260,26 +271,46 @@ export function CommitHistoryGraph({
                 onMouseEnter={() => setHoveredHash(commit.hash)}
                 onMouseLeave={() => setHoveredHash(null)}
               >
-                <Link
-                  to={`/${projectPath}/~commits/${commit.hash}`}
-                  className={styles.commitInfo}
-                  style={{ textDecoration: "none", color: "inherit", flex: 1, minWidth: 0 }}
+                <div
+                  className={styles.graphCell}
+                  style={{ width: graphWidth }}
                 >
-                  <div className={styles.commitPrimary}>
-                    <span className={styles.commitSubject}>
-                      {subject}
-                    </span>
-                    <span className={styles.commitHash}>
-                      {commit.hash.slice(0, 8)}
-                    </span>
-                  </div>
-                  <div className={styles.commitMeta}>
-                    <span className={styles.commitAuthor}>
-                      <Icon name="user" /> {authorName}
-                    </span>
-                    <span className={styles.commitWhen}>{relativeTime}</span>
-                  </div>
-                </Link>
+                  <div
+                    className={`${styles.graphDot} ${isHovered ? styles.graphDotHovered : ""}`}
+                    data-graph-dot={commit.hash}
+                    style={{
+                      backgroundColor: color,
+                      left: GRAPH_PADDING + node.column * LANE_WIDTH + LANE_WIDTH / 2,
+                    }}
+                    onMouseEnter={() => setHoveredHash(commit.hash)}
+                    onMouseLeave={() => setHoveredHash(null)}
+                  />
+                </div>
+                <div className={styles.listCell}>
+                  <Link
+                    to={`/${projectPath}/~commits/${commit.hash}`}
+                    className={styles.commitInfo}
+                    style={{
+                      textDecoration: "none",
+                      color: "inherit",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    <div className={styles.commitPrimary}>
+                      <span className={styles.commitSubject}>{subject}</span>
+                      <span className={styles.commitHash}>
+                        {commit.hash.slice(0, 8)}
+                      </span>
+                    </div>
+                    <div className={styles.commitMeta}>
+                      <span className={styles.commitAuthor}>
+                        <Icon name="user" /> {authorName}
+                      </span>
+                      <span className={styles.commitWhen}>{relativeTime}</span>
+                    </div>
+                  </Link>
+                </div>
               </li>
             );
           })}

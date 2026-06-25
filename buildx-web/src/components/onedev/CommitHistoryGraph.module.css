@@ -12,27 +12,20 @@
   position: relative;
 }
 
-/* ── SVG graph lane (absolutely positioned like OneDev) ── */
+/* ── SVG overlay for lane lines / parent links only ── */
 
-.graphLane {
+.graphLines {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 1;
   pointer-events: none;
+  overflow: visible;
 }
 
-.graphSvg {
-  display: block;
-}
-
-.graphSvg line,
-.graphSvg path {
+.graphLines line,
+.graphLines path {
   pointer-events: stroke;
-}
-
-.graphSvg circle {
-  pointer-events: all;
 }
 
 /* ── Commit rows list ── */
@@ -42,11 +35,32 @@
   margin: 0;
   padding: 0;
   position: relative;
+  z-index: 0;
+}
+
+/* ── Shared row layout: graph lane + commit info stay in one row ── */
+
+.dateRow,
+.commitRow {
+  display: flex;
+  align-items: stretch;
+}
+
+.graphCell {
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.listCell {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── Date separator ── */
 
-.dateRow {
+.dateRow .listCell {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -58,12 +72,12 @@
   color: var(--dark, #24292e);
 }
 
-:global(.dark-mode) .dateRow {
+:global(.dark-mode) .dateRow .listCell {
   border-bottom-color: var(--dark-mode-lighter-dark, #444);
   color: var(--dark-mode-color, #ddd);
 }
 
-.dateRow:first-child {
+.dateRow:first-child .listCell {
   margin-top: 0;
 }
 
@@ -74,18 +88,39 @@
   opacity: 0.6;
 }
 
+/* ── Graph dot (lives inside the commit row's graph cell) ── */
+
+.graphDot {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  margin-left: -4px;
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  pointer-events: all;
+  z-index: 2;
+  transition: transform 0.15s, border-width 0.15s, margin-top 0.15s, margin-left 0.15s;
+}
+
+.graphDotHovered {
+  transform: scale(1.5);
+  border-width: 2.5px;
+}
+
 /* ── Single commit row ── */
 
 .commitRow {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
   border-radius: 0.42rem;
   cursor: pointer;
   transition: background-color 0.15s;
-  text-decoration: none;
-  color: inherit;
+}
+
+.commitRow .listCell {
+  padding: 0.4rem 0.6rem 0.4rem 0;
 }
 
 .commitRow:hover,
@@ -196,7 +231,15 @@
 /* ── Responsive ── */
 
 @media (max-width: 991px) {
-  .graphLane {
+  .graphCell {
     display: none !important;
+  }
+
+  .graphLines {
+    display: none !important;
+  }
+
+  .commitRow .listCell {
+    padding-left: 0.6rem;
   }
 }
