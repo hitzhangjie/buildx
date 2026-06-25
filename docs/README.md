@@ -26,6 +26,7 @@ Reference submodules under `references/` are **read-only** — use them for comp
 | [buildx-server-api-migration.md](buildx-server-api-migration.md) | REST `/~api` backfill tracking (after UI) |
 | [pull-request-migration.md](pull-request-migration.md) | **PR 专项任务书**（端点/页面/推荐批次 A–E） |
 | [code-compare-migration.md](code-compare-migration.md) | Code Compare 专项（PR Changes 内联 diff 依赖） |
+| [code-search-symbol-indexing.md](code-search-symbol-indexing.md) | **Code Search / Symbol 索引调研**（OneDev Lucene + commons-jsymbol vs BuildX 现状） |
 
 ## Changelog
 
