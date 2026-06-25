@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../../../components/onedev/Icon";
 import { FormFeedbackPanel } from "../../../components/onedev/FormFeedbackPanel";
+import { Select2MultiChoice } from "../../../components/onedev/Select2MultiChoice";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { useProject } from "../../../context/ProjectContext";
 import {
@@ -15,6 +16,7 @@ import { fetchProjects } from "../../../api/projects";
 import { fetchUsers, fetchCurrentUser, type User } from "../../../api/users";
 import { fetchCompare, type CompareResult } from "../../../api/compare";
 import { BranchSelector, type BranchSelection } from "../../../components/onedev/panels/BranchSelector";
+import { fetchLabelSpecs } from "../../../api/labels";
 import "./new-pull-request-page.css";
 
 type StatusFragment =
@@ -37,17 +39,15 @@ function formatTime(when: number): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
 }
 
-/** Inline user picker for reviewers / assignees. */
-function UserPicker({
-  users,
-  onAdd,
-  onRemove,
+/** Inline user search for adding reviewers / assignees. */
+function UserSearchInput({
+  onSelect,
   placeholder,
+  excludeIds,
 }: {
-  users: User[];
-  onAdd: (u: User) => void;
-  onRemove: (u: User) => void;
+  onSelect: (u: User) => void;
   placeholder: string;
+  excludeIds: number[];
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -67,17 +67,20 @@ function UserPicker({
     return () => document.removeEventListener("mousedown", click);
   }, [open]);
 
-  const doSearch = useCallback((q: string) => {
-    if (!q.trim()) {
-      setResults([]);
-      return;
-    }
-    setSearching(true);
-    fetchUsers(q)
-      .then((list) => setResults(list.filter((u) => !users.some((s) => s.id === u.id))))
-      .catch(() => setResults([]))
-      .finally(() => setSearching(false));
-  }, [users]);
+  const doSearch = useCallback(
+    (q: string) => {
+      if (!q.trim()) {
+        setResults([]);
+        return;
+      }
+      setSearching(true);
+      fetchUsers(q)
+        .then((list) => setResults(list.filter((u) => !excludeIds.includes(u.id))))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    },
+    [excludeIds],
+  );
 
   const handleInput = (val: string) => {
     setQuery(val);
@@ -86,116 +89,64 @@ function UserPicker({
   };
 
   return (
-    <div ref={rootRef} className="user-picker position-relative">
-      <div className="user-chips d-flex flex-wrap align-items-center gap-1 mb-2">
-        {users.map((u) => (
-          <span key={u.id} className="badge badge-light-primary d-inline-flex align-items-center mr-1 mb-1">
-            <span className="avatar avatar-sm mr-1" style={{ width: 18, height: 18, borderRadius: "50%", background: "var(--primary)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 600 }}>
-              {(u.fullName || u.name).charAt(0).toUpperCase()}
-            </span>
-            {u.fullName || u.name}
-            <button
-              type="button"
-              className="btn btn-icon btn-xs ml-1"
-              onClick={() => onRemove(u)}
-              aria-label={`Remove ${u.fullName || u.name}`}
-            >
-              <Icon name="close" />
-            </button>
-          </span>
-        ))}
-        <div className="position-relative d-inline-flex" style={{ minWidth: 160 }}>
-          <input
-            type="text"
-            className="form-control form-control-sm"
-            placeholder={users.length === 0 ? placeholder : ""}
-            value={query}
-            onFocus={() => { setOpen(true); if (query.trim()) doSearch(query); }}
-            onChange={(e) => handleInput(e.target.value)}
-          />
-          {open && (
-            <div className="floating dropdown-menu show position-absolute w-100" style={{ top: "100%", left: 0, zIndex: 1060, maxHeight: 200, overflowY: "auto" }}>
-              {searching && <div className="text-muted p-2">Searching…</div>}
-              {!searching && results.length === 0 && query.trim() && (
-                <div className="text-muted p-2">No users found</div>
-              )}
-              {results.map((u) => (
-                <a
-                  key={u.id}
-                  href="#"
-                  className="dropdown-item d-flex align-items-center"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onAdd(u);
-                    setQuery("");
-                    setOpen(false);
-                  }}
-                >
-                  <span className="avatar avatar-sm mr-2" style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--primary)", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600 }}>
-                    {(u.fullName || u.name).charAt(0).toUpperCase()}
-                  </span>
-                  {u.fullName || u.name}
-                  {u.name !== (u.fullName || u.name) && <span className="text-muted ml-1">@{u.name}</span>}
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Simple label tag input. */
-function LabelsInput({
-  labels,
-  onAdd,
-  onRemove,
-}: {
-  labels: string[];
-  onAdd: (label: string) => void;
-  onRemove: (label: string) => void;
-}) {
-  const [value, setValue] = useState("");
-
-  function handleKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      const label = value.replace(/,/g, "").trim();
-      if (label && !labels.includes(label)) {
-        onAdd(label);
-        setValue("");
-      }
-    }
-    if (e.key === "Backspace" && !value && labels.length > 0) {
-      onRemove(labels[labels.length - 1]);
-    }
-  }
-
-  return (
-    <div className="label-input d-flex flex-wrap align-items-center gap-1">
-      {labels.map((l) => (
-        <span key={l} className="badge badge-light-success d-inline-flex align-items-center mr-1 mb-1">
-          {l}
-          <button
-            type="button"
-            className="btn btn-icon btn-xs ml-1"
-            onClick={() => onRemove(l)}
-            aria-label={`Remove label ${l}`}
-          >
-            <Icon name="close" />
-          </button>
-        </span>
-      ))}
+    <div ref={rootRef} className="search-input position-relative">
       <input
         type="text"
-        className="form-control form-control-sm d-inline-block"
-        style={{ width: 140 }}
-        placeholder={labels.length === 0 ? "Add label…" : ""}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKey}
+        className="form-control form-control-sm"
+        placeholder={placeholder}
+        value={query}
+        onFocus={() => {
+          setOpen(true);
+          if (query.trim()) doSearch(query);
+        }}
+        onChange={(e) => handleInput(e.target.value)}
       />
+      {open && (
+        <div
+          className="floating dropdown-menu show position-absolute w-100"
+          style={{ zIndex: 1060, maxHeight: 200, overflowY: "auto" }}
+        >
+          {searching && <div className="text-muted p-2">Searching…</div>}
+          {!searching && results.length === 0 && query.trim() && (
+            <div className="text-muted p-2">No users found</div>
+          )}
+          {results.map((u) => (
+            <a
+              key={u.id}
+              href="#"
+              className="dropdown-item d-flex align-items-center"
+              onClick={(e) => {
+                e.preventDefault();
+                onSelect(u);
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <span
+                className="avatar avatar-sm mr-2"
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "var(--primary)",
+                  color: "#fff",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  fontWeight: 600,
+                }}
+              >
+                {(u.fullName || u.name).charAt(0).toUpperCase()}
+              </span>
+              {u.fullName || u.name}
+              {u.name !== (u.fullName || u.name) && (
+                <span className="text-muted ml-1">@{u.name}</span>
+              )}
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -233,6 +184,7 @@ export function NewPullRequestPage() {
   const [reviewers, setReviewers] = useState<User[]>([]);
   const [assignees, setAssignees] = useState<User[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
+  const [labelChoices, setLabelChoices] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Resolve project ID.
@@ -258,6 +210,13 @@ export function NewPullRequestPage() {
   // Load current user for "assign to me".
   useEffect(() => {
     fetchCurrentUser().then((u) => setCurrentUser(u)).catch(() => {});
+  }, []);
+
+  // Fetch label specs for the labels multi-choice.
+  useEffect(() => {
+    fetchLabelSpecs()
+      .then((specs) => setLabelChoices(specs.map((s) => s.name)))
+      .catch(() => {});
   }, []);
 
   // Set default branches from URL params.
@@ -381,7 +340,7 @@ export function NewPullRequestPage() {
     if (currentUser) addAssignee(currentUser);
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormErrors([]);
 
@@ -437,6 +396,10 @@ export function NewPullRequestPage() {
   const effectivePR = compareResult?.effectivePullRequest;
   const mergePreview = compareResult?.mergePreview;
 
+  // Reviewer IDs for exclusion in search.
+  const reviewerIds = reviewers.map((r) => r.id);
+  const assigneeIds = assignees.map((a) => a.id);
+
   return (
     <ProjectLayout projectPath={projectPath} pageTitle="New Pull Request">
       <div className="p-5 new-pull-request">
@@ -444,7 +407,7 @@ export function NewPullRequestPage() {
         <div className="revision-compare mb-5">
           <div className="base revision card">
             <div className="card-body">
-              <div className="title font-weight-bold mb-2">Target</div>
+              <div className="title">Target</div>
               <div className="selector">
                 <BranchSelector
                   defaultProjectPath={projectPath}
@@ -453,9 +416,16 @@ export function NewPullRequestPage() {
                   label="Target Branch"
                 />
               </div>
-              <div className="message text-muted font-size-sm mt-2">
-                {targetCommitSubject || (targetBranch || "Select target branch")}
-              </div>
+              {targetBranch ? (
+                <a
+                  className="message"
+                  href={`/${projectPath}/~commits/${targetBranch}`}
+                >
+                  {targetCommitSubject || targetBranch}
+                </a>
+              ) : (
+                <span className="message">Select target branch</span>
+              )}
             </div>
           </div>
 
@@ -465,6 +435,7 @@ export function NewPullRequestPage() {
               className="btn btn-primary btn-icon"
               onClick={handleSwap}
               title="Swap source and target"
+              data-tippy-content="Swap"
             >
               <Icon name="swap" />
             </button>
@@ -472,7 +443,7 @@ export function NewPullRequestPage() {
 
           <div className="compare revision card">
             <div className="card-body">
-              <div className="title font-weight-bold mb-2">Source</div>
+              <div className="title">Source</div>
               <div className="selector">
                 <BranchSelector
                   defaultProjectPath={projectPath}
@@ -481,9 +452,16 @@ export function NewPullRequestPage() {
                   label="Source Branch"
                 />
               </div>
-              <div className="message text-muted font-size-sm mt-2">
-                {sourceCommitSubject || (sourceBranch || "Select source branch")}
-              </div>
+              {sourceBranch ? (
+                <a
+                  className="message"
+                  href={`/${projectPath}/~commits/${sourceBranch}`}
+                >
+                  {sourceCommitSubject || sourceBranch}
+                </a>
+              ) : (
+                <span className="message">Select source branch</span>
+              )}
             </div>
           </div>
         </div>
@@ -553,11 +531,221 @@ export function NewPullRequestPage() {
           )}
         </div>
 
-        {/* ---- Preview Tabs (Commits / File Changes) ---- */}
-        {statusFragment === "canSend" && targetBranch && sourceBranch && (
-          <div className="card mb-5">
+        {/* ---- canSend Form ---- */}
+        {canSubmit && (
+          <div className="card can-send mb-5">
             <div className="card-body">
-              <ul className="nav nav-tabs nav-tabs-line nav-bolder mb-4">
+              <form className="leave-confirm" method="post" onSubmit={handleSubmit}>
+                <FormFeedbackPanel messages={formErrors} />
+
+                {/* Title */}
+                <div className="form-group pull-request-title">
+                  <label>
+                    Title <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Input title here"
+                    required
+                  />
+                  <div className="text-muted form-text">
+                    Prefix the title with <code>WIP</code> or <code>[WIP]</code> to mark the pull
+                    request as work in progress
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="form-group pull-request-description">
+                  <label>Description</label>
+                  <textarea
+                    className="form-control"
+                    rows={8}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Describe the changes in this pull request"
+                  />
+                </div>
+
+                {/* Merge Strategy */}
+                <div className="form-group merge-strategy">
+                  <label>
+                    Merge Strategy <span className="text-danger">*</span>
+                  </label>
+                  <div className="merge-strategy">
+                    <select
+                      className="form-control custom-select"
+                      value={mergeStrategy}
+                      onChange={(e) => setMergeStrategy(e.target.value)}
+                    >
+                      {MERGE_STRATEGIES.map((s) => (
+                        <option key={s} value={s}>
+                          {mergeStrategyLabel(s)}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="form-text text-muted mt-2">
+                      {mergeStrategy === "CREATE_MERGE_COMMIT" &&
+                        "Always create a merge commit, even when fast-forward is possible."}
+                      {mergeStrategy === "CREATE_MERGE_COMMIT_IF_NECESSARY" &&
+                        "Only create a merge commit when necessary. Fast forward if possible."}
+                      {mergeStrategy === "SQUASH_SOURCE_BRANCH_COMMITS" &&
+                        "Squash all source branch commits into a single commit."}
+                      {mergeStrategy === "REBASE_SOURCE_BRANCH_COMMITS" &&
+                        "Rebase source branch commits onto the target branch."}
+                    </div>
+                    <div className="status mt-2">
+                      {compareLoading && (
+                        <span className="calculating">
+                          <Icon name="loading" className="spin mr-1" />
+                          Calculating merge preview…
+                        </span>
+                      )}
+                      {!compareLoading && mergePreview && !mergePreview.conflicted && (
+                        <span className="no-conflict">
+                          <svg className="icon mt-n1 mr-1" width="18" height="18" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
+                            <path d="M8 12l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
+                          </svg>
+                          Able to merge without conflicts
+                        </span>
+                      )}
+                      {!compareLoading && mergePreview && mergePreview.conflicted && (
+                        <span className="conflict">
+                          <svg className="icon mt-n1 mr-1" width="18" height="18" viewBox="0 0 24 24">
+                            <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" strokeWidth="2" />
+                            <line x1="12" y1="10" x2="12" y2="16" stroke="currentColor" strokeWidth="2" />
+                            <circle cx="12" cy="19" r="1" fill="currentColor" />
+                          </svg>
+                          There are merge conflicts. You can still create the pull request though
+                        </span>
+                      )}
+                      {!compareLoading && !mergePreview && (
+                        <span className="text-muted">
+                          Merge preview will be calculated upon creation
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reviewers */}
+                <div className="form-group">
+                  <label>Reviewers</label>
+                  <ul className="reviews list-unstyled mb-0">
+                    {reviewers.map((user) => (
+                      <li key={user.id} className="d-flex flex-nowrap align-items-center">
+                        <span className="reviewer left mr-2 flex-shrink-0 font-weight-bold">
+                          {user.fullName || user.name}
+                        </span>
+                        <span className="flex-shrink-0 right d-flex align-items-center ml-auto">
+                          <button
+                            type="button"
+                            className="delete btn btn-xs btn-icon btn-light btn-hover-danger flex-shrink-0 mr-2"
+                            title="Remove this reviewer"
+                            onClick={() => removeReviewer(user)}
+                          >
+                            <Icon name="trash" />
+                          </button>
+                        </span>
+                      </li>
+                    ))}
+                    <li className="add-reviewer mt-2">
+                      <UserSearchInput
+                        onSelect={addReviewer}
+                        placeholder="Add reviewer…"
+                        excludeIds={reviewerIds}
+                      />
+                    </li>
+                  </ul>
+                  <div className="text-muted form-text mt-2">
+                    Pull request can only be merged after getting approvals from all reviewers
+                  </div>
+                </div>
+
+                {/* Assignees */}
+                <div className="form-group">
+                  <label>
+                    Assignees
+                    {currentUser && !assignees.some((a) => a.id === currentUser.id) && (
+                      <a
+                        href="#"
+                        className="ml-2 font-weight-normal font-size-sm assign-to-me"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          assignToMe();
+                        }}
+                      >
+                        assign to me
+                      </a>
+                    )}
+                  </label>
+                  <ul className="assignments list-unstyled mb-0">
+                    {assignees.map((user) => (
+                      <li key={user.id} className="d-flex align-items-center flex-nowrap">
+                        <span className="mr-2 left flex-shrink-0 font-weight-bold">
+                          {user.fullName || user.name}
+                        </span>
+                        <button
+                          type="button"
+                          className="right delete btn btn-icon btn-xs btn-light btn-hover-danger flex-shrink-0 ml-auto"
+                          title="Remove this assignee"
+                          onClick={() => removeAssignee(user)}
+                        >
+                          <Icon name="trash" />
+                        </button>
+                      </li>
+                    ))}
+                    <li className="add-assignee mt-2">
+                      <UserSearchInput
+                        onSelect={addAssignee}
+                        placeholder="Add assignee…"
+                        excludeIds={assigneeIds}
+                      />
+                    </li>
+                  </ul>
+                  <div className="text-muted form-text mt-2">
+                    Assignees have code write permission and will be responsible for merging the
+                    pull request
+                  </div>
+                </div>
+
+                {/* Labels */}
+                <div className="form-group">
+                  <label>Labels</label>
+                  <Select2MultiChoice
+                    values={labels}
+                    onChange={setLabels}
+                    choices={labelChoices}
+                    placeholder="Choose labels…"
+                    creatable
+                  />
+                </div>
+
+                {/* Submit */}
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? "Creating…" : "Send Pull Request"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary ml-3"
+                  onClick={handleCancel}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ---- Preview Tabs (Commits / File Changes) ---- */}
+        {(statusFragment === "canSend" || statusFragment === "effective") && targetBranch && sourceBranch && (
+          <div className="card">
+            <div className="card-body">
+              <ul className="nav nav-tabs nav-tabs-line nav-bolder mb-5">
                 <li className="nav-item">
                   <a
                     className={`nav-link${activeTab === "commits" ? " active" : ""}`}
@@ -667,170 +855,6 @@ export function NewPullRequestPage() {
                   </>
                 )}
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* ---- canSend Form ---- */}
-        {canSubmit && (
-          <div className="card can-send mb-5">
-            <div className="card-body">
-              <form className="leave-confirm" method="post" onSubmit={handleSubmit}>
-                <FormFeedbackPanel messages={formErrors} />
-
-                {/* Title */}
-                <div className="form-group pull-request-title">
-                  <label>
-                    Title <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Input title here"
-                    required
-                  />
-                  <div className="text-muted form-text">
-                    Prefix the title with <code>WIP</code> or <code>[WIP]</code> to mark the pull
-                    request as work in progress
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="form-group pull-request-description">
-                  <label>Description</label>
-                  <textarea
-                    className="form-control"
-                    rows={8}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the changes in this pull request"
-                  />
-                </div>
-
-                {/* Merge Strategy */}
-                <div className="form-group merge-strategy">
-                  <label>
-                    Merge Strategy <span className="text-danger">*</span>
-                  </label>
-                  <div className="merge-strategy">
-                    <select
-                      className="form-control custom-select"
-                      value={mergeStrategy}
-                      onChange={(e) => setMergeStrategy(e.target.value)}
-                    >
-                      {MERGE_STRATEGIES.map((s) => (
-                        <option key={s} value={s}>
-                          {mergeStrategyLabel(s)}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="form-text text-muted mt-2">
-                      {mergeStrategy === "CREATE_MERGE_COMMIT" &&
-                        "Always create a merge commit, even when fast-forward is possible."}
-                      {mergeStrategy === "CREATE_MERGE_COMMIT_IF_NECESSARY" &&
-                        "Only create a merge commit when necessary. Fast forward if possible."}
-                      {mergeStrategy === "SQUASH_SOURCE_BRANCH_COMMITS" &&
-                        "Squash all source branch commits into a single commit."}
-                      {mergeStrategy === "REBASE_SOURCE_BRANCH_COMMITS" &&
-                        "Rebase source branch commits onto the target branch."}
-                    </div>
-                    <div className="status mt-2">
-                      {compareLoading && (
-                        <span className="calculating">
-                          <Icon name="loading" className="spin mr-1" />
-                          Calculating merge preview…
-                        </span>
-                      )}
-                      {!compareLoading && mergePreview && !mergePreview.conflicted && (
-                        <span className="no-conflict">
-                          <svg className="icon mt-n1 mr-1" width="18" height="18" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" />
-                            <path d="M8 12l3 3 5-5" fill="none" stroke="currentColor" strokeWidth="2" />
-                          </svg>
-                          Able to merge without conflicts
-                        </span>
-                      )}
-                      {!compareLoading && mergePreview && mergePreview.conflicted && (
-                        <span className="conflict">
-                          <svg className="icon mt-n1 mr-1" width="18" height="18" viewBox="0 0 24 24">
-                            <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" strokeWidth="2" />
-                            <line x1="12" y1="10" x2="12" y2="16" stroke="currentColor" strokeWidth="2" />
-                            <circle cx="12" cy="19" r="1" fill="currentColor" />
-                          </svg>
-                          There are merge conflicts. You can still create the pull request though
-                        </span>
-                      )}
-                      {!compareLoading && !mergePreview && (
-                        <span className="text-muted">
-                          Merge preview will be calculated upon creation
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Reviewers */}
-                <div className="form-group">
-                  <label>Reviewers</label>
-                  <UserPicker
-                    users={reviewers}
-                    onAdd={addReviewer}
-                    onRemove={removeReviewer}
-                    placeholder="Add reviewer…"
-                  />
-                  <div className="text-muted form-text">
-                    Pull request can only be merged after getting approvals from all reviewers
-                  </div>
-                </div>
-
-                {/* Assignees */}
-                <div className="form-group">
-                  <label>
-                    Assignees
-                    {currentUser && !assignees.some((a) => a.id === currentUser.id) && (
-                      <a href="#" className="ml-2 font-weight-normal font-size-sm assign-to-me"
-                        onClick={(e) => { e.preventDefault(); assignToMe(); }}
-                      >
-                        assign to me
-                      </a>
-                    )}
-                  </label>
-                  <UserPicker
-                    users={assignees}
-                    onAdd={addAssignee}
-                    onRemove={removeAssignee}
-                    placeholder="Add assignee…"
-                  />
-                  <div className="text-muted form-text">
-                    Assignees have code write permission and will be responsible for merging the
-                    pull request
-                  </div>
-                </div>
-
-                {/* Labels */}
-                <div className="form-group">
-                  <LabelsInput
-                    labels={labels}
-                    onAdd={(l) => setLabels((prev) => prev.includes(l) ? prev : [...prev, l])}
-                    onRemove={(l) => setLabels((prev) => prev.filter((x) => x !== l))}
-                  />
-                </div>
-
-                {/* Submit */}
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? "Creating…" : "Send Pull Request"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary ml-3"
-                  onClick={handleCancel}
-                  disabled={submitting}
-                >
-                  Cancel
-                </button>
-              </form>
             </div>
           </div>
         )}
