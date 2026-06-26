@@ -213,6 +213,7 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
       <div className="foot">
         <InlineDropdown
           className="btn btn-light btn-hover-primary btn-block d-block"
+          wrapperClassName="d-block w-100"
           label={addStepButton}
         >
           {({ close }) => (

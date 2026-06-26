@@ -181,6 +181,7 @@ export function PolymorphicListEditor({
         ) : (
           <InlineDropdown
             className="btn btn-light btn-hover-primary btn-block d-block"
+            wrapperClassName="d-block w-100"
             label={addButton}
           >
             {({ close }) => (
