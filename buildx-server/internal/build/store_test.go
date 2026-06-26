@@ -107,3 +107,38 @@ func TestUpdateDescriptionAndDelete(t *testing.T) {
 		t.Fatal("expected not found after delete")
 	}
 }
+
+func TestBuildDurationFields(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	submit := time.Date(2026, 6, 26, 12, 0, 0, 0, time.UTC)
+	pending := submit.Add(2 * time.Second)
+	running := pending.Add(3 * time.Second)
+	finish := running.Add(5 * time.Second)
+
+	created, err := s.Create(ctx, &model.Build{
+		ProjectID:   1,
+		JobName:     "CI",
+		Status:      model.BuildStatusSuccessful,
+		SubmitDate:  submit,
+		PendingDate: &pending,
+		RunningDate: &running,
+		FinishDate:  &finish,
+		Submitter:   &model.User{ID: 1},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Get(ctx, created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PendingDuration != 3000 {
+		t.Fatalf("pendingDuration = %d, want 3000", got.PendingDuration)
+	}
+	if got.RunningDuration != 5000 {
+		t.Fatalf("runningDuration = %d, want 5000", got.RunningDuration)
+	}
+}

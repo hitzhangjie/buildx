@@ -1,10 +1,10 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useProject } from "../../../context/ProjectContext";
 
 /** OneDev BuildDashboardPage redirects to the first available detail tab (log). */
 export function BuildDashboardPage() {
-  const { projectPath } = useProject();
-  const { build } = useParams<{ build: string }>();
+  const { projectPath, params } = useProject();
+  const build = params.build;
 
   if (!build) {
     return null;

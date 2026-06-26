@@ -435,7 +435,39 @@ func (s *Service) StreamLog(ctx context.Context, buildID int64) (<-chan LogEntry
 		return ch, nil
 	}
 
-	return lb.Subscribe(), nil
+	return streamLogBuffer(ctx, lb), nil
+}
+
+func streamLogBuffer(ctx context.Context, lb *LogBuffer) <-chan LogEntry {
+	out := make(chan LogEntry, 256)
+	go func() {
+		defer close(out)
+		for _, entry := range lb.Entries() {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- entry:
+			}
+		}
+		live := lb.Subscribe()
+		defer lb.Unsubscribe(live)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case entry, ok := <-live:
+				if !ok {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case out <- entry:
+				}
+			}
+		}
+	}()
+	return out
 }
 
 // GetLog returns stored log entries for a build.

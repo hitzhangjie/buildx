@@ -197,7 +197,13 @@ func runCheckout(ctx context.Context, jobCtx *JobContext, workDir, gitDir string
 	if logger != nil {
 		logger.Log("info", "checking out "+jobCtx.CommitHash)
 	}
-	return checkoutCommit(gitDir, workDir, jobCtx.CommitHash, f.WithLFS, f.WithSubmodules, f.CloneDepth)
+	if err := checkoutCommit(gitDir, workDir, jobCtx.CommitHash, f.WithLFS, f.WithSubmodules, f.CloneDepth, logger); err != nil {
+		return err
+	}
+	if logger != nil {
+		logger.Log("info", "checkout completed")
+	}
+	return nil
 }
 
 func leafResultsToStepResults(results []execplan.LeafResult) []StepResult {

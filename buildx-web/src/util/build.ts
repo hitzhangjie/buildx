@@ -16,6 +16,9 @@ export function formatDuration(ms: number): string {
   }
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) {
+    if (ms < 1000) {
+      return ms > 0 ? "<1s" : "0s";
+    }
     return `${seconds}s`;
   }
   const minutes = Math.floor(seconds / 60);

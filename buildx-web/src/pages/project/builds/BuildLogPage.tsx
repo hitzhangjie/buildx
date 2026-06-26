@@ -73,44 +73,61 @@ export function BuildLogPage() {
     };
   }, [build?.id, build?.status]);
 
-  // Connect to SSE stream for live updates
+  // Connect to SSE stream for live updates; reconnect while the build is running.
   useEffect(() => {
     if (!build) return;
     const isFinished = ["SUCCESSFUL", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
       build.status,
     );
-    if (isFinished) return; // no streaming needed for finished builds
+    if (isFinished) return;
 
-    let source: EventSource;
-    try {
-      source = streamBuildLog(build.id);
-    } catch {
-      return; // SSE not available
-    }
+    let cancelled = false;
+    let source: EventSource | null = null;
+    let retryTimer: number | undefined;
 
-    source.onmessage = (event) => {
+    const connect = () => {
+      if (cancelled) return;
+      source?.close();
       try {
-        const entry = JSON.parse(event.data) as LogEntry;
-        setLogEntries((prev) => {
-          if (prev.some((e) => e.id === entry.id)) {
-            return prev;
-          }
-          return [...prev, entry];
-        });
+        source = streamBuildLog(build.id);
       } catch {
-        // ignore malformed entries
+        retryTimer = window.setTimeout(connect, 2000);
+        return;
       }
+
+      source.onmessage = (event) => {
+        try {
+          const entry = JSON.parse(event.data) as LogEntry;
+          setLogEntries((prev) => {
+            if (prev.some((e) => e.id === entry.id)) {
+              return prev;
+            }
+            return [...prev, entry];
+          });
+        } catch {
+          // ignore malformed entries
+        }
+      };
+
+      source.onerror = () => {
+        source?.close();
+        source = null;
+        if (!cancelled) {
+          retryTimer = window.setTimeout(connect, 2000);
+        }
+      };
+
+      eventSourceRef.current = source;
     };
 
-    source.onerror = () => {
-      // SSE connection closed (build finished or error)
-      source.close();
-    };
-
-    eventSourceRef.current = source;
+    connect();
 
     return () => {
-      source.close();
+      cancelled = true;
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+      }
+      source?.close();
       eventSourceRef.current = null;
     };
   }, [build?.id, build?.status]);

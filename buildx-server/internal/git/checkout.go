@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,8 @@ type CheckoutOptions struct {
 	WithLFS        bool
 	WithSubmodules bool
 	CloneDepth     int
+	// LogLine streams command output lines to the build log. stderr is true for stderr output.
+	LogLine func(line string, stderr bool)
 }
 
 // CheckoutCommit clones a bare repository into workDir and checks out commitHash.
@@ -32,28 +35,104 @@ func CheckoutCommit(repoPath, workDir, commitHash string, opts CheckoutOptions) 
 	}
 
 	cloneURL := "file://" + filepath.ToSlash(repoPath)
-	args := []string{"clone", "--no-checkout"}
+	cloneArgs := []string{"clone", "--no-checkout"}
 	if opts.CloneDepth > 0 {
-		args = append(args, "--depth", fmt.Sprintf("%d", opts.CloneDepth))
+		cloneArgs = append(cloneArgs, "--depth", fmt.Sprintf("%d", opts.CloneDepth))
 	}
-	args = append(args, cloneURL, workDir)
-
-	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-		return fmt.Errorf("git clone: %w: %s", err, strings.TrimSpace(string(out)))
+	cloneArgs = append(cloneArgs, cloneURL, workDir)
+	if err := runGitCommand(opts.LogLine, cloneArgs...); err != nil {
+		return fmt.Errorf("git clone: %w", err)
 	}
 
 	checkoutArgs := []string{"-C", workDir, "checkout", commitHash}
-	if out, err := exec.Command("git", checkoutArgs...).CombinedOutput(); err != nil {
-		return fmt.Errorf("git checkout: %w: %s", err, strings.TrimSpace(string(out)))
+	if err := runGitCommand(opts.LogLine, checkoutArgs...); err != nil {
+		return fmt.Errorf("git checkout: %w", err)
 	}
 
 	if opts.WithSubmodules {
-		if out, err := exec.Command("git", "-C", workDir, "submodule", "update", "--init", "--recursive").CombinedOutput(); err != nil {
-			return fmt.Errorf("git submodule: %w: %s", err, strings.TrimSpace(string(out)))
+		subArgs := []string{"-C", workDir, "submodule", "update", "--init", "--recursive"}
+		if err := runGitCommand(opts.LogLine, subArgs...); err != nil {
+			return fmt.Errorf("git submodule: %w", err)
 		}
 	}
 	if opts.WithLFS {
-		_ = exec.Command("git", "-C", workDir, "lfs", "pull").Run()
+		lfsArgs := []string{"-C", workDir, "lfs", "pull"}
+		if err := runGitCommand(opts.LogLine, lfsArgs...); err != nil {
+			return fmt.Errorf("git lfs pull: %w", err)
+		}
 	}
 	return nil
+}
+
+func runGitCommand(logLine func(string, bool), args ...string) error {
+	if logLine != nil {
+		logLine("+ git "+strings.Join(args, " "), false)
+	}
+
+	cmd := exec.Command("git", args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	var stdoutDone, stderrDone chan struct{}
+	if logLine != nil {
+		stdoutDone = streamCommandOutput(stdout, false, logLine)
+		stderrDone = streamCommandOutput(stderr, true, logLine)
+	} else {
+		stdoutDone = drainReader(stdout)
+		stderrDone = drainReader(stderr)
+	}
+
+	<-stdoutDone
+	<-stderrDone
+	return cmd.Wait()
+}
+
+func streamCommandOutput(reader io.Reader, stderr bool, logLine func(string, bool)) chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		buf := make([]byte, 4096)
+		var remainder string
+		for {
+			n, err := reader.Read(buf)
+			if n > 0 {
+				content := remainder + string(buf[:n])
+				lines := strings.Split(content, "\n")
+				for i := 0; i < len(lines)-1; i++ {
+					if line := strings.TrimRight(lines[i], "\r"); line != "" {
+						logLine(line, stderr)
+					}
+				}
+				remainder = lines[len(lines)-1]
+			}
+			if err != nil {
+				if remainder != "" {
+					if line := strings.TrimRight(remainder, "\r"); line != "" {
+						logLine(line, stderr)
+					}
+				}
+				return
+			}
+		}
+	}()
+	return done
+}
+
+func drainReader(reader io.Reader) chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = io.Copy(io.Discard, reader)
+	}()
+	return done
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { getBuild, getBuildByNumber, type Build } from "../../../api/builds";
 import { useProject } from "../../../context/ProjectContext";
 
@@ -10,8 +10,8 @@ type BuildLocationState = {
 };
 
 export function useBuildDetail() {
-  const { projectPath } = useProject();
-  const { build: buildNumberParam } = useParams<{ build: string }>();
+  const { projectPath, params } = useProject();
+  const buildNumberParam = params.build;
   const location = useLocation();
   const buildNumber = Number(buildNumberParam);
   const initialBuild = (location.state as BuildLocationState | null)?.build ?? null;

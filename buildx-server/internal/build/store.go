@@ -385,14 +385,8 @@ func scanBuild(row rowScanner) (*model.Build, error) {
 	b.PendingDate = parseOptionalTime(pendingDate)
 	b.RunningDate = parseOptionalTime(runningDate)
 	b.FinishDate = parseOptionalTime(finishDate)
-	b.PendingDuration = durationMillis(b.SubmitDate, b.PendingDate)
-	if b.RunningDate != nil {
-		start := b.SubmitDate
-		if b.PendingDate != nil {
-			start = *b.PendingDate
-		}
-		b.RunningDuration = durationMillis(start, b.RunningDate)
-	}
+	b.PendingDuration = durationBetween(b.PendingDate, b.RunningDate)
+	b.RunningDuration = durationBetween(b.RunningDate, b.FinishDate)
 	proj.CreateDate, _ = time.Parse(time.RFC3339Nano, projCreateDate)
 	b.Project = &proj
 	submitter.Type = model.UserType(submitterType)
@@ -420,6 +414,13 @@ func durationMillis(from time.Time, to *time.Time) int64 {
 		return 0
 	}
 	return ms
+}
+
+func durationBetween(from, to *time.Time) int64 {
+	if from == nil || from.IsZero() || to == nil || to.IsZero() {
+		return 0
+	}
+	return durationMillis(*from, to)
 }
 
 func parseOptionalTime(v sql.NullString) *time.Time {
