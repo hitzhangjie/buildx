@@ -97,7 +97,12 @@ Plugin interface inspired by OneDev:
 - `servershell` — run on BuildX host (`internal/executor/servershell`)
 - `serverdocker` — Docker CLI on host (`internal/executor/docker`, auto-enabled when Docker available)
 - `remoteshell` — remote agents via WebSocket `executePlan` + `internal/worker` REST API
-- `kubernetes` — K8s jobs (planned; reuse patterns from `references/k8s-helper`)
+- `remotedocker` — docker-aware jobs on remote agents (skeleton, `internal/executor/remotedocker`)
+- `kubernetes` — K8s jobs skeleton (`internal/executor/kubernetes`, enabled when kubeconfig present)
+
+**buildx-agent** (`buildx-server/cmd/buildx-agent`): standalone CI worker binary; connects to `/~api/agents/ws`, executes plans locally, calls `/~api/worker/*` for server steps and cache.
+
+**Resource allocation**: `internal/resource/` selects online agents by query with per-agent concurrency slots (OneDev `ResourceService` subset).
 
 Worker/internal API: `buildx-server/internal/worker/` (JSON job-data, run-server-step, cache) maps to OneDev `WorkerResource`.
 

@@ -54,10 +54,7 @@ export function jobAtIndex(pipeline: Job[][], index: PipelineJobIndex): Job | nu
 }
 
 /** Dependency map: "column-row" -> list of upstream "column-row" keys. */
-export function buildDependencyMap(
-  pipeline: Job[][],
-  jobs: Job[],
-): Record<string, string[]> {
+export function buildDependencyMap(pipeline: Job[][]): Record<string, string[]> {
   const jobIndexMap = new Map<string, PipelineJobIndex>();
   pipeline.forEach((column, columnIndex) => {
     column.forEach((job, rowIndex) => {

@@ -20,11 +20,16 @@ type AgentSession struct {
 	conn          any       // underlying transport (e.g., *websocket.Conn)
 }
 
+// BuildLogForwarder receives build log lines from connected agents.
+type BuildLogForwarder func(jobToken, level, message string)
+
 // Service manages agent lifecycle: registration, connection, heartbeats,
 // and command dispatch.
 type Service struct {
 	store    *DBStore
 	logStore *LogStore
+
+	buildLogs BuildLogForwarder
 
 	mu       sync.RWMutex
 	sessions map[int64]*AgentSession // agentID -> session
@@ -36,6 +41,18 @@ func NewService(store *DBStore) *Service {
 		store:    store,
 		logStore: NewLogStore(),
 		sessions: make(map[int64]*AgentSession),
+	}
+}
+
+// SetBuildLogForwarder registers a callback for agent build log lines.
+func (s *Service) SetBuildLogForwarder(f BuildLogForwarder) {
+	s.buildLogs = f
+}
+
+// ForwardBuildLog delivers a log line to the registered build log forwarder.
+func (s *Service) ForwardBuildLog(jobToken, level, message string) {
+	if s != nil && s.buildLogs != nil && jobToken != "" {
+		s.buildLogs(jobToken, level, message)
 	}
 }
 

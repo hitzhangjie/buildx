@@ -13,9 +13,12 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/cache"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/issue"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/job"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/pullrequest"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/resource"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/server/api"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/worker"
 )
@@ -147,26 +150,50 @@ func (s *Server) wireCI(projects *project.DBStore, buildsStore *build.DBStore) c
 	agentWS := runtime.NewAgentWebSocket(agentRuntime)
 	agentDialer := dialer.NewWebSocketDialer(agentRuntime)
 
+	agentAdapter := job.NewAgentServiceAdapter(agentStore, agentRuntime)
+	resourceSvc := resource.NewService(agentAdapter)
+
 	registry := executor.NewRegistry()
 	registry.Register(executor.NewServerShellExecutor(workBase), nil)
 	if dockerExec := executor.NewDockerExecutor(workBase); dockerExec.Enabled() {
 		registry.Register(dockerExec, nil)
 	}
+	if k8sExec := executor.NewKubernetesExecutor(workBase); k8sExec.Enabled() {
+		registry.Register(k8sExec, nil)
+	}
 	registry.Register(executor.NewRemoteShellExecutor(agentDialer), &executor.ExecutorConfig{
 		Name:    "remote-shell",
 		Enabled: true,
 	})
+	registry.Register(executor.NewRemoteDockerExecutor(agentDialer), &executor.ExecutorConfig{
+		Name:    "remote-docker",
+		Enabled: true,
+	})
+
+	issueStore := issue.NewDBStore(s.store.DB())
+	prStore := pullrequest.NewDBStore(s.store.DB())
+	prService := &pullrequest.Service{Store: prStore, Project: projects}
+
+	fileLogs := job.NewFileLogReader(logBase)
 
 	svc := job.NewService(
 		buildsStore,
-		job.NewAgentServiceAdapter(agentStore, agentRuntime),
+		agentAdapter,
 		registry,
 		projects,
 		git.CIService{},
-		nil,
+		fileLogs,
 	)
 	svc.SetCacheAndArtifacts(cacheSvc, artifactStore)
 	svc.SetLogPersistDir(logBase)
+	svc.SetResourceService(resourceSvc)
+	svc.SetIssueCreator(&job.IssuePostBuildAdapter{Store: issueStore})
+	svc.SetPullRequestStepService(&job.PullRequestStepAdapter{Service: prService})
+	svc.SetRemoteAgentQuery("", 1)
+
+	agentRuntime.SetBuildLogForwarder(func(jobToken, level, message string) {
+		svc.ForwardAgentBuildLog(jobToken, level, message)
+	})
 	s.jobs = svc
 
 	return ciBundle{

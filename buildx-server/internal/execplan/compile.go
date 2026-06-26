@@ -18,20 +18,57 @@ func CompileJob(ctx CompileContext) (*Plan, error) {
 	if ctx.Job == nil {
 		return nil, fmt.Errorf("execplan: job is nil")
 	}
-	actions, err := compileSteps(ctx, ctx.Job.Steps)
+	secrets := LoadSecretsFromEnv()
+	actions, err := compileSteps(ctx, ctx.Job.Steps, secrets)
 	if err != nil {
 		return nil, err
 	}
+	serviceActions, err := compileRequiredServices(ctx, secrets)
+	if err != nil {
+		return nil, err
+	}
+	actions = append(serviceActions, actions...)
 	return &Plan{Root: &CompositeFacade{Actions: actions}}, nil
 }
 
-func compileSteps(ctx CompileContext, steps buildspec.Steps) ([]Action, error) {
+func compileRequiredServices(ctx CompileContext, secrets map[string]string) ([]Action, error) {
+	if ctx.Spec == nil || ctx.Job == nil || len(ctx.Job.RequiredServices) == 0 {
+		return nil, nil
+	}
+	serviceMap := ctx.Spec.GetServiceMap()
+	var actions []Action
+	for _, name := range ctx.Job.RequiredServices {
+		svc := serviceMap[name]
+		if svc == nil {
+			return nil, fmt.Errorf("execplan: required service %q not found", name)
+		}
+		env := mapsClone(svc.EnvVars)
+		mergeParamsIntoEnv(env, ctx.ParamMap)
+		for k, v := range env {
+			env[k] = InterpolateString(v, ctx.ParamMap, secrets)
+		}
+		actions = append(actions, Action{
+			Name: "service:" + svc.Name,
+			Facade: &ServiceFacade{
+				Name:         svc.Name,
+				Image:        InterpolateString(svc.Image, ctx.ParamMap, secrets),
+				Command:      InterpolateString(svc.Command, ctx.ParamMap, secrets),
+				EnvVars:      env,
+				Ports:        svc.Ports,
+				ReadyCommand: InterpolateString(svc.ReadyCommand, ctx.ParamMap, secrets),
+			},
+		})
+	}
+	return actions, nil
+}
+
+func compileSteps(ctx CompileContext, steps buildspec.Steps, secrets map[string]string) ([]Action, error) {
 	var actions []Action
 	for _, step := range steps {
 		if step == nil {
 			continue
 		}
-		compiled, err := compileStep(ctx, step)
+		compiled, err := compileStep(ctx, step, secrets)
 		if err != nil {
 			return nil, err
 		}
@@ -40,12 +77,12 @@ func compileSteps(ctx CompileContext, steps buildspec.Steps) ([]Action, error) {
 	return actions, nil
 }
 
-func compileStep(ctx CompileContext, step buildspec.Step) ([]Action, error) {
+func compileStep(ctx CompileContext, step buildspec.Step, secrets map[string]string) ([]Action, error) {
 	switch s := step.(type) {
 	case *buildspec.UseTemplateStep:
-		return compileUseTemplate(ctx, s)
+		return compileUseTemplate(ctx, s, secrets)
 	default:
-		action, err := leafAction(ctx, step)
+		action, err := leafAction(ctx, step, secrets)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +93,7 @@ func compileStep(ctx CompileContext, step buildspec.Step) ([]Action, error) {
 	}
 }
 
-func compileUseTemplate(ctx CompileContext, uts *buildspec.UseTemplateStep) ([]Action, error) {
+func compileUseTemplate(ctx CompileContext, uts *buildspec.UseTemplateStep, secrets map[string]string) ([]Action, error) {
 	if ctx.Spec == nil {
 		return nil, fmt.Errorf("execplan: build spec required to expand template %q", uts.TemplateName)
 	}
@@ -74,7 +111,7 @@ func compileUseTemplate(ctx CompileContext, uts *buildspec.UseTemplateStep) ([]A
 	for i, paramMap := range paramMaps {
 		childCtx := ctx
 		childCtx.ParamMap = paramMap
-		childSteps, err := compileSteps(childCtx, template.Steps)
+		childSteps, err := compileSteps(childCtx, template.Steps, secrets)
 		if err != nil {
 			return nil, fmt.Errorf("template %q: %w", uts.TemplateName, err)
 		}
@@ -89,7 +126,7 @@ func compileUseTemplate(ctx CompileContext, uts *buildspec.UseTemplateStep) ([]A
 	return actions, nil
 }
 
-func leafAction(ctx CompileContext, step buildspec.Step) (*Action, error) {
+func leafAction(ctx CompileContext, step buildspec.Step, secrets map[string]string) (*Action, error) {
 	name := step.GetName()
 	if name == "" {
 		name = string(step.StepType())
@@ -99,12 +136,15 @@ func leafAction(ctx CompileContext, step buildspec.Step) (*Action, error) {
 	case *buildspec.CommandStep:
 		env := mapsClone(s.EnvVars)
 		mergeParamsIntoEnv(env, ctx.ParamMap)
+		for k, v := range env {
+			env[k] = InterpolateString(v, ctx.ParamMap, secrets)
+		}
 		return &Action{
 			Name: name,
 			Facade: &CommandFacade{
 				Name:        name,
-				Commands:    s.Commands,
-				Image:       s.Image,
+				Commands:    InterpolateString(s.Commands, ctx.ParamMap, secrets),
+				Image:       InterpolateString(s.Image, ctx.ParamMap, secrets),
 				Interpreter: s.Interpreter,
 				EnvVars:     env,
 				UseTTY:      s.UseTTY,
@@ -178,6 +218,7 @@ func leafAction(ctx CompileContext, step buildspec.Step) (*Action, error) {
 			Condition: ParseExecuteCondition(step.GetCondition()),
 		}, nil
 	case *buildspec.SetBuildVersionStep,
+		*buildspec.SetBuildDescriptionStep,
 		*buildspec.CreateBranchStep,
 		*buildspec.CreateTagStep,
 		*buildspec.CreatePullRequestStep,

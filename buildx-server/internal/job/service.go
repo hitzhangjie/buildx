@@ -23,6 +23,7 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/resource"
 )
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,7 @@ type BuildStore interface {
 	Delete(ctx context.Context, id int64) error
 	UpdateStatus(ctx context.Context, id int64, status model.BuildStatus) error
 	UpdateVersion(ctx context.Context, id int64, version string) error
+	UpdateDescription(ctx context.Context, id int64, description string) error
 	ResetForResubmit(ctx context.Context, id int64, token, reason string, submitterID int64) error
 	UpdateRetryPending(ctx context.Context, id int64) error
 	UpdateDates(ctx context.Context, id int64, pendingDate, runningDate, finishDate *time.Time) error
@@ -87,6 +89,16 @@ type ProjectResolver interface {
 type GitService interface {
 	ResolveRef(ctx context.Context, repoPath, ref string) (string, error)
 	ReadFileAtCommit(ctx context.Context, repoPath, commitHash, filePath string) ([]byte, error)
+}
+
+// IssueCreator creates issues from post-build actions.
+type IssueCreator interface {
+	CreateFromPostBuild(ctx context.Context, projectID int64, submitterID int64, title, body string) error
+}
+
+// PullRequestStepService creates PRs from server steps.
+type PullRequestStepService interface {
+	CreateFromBuildStep(ctx context.Context, jobCtx *executor.JobContext, targetBranch, title, body string) error
 }
 
 // LogStore provides persistent log storage and retrieval.
@@ -140,6 +152,11 @@ type Service struct {
 	logStore     LogStore
 	cache        *cache.Service
 	artifacts    *artifact.Store
+	resources    *resource.Service
+	issues       IssueCreator
+	pullRequests PullRequestStepService
+	agentQuery   string
+	agentConcurrency int
 
 	mu              sync.RWMutex
 	runningJobs     map[string]*RunningJob // keyed by job token
@@ -183,6 +200,16 @@ func (s *Service) SetLogPersistDir(dir string) {
 func (s *Service) SetCacheAndArtifacts(cacheSvc *cache.Service, artifactStore *artifact.Store) {
 	s.cache = cacheSvc
 	s.artifacts = artifactStore
+}
+
+func (s *Service) SetResourceService(r *resource.Service) { s.resources = r }
+func (s *Service) SetIssueCreator(c IssueCreator)           { s.issues = c }
+func (s *Service) SetPullRequestStepService(pr PullRequestStepService) {
+	s.pullRequests = pr
+}
+func (s *Service) SetRemoteAgentQuery(query string, concurrency int) {
+	s.agentQuery = query
+	s.agentConcurrency = concurrency
 }
 
 // ---------------------------------------------------------------------------
@@ -376,7 +403,24 @@ func (s *Service) StreamLog(ctx context.Context, buildID int64) (<-chan LogEntry
 	s.mu.RUnlock()
 
 	if !ok {
-		// Try to get from persistent store
+		// Try persistent file logs
+		if s.logPersistDir != "" {
+			reader := NewFileLogReader(s.logPersistDir)
+			if entries, err := reader.GetLogs(ctx, buildID, time.Time{}); err == nil && len(entries) > 0 {
+				ch := make(chan LogEntry, len(entries))
+				go func() {
+					defer close(ch)
+					for _, e := range entries {
+						ch <- e
+					}
+				}()
+				return ch, nil
+			}
+			ch, err := reader.StreamLogs(ctx, buildID)
+			if err == nil {
+				return ch, nil
+			}
+		}
 		if s.logStore != nil {
 			ch, err := s.logStore.StreamLogs(ctx, buildID)
 			if err == nil {
@@ -395,30 +439,35 @@ func (s *Service) StreamLog(ctx context.Context, buildID int64) (<-chan LogEntry
 // GetLog returns stored log entries for a build.
 func (s *Service) GetLog(ctx context.Context, buildID int64, since time.Time) ([]LogEntry, error) {
 	if s.logStore != nil {
-		return s.logStore.GetLogs(ctx, buildID, since)
+		entries, err := s.logStore.GetLogs(ctx, buildID, since)
+		if err == nil && len(entries) > 0 {
+			return entries, nil
+		}
 	}
 
-	// Fall back to in-memory buffer
 	s.mu.RLock()
 	lb, ok := s.logBuffers[buildID]
 	s.mu.RUnlock()
 
-	if !ok {
-		return nil, fmt.Errorf("%w: no logs for build %d", ErrNotFound, buildID)
-	}
-
-	entries := lb.Entries()
-	if since.IsZero() {
-		return entries, nil
-	}
-
-	var filtered []LogEntry
-	for _, e := range entries {
-		if !e.Timestamp.Before(since) {
-			filtered = append(filtered, e)
+	if ok {
+		entries := lb.Entries()
+		if since.IsZero() {
+			return entries, nil
 		}
+		var filtered []LogEntry
+		for _, e := range entries {
+			if !e.Timestamp.Before(since) {
+				filtered = append(filtered, e)
+			}
+		}
+		return filtered, nil
 	}
-	return filtered, nil
+
+	if s.logPersistDir != "" {
+		return NewFileLogReader(s.logPersistDir).GetLogs(ctx, buildID, since)
+	}
+
+	return nil, fmt.Errorf("%w: no logs for build %d", ErrNotFound, buildID)
 }
 
 // ---------------------------------------------------------------------------
@@ -598,9 +647,18 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 	}
 	defer s.releaseSequentialLock(job.SequentialGroup)
 
-	if (jobCtx.PreferredExecutor == "remote-shell" || jobCtx.PreferredExecutor == "") && s.agentService != nil {
-		if agents, err := s.agentService.GetOnlineAgents(ctx); err == nil && len(agents) > 0 {
-			jobCtx.AgentID = agents[0]
+	if (jobCtx.PreferredExecutor == "remote-shell" || jobCtx.PreferredExecutor == "remote-docker" || jobCtx.PreferredExecutor == "") && s.agentService != nil {
+		needsRemote := jobCtx.PreferredExecutor == "remote-shell" || jobCtx.PreferredExecutor == "remote-docker"
+		if needsRemote || jobCtx.PreferredExecutor == "" {
+			if len(job.RequiredServices) > 0 && jobCtx.PreferredExecutor != "remote-docker" {
+				// OneDev: remote-shell cannot run service sidecars.
+			} else if s.resources != nil {
+				if id, err := s.resources.AllocateAgent(ctx, s.agentQuery, jobCtx.PreferredExecutor, s.agentConcurrency); err == nil {
+					jobCtx.AgentID = id
+				}
+			} else if agents, err := s.agentService.GetOnlineAgents(ctx); err == nil && len(agents) > 0 {
+				jobCtx.AgentID = agents[0]
+			}
 		}
 	}
 
@@ -610,6 +668,7 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 		GitDir:        jobCtx.GitDir,
 		Projects:      s.projects,
 		ReportStore:   s,
+		PullRequests:  s.pullRequests,
 	}
 	if s.cache != nil {
 		jobCtx.Cache = &executor.RunCacheHandler{Cache: s.cache}
@@ -659,7 +718,16 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 		workDir = de.WorkDirFor(jobCtx)
 	}
 	s.copyDependencyArtifacts(ctx, build.ID, workDir)
+	logBuf := s.attachLogBuffer(build.ID, logger)
 	s.attachLogPersistence(build.ID, logger)
+	defer func() {
+		if logBuf != nil {
+			logBuf.Close()
+		}
+		if jobCtx.AgentID > 0 && s.resources != nil {
+			s.resources.ReleaseAgent(jobCtx.AgentID, executor_.Name())
+		}
+	}()
 
 	retried := 0
 	var finalStatus model.BuildStatus
@@ -696,8 +764,9 @@ retryLoop:
 		}
 
 		finalStatus = model.BuildStatusFailed
+		logText := logTextFromLogger(logger)
 		if retried >= job.MaxRetries || !MatchesRetryCondition(job, RetryContext{
-			Build: build, ErrorMessage: errMsg, ParamMap: jobCtx.ParamMap,
+			Build: build, ErrorMessage: errMsg, LogText: logText, ParamMap: jobCtx.ParamMap, Success: false,
 		}) {
 			break
 		}

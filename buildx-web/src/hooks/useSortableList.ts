@@ -24,7 +24,7 @@ export function useSortableList({ handleSelector, onReorder }: SortableOptions) 
       if (!el?.closest) {
         return false;
       }
-      return Boolean(el.closest(handleSelector) && currentTarget?.contains(el));
+      return Boolean(el.closest(handleSelector) && (currentTarget as Node | null)?.contains?.(el));
     },
     [handleSelector],
   );

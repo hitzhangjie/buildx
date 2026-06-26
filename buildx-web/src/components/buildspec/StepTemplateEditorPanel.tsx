@@ -1,6 +1,9 @@
 import { BeanEditor } from "../onedev/BeanEditor";
 import { BeanFormGroup } from "../onedev/BeanFormGroup";
 import type { StepTemplate } from "../../buildspec/types";
+import { StepListEditor } from "./StepListEditor";
+import { PolymorphicListEditor } from "./PolymorphicListEditor";
+import { PARAM_SPEC_TYPES } from "./registries";
 
 type StepTemplateEditorPanelProps = {
   template: StepTemplate;
@@ -20,38 +23,17 @@ export function StepTemplateEditorPanel({ template, onChange }: StepTemplateEdit
           onChange={(e) => update({ name: e.target.value })}
         />
       </BeanFormGroup>
-      <BeanFormGroup property="steps" label="Steps (YAML)" description="Edit template steps as YAML documents separated by ---">
-        <textarea
-          className="form-control font-size-sm"
-          rows={12}
-          value={stepsToText(template.steps ?? [])}
-          onChange={(e) => update({ steps: parseStepsText(e.target.value) })}
+      <BeanFormGroup property="paramSpecs" label="Parameter Specs">
+        <PolymorphicListEditor
+          label="Parameter Spec"
+          types={PARAM_SPEC_TYPES}
+          items={(template.paramSpecs ?? []) as Record<string, unknown>[]}
+          onChange={(paramSpecs) => update({ paramSpecs })}
         />
+      </BeanFormGroup>
+      <BeanFormGroup property="steps" label="Steps">
+        <StepListEditor steps={template.steps ?? []} onChange={(steps) => update({ steps })} />
       </BeanFormGroup>
     </BeanEditor>
   );
-}
-
-function stepsToText(steps: StepTemplate["steps"]): string {
-  if (!steps?.length) {
-    return "";
-  }
-  return steps.map((s) => JSON.stringify(s, null, 2)).join("\n---\n");
-}
-
-function parseStepsText(text: string): StepTemplate["steps"] {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return [];
-  }
-  const chunks = trimmed.split(/\n---\n/);
-  const steps: NonNullable<StepTemplate["steps"]> = [];
-  for (const chunk of chunks) {
-    try {
-      steps.push(JSON.parse(chunk) as NonNullable<StepTemplate["steps"]>[number]);
-    } catch {
-      // skip invalid chunk
-    }
-  }
-  return steps;
 }

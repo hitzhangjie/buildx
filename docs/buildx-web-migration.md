@@ -12,6 +12,7 @@ buildx-web 的目标是完整移植 OneDev 前端体验：每一页对照 `{Name
 |------|------|
 | [pull-request-migration.md](pull-request-migration.md) | Pull Request（Wave 4） |
 | [code-compare-migration.md](code-compare-migration.md) | Code Compare（Wave 2，PR Changes 内联 diff） |
+| [buildspec-editor-migration.md](buildspec-editor-migration.md) | Buildspec 编辑器（Wave 2，`.onedev-buildspec.yml`） |
 | [buildx-web-migration.md § Wave 3 续做指南](buildx-web-migration.md#wave-3-续做指南issue--看板--迭代) | Issue / 看板 / 迭代 |
 
 OneDev 路由来源：`references/onedev/server-core/.../web/mapper/BaseUrlMapper.java`  
@@ -119,7 +120,7 @@ OneDev 页面总数：**223** 个 `*Page.java`（含抽象模板基类若干）
 | 路由 | OneDev 页面 | 参考路径 | API | 状态 |
 |------|-------------|----------|-----|------|
 | `/:project` | ProjectDashboardPage | `web/page/project/dashboard/ProjectDashboardPage` | stub | [x] redirect to `~files` |
-| `/:project/~files` | ProjectBlobPage | `web/page/project/blob/ProjectBlobPage` | stub | [~] 目录/文件浏览 + 打开文件后 edit/delete/download |
+| `/:project/~files` | ProjectBlobPage | `web/page/project/blob/ProjectBlobPage` + `.../render/renderers/buildspec/` | partial | [~] 目录/文件 browse + edit/delete/download；`.onedev-buildspec.yml` 双模式编辑器 ~70% — [buildspec-editor-migration.md](buildspec-editor-migration.md) |
 | `/:project/~commits` | ProjectCommitsPage | `web/page/project/commits/ProjectCommitsPage` | stub | [x] |
 | `/:project/~commits/:commit` | CommitDetailPage | `web/page/project/commits/CommitDetailPage` | stub | [x] |
 | `/:project/~compare` | RevisionComparePage | `web/page/project/compare/RevisionComparePage` | partial | [~] 见 [code-compare-migration.md](code-compare-migration.md) — live compare/patch API；UI ~60% |
@@ -132,6 +133,28 @@ OneDev 页面总数：**223** 个 `*Page.java`（含抽象模板基类若干）
 | `/:project/~stats/buildmetric` | BuildMetricStatsPage | `web/page/project/stats/buildmetric/BuildMetricStatsPage` | stub | [x] |
 | `/:project/~children` | ProjectChildrenPage | `web/page/project/children/ProjectChildrenPage` | stub | [x] |
 | `/:project/~no-storage` | NoProjectStoragePage | `web/page/project/NoProjectStoragePage` | stub | [x] |
+
+### Wave 2 续做指南（Buildspec 编辑器）
+
+> **最后更新**：2026-06-26。完整任务书：[buildspec-editor-migration.md](buildspec-editor-migration.md)
+
+#### 已实现一览
+
+**buildx-web**：`ProjectBlobPage` CI/CD 引导；`BuildSpecBlobViewPanel` / `BuildSpecBlobEditPanel`（Edit \| YAML \| Changes \| Save）；Visual 五 Tab（Jobs / Services / Step Templates / Properties / Imports）；Job BeanEditor、Pipeline DAG、拖拽排序、步骤/Property/Import 编辑器；YAML ↔ visual 同步；`?position=buildspec-jobs/CI`；vitest（`src/buildspec/buildspec.test.ts`）。
+
+**buildx-server**：`POST /~api/buildspec/validate`（`internal/server/api/buildspec.go`）。
+
+#### 剩余（待后续对齐）
+
+| 优先级 | 任务 | OneDev 参考 |
+|--------|------|-------------|
+| P1 | Bean 校验错误 → 字段路径导航 | `BuildSpecEditPanel` |
+| P1 | 逐步骤类型完整嵌套 BeanEditor（部分 step 仍为 JSON modal） | `web/component/buildspec/step/` |
+| P2 | Import 元素解析与跨项目链接 | `Import.java`, `BuildSpec.getJobMap()` |
+| P2 | 插件 Job 建议（Maven/Gradle/Node…）— UI stub 已有 | buildspec 插件 + repo 分析 |
+| P2 | 查看模式 Run Job 按钮 | `BuildSpecBlobViewPanel`, `JobRunSelector` |
+| P3 | BuildSpecRenderer / PlainTabHead 边角 | `BuildSpecRenderer.java` |
+| — | 截图 DoD 验收 | 对照 Wicket HTML/CSS |
 
 ---
 
@@ -343,7 +366,8 @@ Wave 3 所有页面当前 **复刻 = `~` 或 `—`**，无一通过截图 DoD。
 | POST | `/~api/builds/{id}/description` | ✅ live | 鉴权：root / submitter / project admin |
 | DELETE | `/~api/builds/{id}` | ✅ live | 鉴权：root / submitter / project admin |
 | — | `/~api/builds/log/{id}` | ❌ 未实现 | BuildLogResource — 需要 CI 引擎写入日志文件 |
-| — | BuildSpec REST / YAML | ❌ 未实现 | `.onedev-buildspec.yml` 解析、验证、存储 |
+| POST | `/~api/buildspec/validate` | ✅ live | YAML 解析 + schema 校验（存储仍走 Repository files API） |
+| — | BuildSpec import 解析 / JobRun | ❌ 未实现 | 跨项目 import merge、手动触发 job |
 | — | Job 管理 (submit/cancel/rerun) | ❌ 未实现 | 需要 CI 引擎 |
 | — | Agent / JobExecutor 管理 | ❌ 未实现 | 需要 CI 引擎 |
 

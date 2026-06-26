@@ -1,18 +1,38 @@
 import { BeanEditor } from "../onedev/BeanEditor";
 import { BeanFormGroup } from "../onedev/BeanFormGroup";
-import type { Job } from "../../buildspec/types";
+import { Select2MultiChoice } from "../onedev/Select2MultiChoice";
+import type { BuildSpec, Job } from "../../buildspec/types";
+import { StepListEditor } from "./StepListEditor";
+import { PolymorphicListEditor } from "./PolymorphicListEditor";
+import {
+  JOB_DEPENDENCY_FIELDS,
+  PARAM_SPEC_TYPES,
+  POST_BUILD_ACTION_TYPES,
+  PROJECT_DEPENDENCY_FIELDS,
+  TRIGGER_TYPES,
+} from "./registries";
 
 type JobEditorPanelProps = {
   job: Job;
+  buildSpec: BuildSpec;
   onChange: (job: Job) => void;
+  fieldErrors?: Record<string, string>;
 };
 
-export function JobEditorPanel({ job, onChange }: JobEditorPanelProps) {
+const RETRY_CONDITIONS = ["never", "always", "for-all-errors", "for-temporary-error"];
+
+export function JobEditorPanel({ job, buildSpec, onChange, fieldErrors }: JobEditorPanelProps) {
   const update = (patch: Partial<Job>) => onChange({ ...job, ...patch });
+
+  const serviceChoices = (buildSpec.services ?? [])
+    .map((s) => s.name)
+    .filter((n): n is string => Boolean(n));
+
+  const showRetryFields = job.retryCondition && job.retryCondition !== "never";
 
   return (
     <BeanEditor>
-      <BeanFormGroup property="name" label="Name" required>
+      <BeanFormGroup property="name" label="Name" required fieldError={fieldErrors?.name}>
         <input
           type="text"
           className="form-control"
@@ -20,24 +40,85 @@ export function JobEditorPanel({ job, onChange }: JobEditorPanelProps) {
           onChange={(e) => update({ name: e.target.value })}
         />
       </BeanFormGroup>
-      <BeanFormGroup property="jobExecutor" label="Job Executor">
+      <BeanFormGroup
+        property="jobExecutor"
+        label="Job Executor"
+        description="Optionally specify executor for this job. Leave empty to use first applicable executor"
+        fieldError={fieldErrors?.jobExecutor}
+      >
         <input
           type="text"
           className="form-control"
           value={job.jobExecutor ?? ""}
           onChange={(e) => update({ jobExecutor: e.target.value })}
-          placeholder="Default"
+          placeholder="First applicable executor"
         />
       </BeanFormGroup>
-      <BeanFormGroup property="timeout" label="Timeout (seconds)">
-        <input
-          type="number"
-          className="form-control"
-          value={job.timeout ?? ""}
-          onChange={(e) => update({ timeout: e.target.value ? Number(e.target.value) : undefined })}
+      <BeanFormGroup
+        property="steps"
+        label="Steps"
+        description="Steps will be executed serially on same node, sharing the same job working directory"
+        fieldError={fieldErrors?.steps}
+      >
+        <StepListEditor
+          steps={job.steps ?? []}
+          onChange={(steps) => update({ steps })}
         />
       </BeanFormGroup>
-      <BeanFormGroup property="sequentialGroup" label="Sequential Group">
+      <BeanFormGroup property="paramSpecs" label="Parameter Specs" fieldError={fieldErrors?.paramSpecs}>
+        <PolymorphicListEditor
+          label="Parameter Spec"
+          types={PARAM_SPEC_TYPES}
+          items={(job.paramSpecs ?? []) as Record<string, unknown>[]}
+          onChange={(paramSpecs) => update({ paramSpecs })}
+        />
+      </BeanFormGroup>
+      <BeanFormGroup property="triggers" label="Triggers" fieldError={fieldErrors?.triggers}>
+        <PolymorphicListEditor
+          label="Trigger"
+          types={TRIGGER_TYPES}
+          items={(job.triggers ?? []) as Record<string, unknown>[]}
+          onChange={(triggers) => update({ triggers })}
+        />
+      </BeanFormGroup>
+      <BeanFormGroup property="jobDependencies" label="Job Dependencies" fieldError={fieldErrors?.jobDependencies}>
+        <PolymorphicListEditor
+          label="Job Dependency"
+          types={[]}
+          fixedFields={JOB_DEPENDENCY_FIELDS}
+          items={(job.jobDependencies ?? []) as Record<string, unknown>[]}
+          onChange={(jobDependencies) => update({ jobDependencies: jobDependencies as Job["jobDependencies"] })}
+        />
+      </BeanFormGroup>
+      <BeanFormGroup
+        property="projectDependencies"
+        label="Project Dependencies"
+        fieldError={fieldErrors?.projectDependencies}
+      >
+        <PolymorphicListEditor
+          label="Project Dependency"
+          types={[]}
+          fixedFields={PROJECT_DEPENDENCY_FIELDS}
+          items={(job.projectDependencies ?? []) as Record<string, unknown>[]}
+          onChange={(projectDependencies) =>
+            update({ projectDependencies: projectDependencies as Job["projectDependencies"] })
+          }
+        />
+      </BeanFormGroup>
+      <BeanFormGroup
+        property="requiredServices"
+        label="Required Services"
+        description="Optionally specify services required by this job"
+        fieldError={fieldErrors?.requiredServices}
+      >
+        <Select2MultiChoice
+          choices={serviceChoices}
+          values={job.requiredServices ?? []}
+          onChange={(requiredServices) => update({ requiredServices })}
+          placeholder="No required services"
+        />
+      </BeanFormGroup>
+      <BeanFormGroup property="sequentialGroup" label="Sequential Group" fieldError={fieldErrors?.sequentialGroup}>
         <input
           type="text"
           className="form-control"
@@ -45,85 +126,57 @@ export function JobEditorPanel({ job, onChange }: JobEditorPanelProps) {
           onChange={(e) => update({ sequentialGroup: e.target.value })}
         />
       </BeanFormGroup>
-      <BeanFormGroup property="retryCondition" label="Retry Condition">
-        <input
-          type="text"
-          className="form-control"
-          value={job.retryCondition ?? ""}
+      <BeanFormGroup property="retryCondition" label="Retry Condition" fieldError={fieldErrors?.retryCondition}>
+        <select
+          className="form-control custom-select"
+          value={job.retryCondition ?? "never"}
           onChange={(e) => update({ retryCondition: e.target.value })}
-        />
+        >
+          {RETRY_CONDITIONS.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
       </BeanFormGroup>
-      <BeanFormGroup property="maxRetries" label="Max Retries">
+      {showRetryFields ? (
+        <>
+          <BeanFormGroup property="maxRetries" label="Max Retries" fieldError={fieldErrors?.maxRetries}>
+            <input
+              type="number"
+              className="form-control"
+              min={1}
+              value={job.maxRetries ?? 3}
+              onChange={(e) => update({ maxRetries: Number(e.target.value) })}
+            />
+          </BeanFormGroup>
+          <BeanFormGroup property="retryDelay" label="Retry Delay (seconds)" fieldError={fieldErrors?.retryDelay}>
+            <input
+              type="number"
+              className="form-control"
+              min={1}
+              value={job.retryDelay ?? 30}
+              onChange={(e) => update({ retryDelay: Number(e.target.value) })}
+            />
+          </BeanFormGroup>
+        </>
+      ) : null}
+      <BeanFormGroup property="timeout" label="Timeout (seconds)" fieldError={fieldErrors?.timeout}>
         <input
           type="number"
           className="form-control"
-          value={job.maxRetries ?? ""}
-          onChange={(e) => update({ maxRetries: e.target.value ? Number(e.target.value) : undefined })}
+          value={job.timeout ?? 14400}
+          onChange={(e) => update({ timeout: e.target.value ? Number(e.target.value) : undefined })}
         />
       </BeanFormGroup>
-      <BeanFormGroup property="retryDelay" label="Retry Delay (seconds)">
-        <input
-          type="number"
-          className="form-control"
-          value={job.retryDelay ?? ""}
-          onChange={(e) => update({ retryDelay: e.target.value ? Number(e.target.value) : undefined })}
-        />
-      </BeanFormGroup>
-      <BeanFormGroup
-        property="requiredServices"
-        label="Required Services"
-        description="Comma-separated service names"
-      >
-        <input
-          type="text"
-          className="form-control"
-          value={(job.requiredServices ?? []).join(", ")}
-          onChange={(e) =>
-            update({
-              requiredServices: e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            })
-          }
-        />
-      </BeanFormGroup>
-      <BeanFormGroup property="steps" label="Steps (YAML)" description="Edit job steps as YAML array">
-        <textarea
-          className="form-control font-size-sm"
-          rows={12}
-          value={stepsToYaml(job.steps ?? [])}
-          onChange={(e) => update({ steps: parseStepsYaml(e.target.value) })}
+      <BeanFormGroup property="postBuildActions" label="Post Build Actions" fieldError={fieldErrors?.postBuildActions}>
+        <PolymorphicListEditor
+          label="Post Build Action"
+          types={POST_BUILD_ACTION_TYPES}
+          items={(job.postBuildActions ?? []) as Record<string, unknown>[]}
+          onChange={(postBuildActions) => update({ postBuildActions })}
         />
       </BeanFormGroup>
     </BeanEditor>
   );
-}
-
-function stepsToYaml(steps: Job["steps"]): string {
-  if (!steps?.length) {
-    return "";
-  }
-  try {
-    return steps.map((s) => JSON.stringify(s, null, 2)).join("\n---\n");
-  } catch {
-    return "";
-  }
-}
-
-function parseStepsYaml(text: string): Job["steps"] {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return [];
-  }
-  const chunks = trimmed.split(/\n---\n/);
-  const steps: NonNullable<Job["steps"]> = [];
-  for (const chunk of chunks) {
-    try {
-      steps.push(JSON.parse(chunk) as NonNullable<Job["steps"]>[number]);
-    } catch {
-      // skip invalid chunk
-    }
-  }
-  return steps;
 }

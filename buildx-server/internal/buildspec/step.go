@@ -18,8 +18,9 @@ const (
 	StepTypePublishReport     StepType = "publish-report"
 	StepTypeCreateBranch      StepType = "create-branch"
 	StepTypeCreateTag         StepType = "create-tag"
-	StepTypeSetBuildVersion   StepType = "set-build-version"
-	StepTypeCreatePullRequest StepType = "create-pull-request"
+	StepTypeSetBuildVersion      StepType = "set-build-version"
+	StepTypeSetBuildDescription  StepType = "set-build-description"
+	StepTypeCreatePullRequest    StepType = "create-pull-request"
 	StepTypeBuildImage        StepType = "build-image"
 	StepTypePushImage         StepType = "push-image"
 	StepTypeRunContainer      StepType = "run-container"
@@ -118,6 +119,8 @@ func decodeStep(node *yaml.Node) (Step, error) {
 		step = &CreateTagStep{}
 	case StepTypeSetBuildVersion:
 		step = &SetBuildVersionStep{}
+	case StepTypeSetBuildDescription:
+		step = &SetBuildDescriptionStep{}
 	case StepTypeCreatePullRequest:
 		step = &CreatePullRequestStep{}
 	case StepTypeBuildImage:
@@ -265,6 +268,18 @@ type SetBuildVersionStep struct {
 }
 
 func (s *SetBuildVersionStep) StepType() StepType { return StepTypeSetBuildVersion }
+
+// ---------------------------------------------------------------------------
+// SetBuildDescriptionStep
+// ---------------------------------------------------------------------------
+
+// SetBuildDescriptionStep sets the build description (maps to SetBuildDescriptionStep.java).
+type SetBuildDescriptionStep struct {
+	StepBase         `yaml:",inline"`
+	BuildDescription string `yaml:"buildDescription" json:"buildDescription"`
+}
+
+func (s *SetBuildDescriptionStep) StepType() StepType { return StepTypeSetBuildDescription }
 
 // ---------------------------------------------------------------------------
 // CreatePullRequestStep

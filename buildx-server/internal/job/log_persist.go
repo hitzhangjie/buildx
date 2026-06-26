@@ -4,10 +4,51 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 )
+
+func (s *Service) attachLogBuffer(buildID int64, logger *executor.BuildLogger) *LogBuffer {
+	if logger == nil {
+		return nil
+	}
+	lb := NewLogBuffer(buildID, 10000)
+	s.mu.Lock()
+	if s.logBuffers == nil {
+		s.logBuffers = make(map[int64]*LogBuffer)
+	}
+	s.logBuffers[buildID] = lb
+	s.mu.Unlock()
+
+	ch := logger.Subscribe()
+	go func() {
+		defer logger.Unsubscribe(ch)
+		for entry := range ch {
+			lb.Append(LogEntry{
+				BuildID:   buildID,
+				Timestamp: entry.Timestamp,
+				Level:     entry.Level,
+				Message:   MaskSecrets(entry.Message),
+				StepName:  entry.StepName,
+			})
+		}
+	}()
+	return lb
+}
+
+func logTextFromLogger(logger *executor.BuildLogger) string {
+	if logger == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range logger.Entries() {
+		b.WriteString(e.Message)
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
 
 type logPersistWriter struct {
 	path string
@@ -25,7 +66,7 @@ func (s *Service) attachLogPersistence(buildID int64, logger *executor.BuildLogg
 	go func() {
 		defer logger.Unsubscribe(ch)
 		for entry := range ch {
-			w.appendLine(fmt.Sprintf("[%s] %s: %s", entry.Timestamp.Format("2006-01-02T15:04:05Z"), entry.Level, entry.Message))
+			w.appendLine(fmt.Sprintf("[%s] %s: %s", entry.Timestamp.Format("2006-01-02T15:04:05Z"), entry.Level, MaskSecrets(entry.Message)))
 		}
 	}()
 }

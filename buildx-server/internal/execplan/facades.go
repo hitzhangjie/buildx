@@ -87,3 +87,16 @@ type PushImageFacade struct {
 
 func (*PushImageFacade) isFacade()     {}
 func (*PushImageFacade) isLeafFacade() {}
+
+// ServiceFacade starts a sidecar service container for the job (docker/k8s executors).
+type ServiceFacade struct {
+	Name         string
+	Image        string
+	Command      string
+	EnvVars      map[string]string
+	Ports        []int
+	ReadyCommand string
+}
+
+func (*ServiceFacade) isFacade()     {}
+func (*ServiceFacade) isLeafFacade() {}

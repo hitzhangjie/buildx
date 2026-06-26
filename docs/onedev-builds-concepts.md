@@ -273,5 +273,6 @@ jobs:
 - [onedev-builds-execution.md](onedev-builds-execution.md) — 谁执行 buildspec、Executor / Agent 架构、BuildX 迁移进度
 - [ARCHITECTURE.md](ARCHITECTURE.md) — BuildX 模块映射（`buildspec`、`build`、`job`）
 - [ROADMAP.md](ROADMAP.md) — CI/Build 模块迁移阶段
-- [buildx-web-migration.md](buildx-web-migration.md) — buildspec 编辑器页面迁移
+- [buildspec-editor-migration.md](buildspec-editor-migration.md) — buildspec 编辑器迁移进度与待办
+- [buildx-web-migration.md](buildx-web-migration.md) — buildspec 编辑器页面迁移（Wave 2）
 - OneDev 官方：[CI/CD 概念](https://docs.onedev.io/concepts)、[Job secrets 教程](https://docs.onedev.io/tutorials/cicd/job-secrets)

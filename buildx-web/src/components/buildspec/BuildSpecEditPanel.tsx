@@ -105,6 +105,7 @@ export function BuildSpecEditPanel({
   if (activeTab === "jobs") {
     tabContent = (
       <JobsEditorPanel
+        spec={spec}
         jobs={jobs}
         activeIndex={jobsActiveIndex}
         onActiveIndexChange={handleJobsActiveChange}

@@ -78,6 +78,13 @@ func (m *memBuildStore) UpdateVersion(_ context.Context, id int64, version strin
 	return nil
 }
 
+func (m *memBuildStore) UpdateDescription(_ context.Context, id int64, description string) error {
+	if b := m.builds[id]; b != nil {
+		b.Description = description
+	}
+	return nil
+}
+
 func (m *memBuildStore) ResetForResubmit(_ context.Context, id int64, token, reason string, submitterID int64) error {
 	b := m.builds[id]
 	if b == nil {

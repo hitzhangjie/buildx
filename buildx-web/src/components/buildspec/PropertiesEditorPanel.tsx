@@ -1,3 +1,4 @@
+import { useSortableList } from "../../hooks/useSortableList";
 import { Icon } from "../onedev/Icon";
 import type { JobProperty } from "../../buildspec/types";
 
@@ -7,6 +8,15 @@ type PropertiesEditorPanelProps = {
 };
 
 export function PropertiesEditorPanel({ properties, onChange }: PropertiesEditorPanelProps) {
+  const { itemProps } = useSortableList({
+    onReorder: (from, to) => {
+      const next = [...properties];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      onChange(next);
+    },
+  });
+
   const updateRow = (index: number, patch: Partial<JobProperty>) => {
     const next = [...properties];
     next[index] = { ...next[index], ...patch };
@@ -23,14 +33,18 @@ export function PropertiesEditorPanel({ properties, onChange }: PropertiesEditor
         <table className="table">
           <thead>
             <tr>
+              <th className="minimum actions" />
               <th>Name</th>
               <th>Value</th>
-              <th />
+              <th className="minimum actions" />
             </tr>
           </thead>
           <tbody>
             {properties.map((prop, index) => (
-              <tr key={index}>
+              <tr key={index} {...itemProps(index)}>
+                <td className="minimum actions">
+                  <Icon name="grip" className="icon drag-indicator" />
+                </td>
                 <td>
                   <input
                     type="text"
@@ -47,7 +61,7 @@ export function PropertiesEditorPanel({ properties, onChange }: PropertiesEditor
                     onChange={(e) => updateRow(index, { value: e.target.value })}
                   />
                 </td>
-                <td className="text-nowrap">
+                <td className="text-nowrap minimum actions">
                   <a
                     href="#"
                     className="btn btn-light btn-xs btn-icon btn-hover-danger text-muted"
@@ -65,6 +79,7 @@ export function PropertiesEditorPanel({ properties, onChange }: PropertiesEditor
           </tbody>
         </table>
       </div>
+      {properties.length === 0 ? <div className="text-muted font-size-sm mb-2">Unspecified</div> : null}
       <a
         href="#"
         className="add btn btn-light btn-hover-primary btn-block mt-3"

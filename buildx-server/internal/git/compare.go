@@ -346,6 +346,12 @@ func matchesPathFilter(path string, patterns []string) bool {
 		if ok {
 			return true
 		}
+		if strings.HasSuffix(p, "/*") {
+			prefix := strings.TrimSuffix(p, "/*")
+			if strings.HasPrefix(path, prefix+"/") || path == prefix {
+				return true
+			}
+		}
 		if strings.Contains(path, p) {
 			return true
 		}

@@ -5,6 +5,7 @@ import { BUILD_SPEC_PATH } from "../../buildspec/path";
 import { buildSpecPosition, parseBuildSpecSelection } from "../../buildspec/position";
 import { parseBuildSpecYaml, serializeBuildSpecYaml } from "../../buildspec/yaml";
 import type { BuildSpec } from "../../buildspec/types";
+import { validateBuildSpecYaml } from "../../api/buildspec";
 import { BuildSpecEditPanel, BuildSpecUnparseablePanel } from "./BuildSpecEditPanel";
 import { CommitOptionPanel } from "../../pages/project/blob/CommitOptionPanel";
 import "../../pages/project/blob/BlobAddEditPanel.css";
@@ -109,6 +110,7 @@ export function BuildSpecBlobEditPanel({
   const [parseError, setParseError] = useState<string | null>(
     "error" in initialParse ? initialParse.error : null,
   );
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const selection = parseBuildSpecSelection(position);
   const fileName = filePath.split("/").pop() || BUILD_SPEC_PATH;
@@ -157,7 +159,7 @@ export function BuildSpecBlobEditPanel({
     setActiveTab(tab);
   };
 
-  const handleCommit = (commitMessage: string) => {
+  const handleCommit = async (commitMessage: string) => {
     let content = yamlContent;
     if (lastEditedMode === "visual" && spec && !parseError) {
       content = serializeBuildSpecYaml(spec);
@@ -170,6 +172,14 @@ export function BuildSpecBlobEditPanel({
       }
       content = yamlContent;
     }
+
+    const validation = await validateBuildSpecYaml(content);
+    if (!validation.valid && validation.errors?.length) {
+      setValidationError(validation.errors.join("\n"));
+      setActiveTab("save");
+      return;
+    }
+    setValidationError(null);
     onCommit(commitMessage, content);
   };
 
@@ -302,10 +312,15 @@ export function BuildSpecBlobEditPanel({
         </div>
 
         <div className={activeTab === "save" ? "commit-options flex-grow-1 d-flex flex-column autofit" : "d-none"}>
+          {validationError ? (
+            <div className="alert alert-light-danger mx-3 mt-3 mb-0">
+              <pre className="mb-0 font-size-sm">{validationError}</pre>
+            </div>
+          ) : null}
           <CommitOptionPanel
             fileName={fileName}
             action={mode}
-            onCommit={handleCommit}
+            onCommit={(msg) => void handleCommit(msg)}
             onCancel={onCancel}
           />
         </div>

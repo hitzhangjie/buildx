@@ -34,6 +34,7 @@ import { MarkdownContent } from "../components/onedev/MarkdownContent";
 import { useAuth } from "../context/AuthContext";
 import { BlobAddEditPanel } from "./project/blob/BlobAddEditPanel";
 import { BuildSpecBlobEditPanel } from "../components/buildspec/BuildSpecBlobEditPanel";
+import { BuildSpecBlobViewPanel } from "../components/buildspec/BuildSpecBlobViewPanel";
 import { isBuildSpecPath, BUILD_SPEC_PATH, LEGACY_BUILD_SPEC_PATH } from "../buildspec/path";
 import { NoNameEditPanel } from "./project/blob/NoNameEditPanel";
 import { CommitOptionPanel } from "./project/blob/CommitOptionPanel";
@@ -406,6 +407,7 @@ function FileView({
   const markPosition = parseSourcePosition(position);
   const loginHref = `/~login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
   const isMarkdown = isMarkdownFile(path);
+  const isBuildSpec = isBuildSpecPath(path);
   const fileName = path.split("/").pop() ?? path;
   const downloadUrl = blobDownloadUrl(projectPath, revision, path);
   const editTitle = revision ? `Edit on branch ${revision}` : "Edit file";
@@ -778,6 +780,13 @@ function FileView({
           <div className="p-4">
             <MarkdownContent content={blob.content ?? ""} />
           </div>
+        ) : isBuildSpec ? (
+          <BuildSpecBlobViewPanel
+            filePath={path}
+            content={blob.content ?? ""}
+            position={position}
+            onPositionChange={onPositionChange}
+          />
         ) : (
           <SourceView
             filePath={path}

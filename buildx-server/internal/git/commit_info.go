@@ -42,13 +42,27 @@ type Contributor struct {
 //
 // The returned map uses epoch-day integers as keys (matching OneDev's
 // representation). Epoch day = commit timestamp Unix / 86400.
-func (r *Repository) GetOverallContributions(revision string) (map[int]*Contribution, error) {
+func (r *Repository) resolveRevisionOrEmpty(revision string) (*plumbing.Hash, error) {
 	if revision == "" {
 		revision = r.DefaultRevision()
 	}
 	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
 	if err != nil {
+		if !r.revisionExists(revision) {
+			return nil, nil
+		}
 		return nil, err
+	}
+	return hash, nil
+}
+
+func (r *Repository) GetOverallContributions(revision string) (map[int]*Contribution, error) {
+	hash, err := r.resolveRevisionOrEmpty(revision)
+	if err != nil {
+		return nil, err
+	}
+	if hash == nil {
+		return map[int]*Contribution{}, nil
 	}
 
 	iter, err := r.inner.Log(&gogit.LogOptions{From: *hash, Order: gogit.LogOrderCommitterTime})
@@ -98,12 +112,12 @@ func (r *Repository) GetOverallContributions(revision string) (map[int]*Contribu
 // Languages are detected by file extension. Only the top languages are
 // typically charted on the frontend.
 func (r *Repository) GetLineIncrements(revision string) (map[int]map[string]int, error) {
-	if revision == "" {
-		revision = r.DefaultRevision()
-	}
-	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	hash, err := r.resolveRevisionOrEmpty(revision)
 	if err != nil {
 		return nil, err
+	}
+	if hash == nil {
+		return map[int]map[string]int{}, nil
 	}
 
 	// Collect all commits in chronological order.
@@ -161,12 +175,12 @@ func (r *Repository) GetLineIncrements(revision string) (map[int]map[string]int,
 // contribution type within the given date range. fromDay and toDay are
 // inclusive epoch-day values.
 func (r *Repository) GetTopContributors(revision string, top int, contribType string, fromDay, toDay int) ([]*Contributor, error) {
-	if revision == "" {
-		revision = r.DefaultRevision()
-	}
-	hash, err := r.inner.ResolveRevision(plumbing.Revision(revision))
+	hash, err := r.resolveRevisionOrEmpty(revision)
 	if err != nil {
 		return nil, err
+	}
+	if hash == nil {
+		return []*Contributor{}, nil
 	}
 
 	iter, err := r.inner.Log(&gogit.LogOptions{From: *hash, Order: gogit.LogOrderCommitterTime})

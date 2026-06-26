@@ -84,5 +84,20 @@ func (e *RemoteShellExecutor) ExecutePlan(ctx context.Context, jobCtx *JobContex
 	if jobCtx.AgentID == 0 {
 		return nil, fmt.Errorf("remote-shell executor: no agent assigned")
 	}
+	if plan != nil && planHasServices(plan) {
+		return nil, fmt.Errorf("remote-shell executor: jobs requiring services need a docker-aware executor")
+	}
 	return e.agentDialer.ExecuteOnAgent(ctx, jobCtx.AgentID, jobCtx, plan, logger)
+}
+
+func planHasServices(plan *execplan.Plan) bool {
+	if plan == nil || plan.Root == nil {
+		return false
+	}
+	for _, action := range plan.Root.Actions {
+		if _, ok := action.Facade.(*execplan.ServiceFacade); ok {
+			return true
+		}
+	}
+	return false
 }

@@ -93,6 +93,7 @@ func (s *Server) routes() chi.Router {
 	workspacesStore := workspace.NewDBStore(s.store.DB())
 	workspacesHandler := &api.WorkspacesHandler{Workspaces: workspacesStore, Projects: projects, Security: sec}
 	codeStatsHandler := &api.CodeStatsHandler{Projects: projects, Security: sec}
+	buildSpecHandler := &api.BuildSpecHandler{}
 
 	// CI engine
 	ci := s.wireCI(projects, buildsStore)
@@ -127,6 +128,8 @@ func (s *Server) routes() chi.Router {
 	r.Post("/~api/v1/logout", authHandler.Logout)
 
 	r.Route("/~api", func(r chi.Router) {
+		r.Post("/buildspec/validate", buildSpecHandler.Validate)
+
 		r.Get("/roles", rolesHandler.List)
 
 		r.Get("/users", userHandler.List)

@@ -1,6 +1,7 @@
-.PHONY: build install run test lint clean format dev docker web sync-web
+.PHONY: build install run test lint clean format dev docker web sync-web build-agent
 
 BINARY := buildx-server
+AGENT_BINARY := buildx-agent
 MODULE := github.com/hitzhangjie/buildx/buildx-server
 VERSION ?= dev
 BUILD_MODE ?= DEBUG
@@ -27,6 +28,10 @@ ifneq ($(SKIP_WEB),1)
 	$(MAKE) web
 endif
 	go build -mod=vendor -ldflags "$(LDFLAGS)" -o bin/$(BINARY) .
+	$(MAKE) build-agent
+
+build-agent:
+	go build -mod=vendor -ldflags "$(LDFLAGS)" -o bin/$(AGENT_BINARY) ./cmd/buildx-agent
 
 install:
 ifneq ($(SKIP_WEB),1)

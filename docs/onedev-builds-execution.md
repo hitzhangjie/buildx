@@ -264,12 +264,14 @@ OneDev 支持多 server 集群（Hazelcast）：
 | Step → Action / ServerStep | `internal/execplan/` + `executor/` | Command/Checkout/SetupCache/RunContainer/BuildImage/PullImage/PushImage/ServerSide facades |
 | Cache / Artifacts | `internal/cache/` + `internal/artifact/` | cache tar + publish/copy + `GET .../artifacts` 列表/下载 |
 | 触发器 | `internal/job/triggers.go` + `schedule.go` | Branch/PR + branchSchedules 缓存 + 分钟 tick |
-| Agent / Worker API | `internal/agent/` + `internal/worker/` | WebSocket `executePlan`；`/~api/worker/*` JSON API |
+| Agent / Worker API | `internal/agent/` + `internal/worker/` + `cmd/buildx-agent` | WebSocket `executePlan`；agent 本地执行 plan；`/~api/worker/*` |
+| ResourceService | `internal/resource/` | Agent 查询、并发槽、pause 过滤 |
+| K8s / remote-docker | `internal/executor/kubernetes.go`, `remotedocker.go` | 骨架（kubeconfig / agent 分配） |
 | 集群 / active server 路由 | — | **未开始** |
 
-完整 parity 还需：BuildX agent 二进制（消费 worker API）、ResourceService 式 Agent 调度与并发槽、K8s executor、Java 二进制 Worker 协议兼容、完整 retryCondition 解析、Services sidecar、CreatePullRequest/CreateIssue post-build、日志 DB + secret 掩码、集群 Leader 路由。
+完整 parity 还需：K8s helper 完整 Pod 执行、Java 二进制 Worker 协议兼容、完整 retryCondition 表达式、SendNotification post-build、日志 DB 持久化、集群 Leader 路由、Build 提交幂等锁与崩溃恢复。
 
-**BuildX 估计 parity：~62–68%**（Worker API + Docker + schedule + 更多 server/image steps；Agent 运行时与 K8s/集群仍为缺口）。
+**BuildX 估计 parity：~78–82%**（buildx-agent + ResourceService + services sidecar + 更多 server/post-build/log 能力；K8s 完整执行与集群仍为缺口）。
 
 ---
 

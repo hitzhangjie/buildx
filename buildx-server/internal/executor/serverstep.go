@@ -16,6 +16,12 @@ type ProjectPathResolver interface {
 // BuildVersionUpdater updates build metadata from server steps.
 type BuildVersionUpdater interface {
 	UpdateVersion(ctx context.Context, buildID int64, version string) error
+	UpdateDescription(ctx context.Context, buildID int64, description string) error
+}
+
+// PullRequestCreator opens pull requests from server steps.
+type PullRequestCreator interface {
+	CreateFromBuildStep(ctx context.Context, jobCtx *JobContext, targetBranch, title, body string) error
 }
 
 // ArtifactPublisher stores build artifacts from the work directory.
@@ -30,6 +36,7 @@ type DefaultServerStepHandler struct {
 	GitDir          string
 	Projects        ProjectPathResolver
 	ReportStore     ReportPublisher
+	PullRequests    PullRequestCreator
 }
 
 // ReportPublisher stores published test/analysis reports.
@@ -66,6 +73,30 @@ func (h *DefaultServerStepHandler) RunServerStep(ctx context.Context, step build
 			logger.Logf("info", "build version set to %q", s.Version)
 		}
 		return &ServerStepResult{Success: true, Outputs: map[string]string{"version": s.Version}}, nil
+
+	case *buildspec.SetBuildDescriptionStep:
+		if h.BuildStore == nil {
+			return nil, fmt.Errorf("runServerStep: build store not configured")
+		}
+		if err := h.BuildStore.UpdateDescription(ctx, jobCtx.BuildID, s.BuildDescription); err != nil {
+			return &ServerStepResult{Success: false, Message: err.Error()}, nil
+		}
+		if logger != nil {
+			logger.Log("info", "build description updated")
+		}
+		return &ServerStepResult{Success: true}, nil
+
+	case *buildspec.CreatePullRequestStep:
+		if h.PullRequests == nil {
+			return &ServerStepResult{Success: false, Message: "pull request service not configured"}, nil
+		}
+		if err := h.PullRequests.CreateFromBuildStep(ctx, jobCtx, s.TargetBranch, s.PRTitle, s.PRBody); err != nil {
+			return &ServerStepResult{Success: false, Message: err.Error()}, nil
+		}
+		if logger != nil {
+			logger.Logf("info", "pull request created targeting %q", s.TargetBranch)
+		}
+		return &ServerStepResult{Success: true}, nil
 
 	case *buildspec.PublishArtifactStep:
 		if h.ArtifactStore == nil {
@@ -167,10 +198,5 @@ func runServerStepBuiltin(ctx context.Context, step interface{}, jobCtx *JobCont
 	if logger != nil {
 		logger.Logf("info", "running server step: %T", step)
 	}
-	switch step.(type) {
-	case *buildspec.CreatePullRequestStep:
-		return &ServerStepResult{Success: false, Message: "CreatePullRequestStep not yet implemented"}, nil
-	default:
-		return nil, fmt.Errorf("runServerStep: unsupported step type %T", step)
-	}
+	return nil, fmt.Errorf("runServerStep: unsupported step type %T", step)
 }

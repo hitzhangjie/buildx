@@ -61,6 +61,9 @@ func ExecutePlanOnDocker(
 		case *execplan.RunContainerFacade:
 			return runDockerCommand(ctx, jobCtx, workDir, action.Name, f.Image, f.Commands, f.EnvVars, logger)
 
+		case *execplan.ServiceFacade:
+			return runDockerService(ctx, workDir, action.Name, f, logger)
+
 		case *execplan.BuildImageFacade:
 			return runDockerBuild(ctx, workDir, action.Name, f, logger)
 
@@ -187,6 +190,50 @@ func runDockerPush(ctx context.Context, stepName string, f *execplan.PushImageFa
 			logger.Stdout(string(out))
 		}
 		if err != nil {
+			return execplan.LeafResult{
+				StepResultName: stepName,
+				Success:        false,
+				Error:          dockerErr(err, out),
+				DurationMs:     time.Since(start).Milliseconds(),
+			}, nil
+		}
+	}
+	return execplan.LeafResult{StepResultName: stepName, Success: true, DurationMs: time.Since(start).Milliseconds()}, nil
+}
+
+func runDockerService(ctx context.Context, workDir, stepName string, f *execplan.ServiceFacade, logger TaskLogger) (execplan.LeafResult, error) {
+	start := time.Now()
+	if f == nil || f.Image == "" {
+		return execplan.LeafResult{StepResultName: stepName, Success: false, Error: "service image is required"}, nil
+	}
+	args := []string{"run", "-d", "--name", "svc-"+f.Name}
+	for k, v := range f.EnvVars {
+		args = append(args, "-e", k+"="+v)
+	}
+	for _, p := range f.Ports {
+		args = append(args, "-p", fmt.Sprintf("%d:%d", p, p))
+	}
+	args = append(args, f.Image)
+	if f.Command != "" {
+		args = append(args, "/bin/sh", "-ec", f.Command)
+	}
+	if logger != nil {
+		logger.Log("info", "starting service container "+f.Name)
+	}
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return execplan.LeafResult{
+			StepResultName: stepName,
+			Success:        false,
+			Error:          dockerErr(err, out),
+			DurationMs:     time.Since(start).Milliseconds(),
+		}, nil
+	}
+	if f.ReadyCommand != "" {
+		ready := exec.CommandContext(ctx, "/bin/sh", "-ec", f.ReadyCommand)
+		ready.Dir = workDir
+		if out, err := ready.CombinedOutput(); err != nil {
 			return execplan.LeafResult{
 				StepResultName: stepName,
 				Success:        false,

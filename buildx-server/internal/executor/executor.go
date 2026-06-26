@@ -47,6 +47,9 @@ type JobContext struct {
 
 	// RequiresDocker is set when the compiled plan needs a docker-aware executor.
 	RequiresDocker bool
+
+	// CurrentStepPosition is set during plan traversal for worker/server step callbacks.
+	CurrentStepPosition []int
 }
 
 // TaskLogger is the logging interface for job steps.

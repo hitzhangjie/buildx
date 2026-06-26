@@ -144,6 +144,9 @@ func executePlanOnShell(
 			}, nil
 
 		case *execplan.ServerSideFacade:
+			if jobCtx != nil {
+				jobCtx.CurrentStepPosition = append([]int(nil), position...)
+			}
 			res, err := RunServerStep(ctx, f.Step, jobCtx, cfg.WorkDir, logger)
 			if err != nil {
 				return execplan.LeafResult{StepResultName: action.Name, Success: false, Error: err.Error()}, nil

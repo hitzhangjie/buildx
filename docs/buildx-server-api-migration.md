@@ -33,6 +33,7 @@
 | TriggerJobResource | `/trigger-job` | — | |
 | CodeCommentResource | `/code-comments` | partial | CRUD, replies, resolved, project list |
 | RepositoryResource | `/repositories` | partial | branches, commits, compare, blob browse, files POST, raw |
+| — | `/buildspec/validate` | partial | `POST` YAML parse + validate；无 OneDev 同名 Resource；import merge / job run 未实现 — 见 [buildspec-editor-migration.md](buildspec-editor-migration.md) |
 | PackResource | `/packs` | — | |
 | PackBlobResource | `/pack-blobs` | — | |
 | ArtifactResource | `/artifacts` | — | |

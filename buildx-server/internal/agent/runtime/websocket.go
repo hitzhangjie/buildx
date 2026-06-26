@@ -162,6 +162,9 @@ func (ws *AgentWebSocket) handleLog(agentID int64, msg agentMessage) {
 		}
 	}
 	ws.service.logStore.Append(agentID, level, message)
+	if msg.JobToken != "" {
+		ws.service.ForwardBuildLog(msg.JobToken, level, message)
+	}
 }
 
 func (ws *AgentWebSocket) handleJobComplete(msg agentMessage) {

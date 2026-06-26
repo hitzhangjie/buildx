@@ -47,17 +47,22 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 ### Phase 3 — CI/CD
 
 - [x] Buildspec parser (`.onedev-buildspec.yml`, OneDev-compatible) — `internal/buildspec` (steps, templates, triggers; partial)
+- [x] Buildspec validation API — `POST /~api/buildspec/validate`
 - [x] Job scheduler and build queue — `internal/job` WAITING/PENDING polling, dependency gating, retry, resubmit
 - [~] Step → Action IR — `internal/execplan` (+ BuildImage/PullImage/PushImage facades)
-- [~] Server-side steps — PublishArtifact/SetBuildVersion/PublishReport/CreateBranch/CreateTag; CreatePullRequest stub
+- [~] Server-side steps — PublishArtifact/SetBuildVersion/SetBuildDescription/PublishReport/CreateBranch/CreateTag/CreatePullRequest
 - [~] Job cache — `internal/cache` + worker job-cache endpoints
 - [~] Artifacts — publish/copy + `GET /builds/{id}/artifacts` list/download
 - [~] Triggers — Branch/PR + ScheduleTrigger branch cache + minute tick (single-node)
-- [~] Post-build actions — RunJobAction; CreateIssue/SendNotification stub
+- [~] Post-build actions — RunJobAction + CreateIssue (issue store); SendNotification stub
 - [~] Docker executor — `server-docker` via Docker CLI when available
 - [x] Agent WorkerResource API (JSON) + RemoteShell ExecutePlan over WebSocket
+- [x] **buildx-agent** binary — `cmd/buildx-agent` consumes worker API + WebSocket dispatch
+- [x] ResourceService-style allocation — `internal/resource` agent query + concurrency slots
+- [~] K8s / remote-docker executors — skeleton registration (`kubernetes`, `remote-docker`)
+- [~] Services sidecar — `ServiceFacade` compile + docker start (readyCommand)
 - [x] Server shell executor — `internal/executor/servershell` with `ExecutePlan`
-- [~] Build log streaming — in-memory + basic file persistence under data dir
+- [~] Build log streaming — in-memory buffer + file persistence + secret mask; SSE bridge from running builds
 
 **Milestone**: Push code → CI runs → status reported on PR.
 
@@ -88,6 +93,7 @@ Migration progress for **buildx-server** (from OneDev) and **buildx-cli** (from 
 - [x] Migration task list — [buildx-web-migration.md](buildx-web-migration.md) (**223 pages**)
 - [x] Wave 0 scaffolding — router, layouts, mocks, `PageRenderer` placeholders, Playwright smoke
 - [x] All 223 routes reachable (scaffold only; **not** parity)
+- [~] **Buildspec editor** (Project Files `.onedev-buildspec.yml`) — visual + YAML dual mode, Job/Step/Property/Import editors, pipeline DAG; see [buildspec-editor-migration.md](buildspec-editor-migration.md)
 - [ ] **1:1 page port** — each Wicket page → dedicated React component; DOM/class/interaction match; screenshot gate ([buildx-web-design.md](buildx-web-design.md))
 - [ ] Retire `PageRenderer` fallbacks as pages reach `✓`
 - [ ] Complex controls from OneDev assets (CodeMirror, diff, xterm, Kanban, …)

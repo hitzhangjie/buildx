@@ -61,6 +61,10 @@ func (v *versionStore) UpdateVersion(_ context.Context, _ int64, version string)
 	return nil
 }
 
+func (v *versionStore) UpdateDescription(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
 func TestServerStepResult_Basic(t *testing.T) {
 	r := executor.ServerStepResult{
 		Success: true,

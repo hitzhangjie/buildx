@@ -25,10 +25,7 @@ func (s *Service) runPostBuildActions(ctx context.Context, build *model.Build, j
 		case *buildspec.RunJobAction:
 			s.runPostBuildRunJob(ctx, build, a)
 		case *buildspec.CreateIssueAction:
-			if logger := build.Submitter; logger.ID > 0 {
-				_ = logger
-			}
-			// Issue creation requires issue service wiring; logged for future parity.
+			s.runPostBuildCreateIssue(ctx, build, a)
 		case *buildspec.SendNotificationAction:
 			// Notification channel not wired; no-op stub matching OneDev hook point.
 		}

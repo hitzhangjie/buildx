@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ElementNavRow } from "./ElementNavRow";
 import { Icon } from "../onedev/Icon";
 import { namedElementLabel } from "../../buildspec/types";
+import { useSortableList } from "../../hooks/useSortableList";
 
 type NamedElement = { name?: string };
 
@@ -24,6 +25,23 @@ export function ElementsEditorPanel<T extends NamedElement>({
   createElement,
   renderDetail,
 }: ElementsEditorPanelProps<T>) {
+  const { itemProps } = useSortableList({
+    handleSelector: ".drag-indicator",
+    onReorder: (from, to) => {
+      const next = [...elements];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      onElementsChange(next);
+      if (activeIndex === from) {
+        onActiveIndexChange(to);
+      } else if (from < activeIndex && to >= activeIndex) {
+        onActiveIndexChange(activeIndex - 1);
+      } else if (from > activeIndex && to <= activeIndex) {
+        onActiveIndexChange(activeIndex + 1);
+      }
+    },
+  });
+
   const updateElement = (index: number, next: T) => {
     const copy = [...elements];
     copy[index] = next;
@@ -63,14 +81,15 @@ export function ElementsEditorPanel<T extends NamedElement>({
       <div className="side autofit flex-shrink-0 pr-2">
         <div className="navs">
           {elements.map((element, index) => (
-            <ElementNavRow
-              key={index}
-              label={namedElementLabel(element.name)}
-              active={index === activeIndex}
-              onSelect={() => onActiveIndexChange(index)}
-              onCopy={() => copyElement(index)}
-              onDelete={() => deleteElement(index)}
-            />
+            <div key={index} {...itemProps(index)}>
+              <ElementNavRow
+                label={namedElementLabel(element.name)}
+                active={index === activeIndex}
+                onSelect={() => onActiveIndexChange(index)}
+                onCopy={() => copyElement(index)}
+                onDelete={() => deleteElement(index)}
+              />
+            </div>
           ))}
         </div>
         <div className="add btn-group btn-block">
