@@ -78,5 +78,5 @@ func (e *KubernetesExecutor) ExecutePlan(ctx context.Context, jobCtx *JobContext
 }
 
 func (e *KubernetesExecutor) buildWorkDir(jobCtx *JobContext) string {
-	return fmt.Sprintf("%s/%d/%d", e.workDirBase, jobCtx.ProjectID, jobCtx.BuildNumber)
+	return BuildWorkDir(e.workDirBase, jobCtx)
 }

@@ -10,6 +10,29 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/git"
 )
 
+func TestCheckoutCommitShallowNonHeadCommit(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	bare := filepath.Join(dir, "repo.git")
+	workDir := filepath.Join(dir, "work")
+
+	initBareRepo(t, bare)
+	first := seedCommit(t, bare)
+	second := seedCommit(t, bare)
+	if first == second {
+		t.Fatal("expected two distinct commits")
+	}
+
+	err := git.CheckoutCommit(bare, workDir, first, git.CheckoutOptions{CloneDepth: 1})
+	if err != nil {
+		t.Fatalf("shallow checkout older commit: %v", err)
+	}
+	got := strings.TrimSpace(string(runGit(t, workDir, "rev-parse", "HEAD")))
+	if got != first {
+		t.Fatalf("HEAD = %q, want %q", got, first)
+	}
+}
+
 func TestCheckoutCommitStreamsGitOutput(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
@@ -33,18 +56,18 @@ func TestCheckoutCommitStreamsGitOutput(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("expected git command output lines, got %d: %v", len(lines), lines)
 	}
-	if !strings.HasPrefix(lines[0], "+ git clone ") {
-		t.Fatalf("first line = %q, want git clone command", lines[0])
+	if !strings.HasPrefix(lines[0], "+ git init ") {
+		t.Fatalf("first line = %q, want git init command", lines[0])
 	}
-	foundCloneMsg := false
+	foundFetch := false
 	for _, line := range lines {
-		if strings.Contains(line, "Cloning into") {
-			foundCloneMsg = true
+		if strings.Contains(line, "+ git -C") && strings.Contains(line, " fetch ") {
+			foundFetch = true
 			break
 		}
 	}
-	if !foundCloneMsg {
-		t.Fatalf("expected clone progress in log, got: %v", lines)
+	if !foundFetch {
+		t.Fatalf("expected shallow fetch in log, got: %v", lines)
 	}
 }
 
@@ -58,7 +81,8 @@ func seedCommit(t *testing.T, bare string) string {
 	cloneDir := filepath.Join(t.TempDir(), "seed")
 	runGit(t, "", "clone", bare, cloneDir)
 	readme := filepath.Join(cloneDir, "README.md")
-	if err := os.WriteFile(readme, []byte("hello\n"), 0644); err != nil {
+	content := []byte("hello " + cloneDir + "\n")
+	if err := os.WriteFile(readme, content, 0644); err != nil {
 		t.Fatal(err)
 	}
 	runGit(t, cloneDir, "add", "README.md")

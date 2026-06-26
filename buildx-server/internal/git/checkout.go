@@ -35,13 +35,27 @@ func CheckoutCommit(repoPath, workDir, commitHash string, opts CheckoutOptions) 
 	}
 
 	cloneURL := "file://" + filepath.ToSlash(repoPath)
-	cloneArgs := []string{"clone", "--no-checkout"}
 	if opts.CloneDepth > 0 {
-		cloneArgs = append(cloneArgs, "--depth", fmt.Sprintf("%d", opts.CloneDepth))
-	}
-	cloneArgs = append(cloneArgs, cloneURL, workDir)
-	if err := runGitCommand(opts.LogLine, cloneArgs...); err != nil {
-		return fmt.Errorf("git clone: %w", err)
+		// Shallow clone only fetches the default branch tip; fetch the build commit explicitly.
+		if err := runGitCommand(opts.LogLine, "init", workDir); err != nil {
+			return fmt.Errorf("git init: %w", err)
+		}
+		if err := runGitCommand(opts.LogLine, "-C", workDir, "remote", "add", "origin", cloneURL); err != nil {
+			return fmt.Errorf("git remote add: %w", err)
+		}
+		fetchArgs := []string{
+			"-C", workDir, "fetch",
+			"--depth", fmt.Sprintf("%d", opts.CloneDepth),
+			"origin", commitHash,
+		}
+		if err := runGitCommand(opts.LogLine, fetchArgs...); err != nil {
+			return fmt.Errorf("git fetch: %w", err)
+		}
+	} else {
+		cloneArgs := []string{"clone", "--no-checkout", cloneURL, workDir}
+		if err := runGitCommand(opts.LogLine, cloneArgs...); err != nil {
+			return fmt.Errorf("git clone: %w", err)
+		}
 	}
 
 	checkoutArgs := []string{"-C", workDir, "checkout", commitHash}

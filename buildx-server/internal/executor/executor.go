@@ -22,6 +22,8 @@ type JobContext struct {
 	BuildNumber int    `json:"buildNumber"`
 	ProjectID   int64  `json:"projectId"`
 	ProjectPath string `json:"projectPath"`
+	ProjectName string `json:"projectName"`
+	JobID       int    `json:"jobId"`
 	JobName     string `json:"jobName"`
 	JobToken    string `json:"jobToken"`
 	CommitHash  string `json:"commitHash"`

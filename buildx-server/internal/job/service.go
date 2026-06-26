@@ -661,6 +661,10 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 	}
 	if proj, err := s.projects.Get(ctx, build.ProjectID); err == nil && proj != nil {
 		jobCtx.ProjectPath = proj.Path
+		jobCtx.ProjectName = proj.Name
+	}
+	if spec != nil {
+		jobCtx.JobID = spec.JobIndex(build.JobName)
 	}
 	jobCtx.GitDir = s.projects.GitDir(build.ProjectID)
 

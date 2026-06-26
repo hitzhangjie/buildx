@@ -233,7 +233,7 @@ func (e *ServerShellExecutor) runShellCommand(ctx context.Context, jobCtx *JobCo
 
 // buildWorkDir returns the work directory path for a job context.
 func (e *ServerShellExecutor) buildWorkDir(jobCtx *JobContext) string {
-	return filepath.Join(e.workDirBase, fmt.Sprintf("%d", jobCtx.ProjectID), fmt.Sprintf("%d", jobCtx.BuildNumber))
+	return BuildWorkDir(e.workDirBase, jobCtx)
 }
 
 // WorkDirFor returns the job work directory path (public accessor for job service).

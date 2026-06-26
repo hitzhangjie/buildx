@@ -124,27 +124,29 @@ func (a *Agent) runJob(parent context.Context, data jobdata.ShellJobData) {
 	defer cancel()
 
 	worker := NewWorkerClient(a.cfg.ServerURL, data.JobToken)
-	workDir := filepath.Join(a.cfg.WorkBase, fmt.Sprintf("%d", data.ProjectID), fmt.Sprintf("%d", data.BuildNumber))
+	jobCtx := &executor.JobContext{
+		BuildID:     data.BuildID,
+		BuildNumber: data.BuildNumber,
+		ProjectID:   data.ProjectID,
+		ProjectPath: data.ProjectPath,
+		ProjectName: data.ProjectName,
+		JobID:       data.JobID,
+		JobName:     data.JobName,
+		JobToken:    data.JobToken,
+		CommitHash:  data.CommitHash,
+		RefName:     data.RefName,
+		Timeout:     data.TimeoutSec,
+		Cache:       &WorkerCacheHandler{Worker: worker},
+		ServerSteps: &WorkerServerSteps{Worker: worker},
+	}
+	workDir := executor.BuildWorkDir(a.cfg.WorkBase, jobCtx)
+	jobCtx.WorkDir = workDir
 	_ = os.MkdirAll(workDir, 0755)
 	_, _ = worker.FetchJobData(ctx, workDir)
 	_ = worker.DownloadDependencies(ctx, workDir)
 
 	logger := &wsLogger{agent: a, jobToken: data.JobToken}
 	logger.Log("info", fmt.Sprintf("executing build #%d on agent", data.BuildNumber))
-
-	jobCtx := &executor.JobContext{
-		BuildID:     data.BuildID,
-		BuildNumber: data.BuildNumber,
-		ProjectID:   data.ProjectID,
-		ProjectPath: data.ProjectPath,
-		JobToken:    data.JobToken,
-		CommitHash:  data.CommitHash,
-		RefName:     data.RefName,
-		WorkDir:     workDir,
-		Timeout:     data.TimeoutSec,
-		Cache:       &WorkerCacheHandler{Worker: worker},
-		ServerSteps: &WorkerServerSteps{Worker: worker},
-	}
 
 	runner := executor.NewServerShellExecutor(a.cfg.WorkBase)
 	results, err := executor.ExecutePlanOnShell(ctx, jobCtx, data.Plan, runner, logger)

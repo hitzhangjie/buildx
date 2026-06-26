@@ -223,6 +223,19 @@ func checkDAG(name string, job *Job, jobMap map[string]*Job, visited []string) e
 	return nil
 }
 
+// JobIndex returns the 1-based index of jobName in the local jobs list, or 0 if not found.
+func (spec *BuildSpec) JobIndex(jobName string) int {
+	if spec == nil {
+		return 0
+	}
+	for i, job := range spec.Jobs {
+		if job != nil && job.Name == jobName {
+			return i + 1
+		}
+	}
+	return 0
+}
+
 // GetJobMap returns a merged map of all job names to jobs, including imported build specs.
 func (spec *BuildSpec) GetJobMap() map[string]*Job {
 	m := make(map[string]*Job)

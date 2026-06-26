@@ -9,7 +9,10 @@ type ShellJobData struct {
 	JobToken     string         `json:"jobToken"`
 	ExecutorName string         `json:"executorName"`
 	ProjectPath  string         `json:"projectPath"`
+	ProjectName  string         `json:"projectName"`
 	ProjectID    int64          `json:"projectId"`
+	JobName      string         `json:"jobName"`
+	JobID        int            `json:"jobId"`
 	RefName      string         `json:"refName"`
 	CommitHash   string         `json:"commitHash"`
 	BuildNumber  int            `json:"buildNumber"`

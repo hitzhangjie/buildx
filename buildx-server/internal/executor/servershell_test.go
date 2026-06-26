@@ -3,7 +3,6 @@ package executor_test
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -236,6 +235,9 @@ func TestServerShell_Execute_WorkDirCreated(t *testing.T) {
 		BuildID:     9,
 		BuildNumber: 18,
 		ProjectID:   100,
+		ProjectName: "demo",
+		JobID:       1,
+		JobName:     "job1",
 	}
 
 	_, err := e.Execute(ctx, jc, []string{"echo created"}, nil)
@@ -243,7 +245,7 @@ func TestServerShell_Execute_WorkDirCreated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedDir := filepath.Join(workDir, "100", "18")
+	expectedDir := executor.BuildWorkDir(workDir, jc)
 	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
 		t.Fatalf("work directory %s was not created", expectedDir)
 	}

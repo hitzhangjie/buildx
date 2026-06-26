@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 )
@@ -78,7 +77,7 @@ func (e *DockerExecutor) ExecutePlan(ctx context.Context, jobCtx *JobContext, pl
 }
 
 func (e *DockerExecutor) buildWorkDir(jobCtx *JobContext) string {
-	return strings.TrimRight(e.workDirBase, "/") + "/" + fmt.Sprintf("%d/%d", jobCtx.ProjectID, jobCtx.BuildNumber)
+	return BuildWorkDir(e.workDirBase, jobCtx)
 }
 
 func (e *DockerExecutor) WorkDirFor(jobCtx *JobContext) string {
