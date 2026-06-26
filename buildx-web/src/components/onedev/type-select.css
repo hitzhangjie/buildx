@@ -53,22 +53,11 @@
   background: var(--dark-mode-light-primary);
 }
 
-.type-select-tree .group-node > .selectable {
+.type-select-tree.tree-theme-human .group-node > .tree-node > .tree-content > .selectable {
   font-weight: 500;
-  position: relative;
 }
 
-.type-select-tree .group-node > .selectable .group-arrow {
-  position: absolute;
-  left: 0.15rem;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.5rem;
-  width: 0.6rem;
-  text-align: center;
-  transition: transform 0.15s ease;
-}
-
-.type-select-tree .group-node > .selectable .group-arrow.expanded {
-  transform: translateY(-50%) rotate(90deg);
+.type-select-tree.tree-theme-human .tree-node > a.tree-junction[aria-hidden="true"] {
+  pointer-events: none;
+  visibility: hidden;
 }

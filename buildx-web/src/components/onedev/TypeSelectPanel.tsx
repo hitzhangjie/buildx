@@ -21,27 +21,39 @@ function matchesFilter(typeDef: TypeDef, filter: string): boolean {
 function TypeNode({
   typeDef,
   onSelect,
+  nested = false,
 }: {
   typeDef: TypeDef;
   onSelect: (type: string) => void;
+  nested?: boolean;
 }) {
   const description = typeDef.description?.split(".")[0];
+  const selectable = (
+    <a
+      href="#"
+      className="selectable"
+      onClick={(e) => {
+        e.preventDefault();
+        onSelect(typeDef.type);
+      }}
+    >
+      <span>{typeDef.label}</span>
+      {description ? (
+        <div className="font-size-sm text-muted text-wrap">{description}</div>
+      ) : null}
+    </a>
+  );
 
   return (
     <li className="type-node">
-      <a
-        href="#"
-        className="selectable"
-        onClick={(e) => {
-          e.preventDefault();
-          onSelect(typeDef.type);
-        }}
-      >
-        <span>{typeDef.label}</span>
-        {description ? (
-          <div className="font-size-sm text-muted text-wrap">{description}</div>
-        ) : null}
-      </a>
+      {nested ? (
+        selectable
+      ) : (
+        <div className="tree-node">
+          <a className="tree-junction" aria-hidden="true" tabIndex={-1} />
+          <span className="tree-content">{selectable}</span>
+        </div>
+      )}
     </li>
   );
 }
@@ -118,7 +130,7 @@ export function TypeSelectPanel({ types, onSelect }: TypeSelectPanelProps) {
         onChange={(e) => setFilter(e.target.value)}
       />
       <div className="content mt-3">
-        <ul className="type-select-tree">
+        <ul className="type-select-tree tree-theme-human">
           {filteredItems.map((item) => {
             if (item.kind === "type") {
               return (
@@ -128,21 +140,38 @@ export function TypeSelectPanel({ types, onSelect }: TypeSelectPanelProps) {
             const expanded = isGroupExpanded(item.name);
             return (
               <li key={item.name} className="group-node">
-                <a
-                  href="#"
-                  className="selectable"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toggleGroup(item.name);
-                  }}
-                >
-                  <span className={`group-arrow ${expanded ? "expanded" : ""}`}>&#9654;</span>
-                  <span>{item.name}</span>
-                </a>
+                <div className="tree-node">
+                  <a
+                    href="#"
+                    className={`tree-junction ${expanded ? "tree-junction-expanded" : "tree-junction-collapsed"}`}
+                    aria-label={expanded ? "Collapse" : "Expand"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleGroup(item.name);
+                    }}
+                  />
+                  <span className="tree-content">
+                    <a
+                      href="#"
+                      className="selectable"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleGroup(item.name);
+                      }}
+                    >
+                      <span>{item.name}</span>
+                    </a>
+                  </span>
+                </div>
                 {expanded ? (
                   <ul>
                     {item.items.map((typeDef) => (
-                      <TypeNode key={typeDef.type} typeDef={typeDef} onSelect={onSelect} />
+                      <TypeNode
+                        key={typeDef.type}
+                        typeDef={typeDef}
+                        onSelect={onSelect}
+                        nested
+                      />
                     ))}
                   </ul>
                 ) : null}
