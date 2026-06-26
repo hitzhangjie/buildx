@@ -75,7 +75,7 @@ OneDev 参考（只读）：
 | 后端 buildspec 解析 | ~80% | `internal/buildspec/` 已有 Parse/Validate；无 import 跨项目 merge API |
 | REST 验证 | ~30% | 仅 `POST /buildspec/validate`；无独立 BuildSpec CRUD（存储走 Repository files API） |
 | Web 编辑器 | ~70% | 双模式 + 五 Tab + Job/Step/Property/Import 主流程；复杂 step 嵌套对象部分仍为 JSON modal |
-| 1:1 视觉/交互 | ~50% | DOM/CSS 大体对齐 `buildspec/` Wicket panels；细节与插件交互未齐 |
+| 1:1 视觉/交互 | ~50% | DOM/CSS 大体对齐 `buildspec/` Wicket panels；Job 编辑器折叠分组、TypeSelect 菜单、PolymorphicEditor 下拉已对齐；截图 DoD 待验收 |
 
 ---
 

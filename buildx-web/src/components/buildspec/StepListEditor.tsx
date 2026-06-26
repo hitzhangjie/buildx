@@ -2,12 +2,14 @@ import { useMemo, useState } from "react";
 import { BeanEditor } from "../onedev/BeanEditor";
 import { Icon } from "../onedev/Icon";
 import { InlineDropdown } from "../onedev/DropdownMenu";
+import { TypeSelectPanel } from "../onedev/TypeSelectPanel";
 import { useSortableList } from "../../hooks/useSortableList";
 import { DynamicBeanFields, createDefaultBean } from "./DynamicBeanFields";
 import { ModalPanel } from "./ModalPanel";
 import {
   STEP_TYPES,
   findTypeDef,
+  groupedTypeLabel,
   stepConditionLabel,
   stepDisplayName,
 } from "./registries";
@@ -20,7 +22,10 @@ type StepListEditorProps = {
 
 export function StepListEditor({ steps, onChange }: StepListEditorProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [insertIndex, setInsertIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<BuildSpecStep | null>(null);
+
+  const [typePickAtIndex, setTypePickAtIndex] = useState<number | null>(null);
 
   const { itemProps } = useSortableList({
     onReorder: (from, to) => {
@@ -40,16 +45,24 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
 
   const openEdit = (index: number) => {
     setEditingIndex(index);
+    setInsertIndex(null);
     setDraft(structuredClone(steps[index]));
   };
 
-  const openAdd = (type: string) => {
+  const openAdd = (type: string, atIndex?: number) => {
     const def = findTypeDef(STEP_TYPES, type);
     if (!def) {
       return;
     }
     setEditingIndex(null);
+    setInsertIndex(atIndex ?? steps.length);
     setDraft(createDefaultBean(def) as BuildSpecStep);
+  };
+
+  const openCopy = (index: number) => {
+    setEditingIndex(null);
+    setInsertIndex(steps.length);
+    setDraft(structuredClone(steps[index]));
   };
 
   const saveDraft = () => {
@@ -61,15 +74,41 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
       next[editingIndex] = draft;
       onChange(next);
     } else {
-      onChange([...steps, draft]);
+      const next = [...steps];
+      const at = insertIndex ?? next.length;
+      next.splice(at, 0, draft);
+      onChange(next);
     }
     setDraft(null);
     setEditingIndex(null);
+    setInsertIndex(null);
   };
 
+  const changeStepType = (type: string) => {
+    const def = findTypeDef(STEP_TYPES, type);
+    if (!def) {
+      return;
+    }
+    const next = createDefaultBean(def) as BuildSpecStep;
+    if (draft) {
+      if (typeof draft.name === "string" && draft.name.trim()) {
+        next.name = draft.name;
+      }
+      if (typeof draft.condition === "string") {
+        next.condition = draft.condition;
+      }
+      if (draft.enabled !== undefined) {
+        next.enabled = draft.enabled;
+      }
+    }
+    setDraft(next);
+  };
+
+  const addStepButton = <Icon name="plus" className="icon" />;
+
   return (
-    <div className="step-list-editor bean-list">
-      <table className="table">
+    <div className="step-list bean-list">
+      <table className="table table-hover">
         <thead>
           <tr>
             <th className="minimum actions" />
@@ -95,7 +134,7 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
               <td className="minimum actions text-nowrap">
                 <a
                   href="#"
-                  className="btn btn-light btn-xs btn-icon mr-1"
+                  className="btn btn-light btn-hover-primary btn-xs btn-icon mr-1"
                   title="Edit"
                   onClick={(e) => {
                     e.preventDefault();
@@ -105,7 +144,7 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
                   <Icon name="edit" className="icon" />
                 </a>
                 <InlineDropdown
-                  className="btn btn-light btn-xs btn-icon"
+                  className="btn btn-light btn-hover-primary btn-xs btn-icon"
                   label={<Icon name="arrow" className="icon rotate-90" />}
                 >
                   {({ close }) => (
@@ -116,8 +155,29 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
                         onClick={(e) => {
                           e.preventDefault();
                           close();
-                          setEditingIndex(null);
-                          setDraft(structuredClone(steps[index]));
+                          setTypePickAtIndex(index);
+                        }}
+                      >
+                        Add before
+                      </a>
+                      <a
+                        href="#"
+                        className="list-group-item list-group-item-action"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          close();
+                          setTypePickAtIndex(index + 1);
+                        }}
+                      >
+                        Add after
+                      </a>
+                      <a
+                        href="#"
+                        className="list-group-item list-group-item-action"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          close();
+                          openCopy(index);
                         }}
                       >
                         Copy
@@ -140,79 +200,83 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
             </tr>
           ))}
         </tbody>
+        {steps.length === 0 ? (
+          <tfoot>
+            <tr>
+              <td colSpan={4}>
+                <em className="text-muted">Unspecified</em>
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
-      {steps.length === 0 ? <div className="text-muted font-size-sm mb-2">Unspecified</div> : null}
-      <InlineDropdown
-        className="add-new btn btn-light btn-hover-primary"
-        label={
-          <>
-            <Icon name="plus" className="icon align-middle mr-1" /> Add New
-          </>
-        }
-      >
-        {({ close }) => (
-          <div className="list-group list-group-flush type-select">
-            {STEP_TYPES.map((typeDef) => (
-              <a
-                key={typeDef.type}
-                href="#"
-                className="list-group-item list-group-item-action"
-                onClick={(e) => {
-                  e.preventDefault();
-                  close();
-                  openAdd(typeDef.type);
-                }}
-              >
-                {typeDef.group ? (
-                  <span className="text-muted font-size-sm d-block">{typeDef.group}</span>
-                ) : null}
-                {typeDef.label}
-              </a>
-            ))}
-          </div>
-        )}
-      </InlineDropdown>
+      <div className="foot">
+        <InlineDropdown
+          className="btn btn-light btn-hover-primary btn-block d-block"
+          label={addStepButton}
+        >
+          {({ close }) => (
+            <TypeSelectPanel
+              types={STEP_TYPES}
+              onSelect={(type) => {
+                close();
+                openAdd(type);
+              }}
+            />
+          )}
+        </InlineDropdown>
+      </div>
       {draft && typeDef ? (
         <ModalPanel
-          title={editingIndex != null ? "Edit Step" : "Add Step"}
-          description={typeDef.description}
-          onSave={saveDraft}
-          onCancel={() => {
-            setDraft(null);
-            setEditingIndex(null);
-          }}
-        >
-          <BeanEditor>
+          header={
             <InlineDropdown
-              className="btn btn-light mb-3"
+              className="text-reset"
               label={
                 <>
-                  {typeDef.group ? `${typeDef.group} / ` : ""}
-                  {typeDef.label} <Icon name="arrow" className="icon rotate-90 ml-1" />
+                  <span>{groupedTypeLabel(typeDef)}</span>
+                  <Icon name="arrow" className="icon rotate-90 ml-1" />
                 </>
               }
             >
               {({ close }) => (
-                <div className="list-group list-group-flush">
-                  {STEP_TYPES.map((def) => (
-                    <a
-                      key={def.type}
-                      href="#"
-                      className="list-group-item list-group-item-action"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        close();
-                        setDraft(createDefaultBean(def) as BuildSpecStep);
-                      }}
-                    >
-                      {def.label}
-                    </a>
-                  ))}
-                </div>
+                <TypeSelectPanel
+                  types={STEP_TYPES}
+                  onSelect={(type) => {
+                    close();
+                    changeStepType(type);
+                  }}
+                />
               )}
             </InlineDropdown>
+          }
+          description={typeDef.description}
+          descriptionClassName="alert alert-light alert-notice mb-3"
+          onSave={saveDraft}
+          onCancel={() => {
+            setDraft(null);
+            setEditingIndex(null);
+            setInsertIndex(null);
+          }}
+        >
+          <BeanEditor>
             <DynamicBeanFields fields={typeDef.fields} value={draft} onChange={setDraft} />
           </BeanEditor>
+        </ModalPanel>
+      ) : null}
+      {typePickAtIndex != null ? (
+        <ModalPanel
+          title="Add Step"
+          onSave={() => setTypePickAtIndex(null)}
+          onCancel={() => setTypePickAtIndex(null)}
+          hideFooter
+        >
+          <TypeSelectPanel
+            types={STEP_TYPES}
+            onSelect={(type) => {
+              openAdd(type, typePickAtIndex);
+              setTypePickAtIndex(null);
+            }}
+          />
         </ModalPanel>
       ) : null}
     </div>

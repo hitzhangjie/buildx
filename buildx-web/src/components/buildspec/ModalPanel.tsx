@@ -4,22 +4,29 @@ import { Icon } from "../onedev/Icon";
 import "../onedev/ConfirmModal.css";
 
 type ModalPanelProps = {
-  title: string;
+  title?: string;
+  /** Custom modal title content (e.g. step type selector dropdown in header). */
+  header?: ReactNode;
   description?: string;
+  descriptionClassName?: string;
   children: ReactNode;
   onSave: () => void;
   onCancel: () => void;
   saveLabel?: string;
+  hideFooter?: boolean;
 };
 
 /** Generic modal matching OneDev ModalPanel / step edit modal layout. */
 export function ModalPanel({
   title,
+  header,
   description,
+  descriptionClassName = "text-muted mb-3",
   children,
   onSave,
   onCancel,
-  saveLabel = "OK",
+  saveLabel = "Save",
+  hideFooter = false,
 }: ModalPanelProps) {
   useEffect(() => {
     document.body.classList.add("modal-open");
@@ -42,7 +49,7 @@ export function ModalPanel({
         <div className="modal-dialog modal-lg">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">{title}</h5>
+              <h5 className="modal-title">{header ?? title}</h5>
               <button type="button" className="close" onClick={onCancel} aria-label="Close">
                 <Icon name="times" />
               </button>
@@ -50,19 +57,23 @@ export function ModalPanel({
             <div className="modal-body">
               {description ? (
                 <div
-                  className="text-muted mb-3"
+                  className={descriptionClassName}
                   dangerouslySetInnerHTML={{ __html: description }}
                 />
               ) : null}
               {children}
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-primary dirty-aware" onClick={onSave}>
-                {saveLabel}
-              </button>
-              <button type="button" className="btn btn-light" onClick={onCancel}>
-                Cancel
-              </button>
+              {!hideFooter ? (
+                <>
+                  <button type="button" className="btn btn-primary dirty-aware" onClick={onSave}>
+                    {saveLabel}
+                  </button>
+                  <button type="button" className="btn btn-secondary" onClick={onCancel}>
+                    Cancel
+                  </button>
+                </>
+              ) : null}
             </div>
           </div>
         </div>

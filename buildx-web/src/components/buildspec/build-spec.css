@@ -105,7 +105,15 @@
   margin-bottom: 0;
 }
 
-.imports-editor .import {
+.editable.property-editor table + .foot {
+  margin-top: 1rem;
+}
+
+.step-list .foot,
+.draw-card-bean-list .foot {
+  margin-top: 1rem;
+}
+
   margin-bottom: 1rem;
 }
 .imports-editor .import-head {

@@ -1,12 +1,18 @@
-import { useMemo, useState } from "react";
-import { BeanEditor } from "../onedev/BeanEditor";
+import { useMemo, useState, type ReactNode } from "react";
 import { Icon } from "../onedev/Icon";
 import { InlineDropdown } from "../onedev/DropdownMenu";
+import { TypeSelectPanel } from "../onedev/TypeSelectPanel";
 import { useSortableList } from "../../hooks/useSortableList";
 import { DynamicBeanFields, createDefaultBean } from "./DynamicBeanFields";
+import { PolymorphicEditor } from "./PolymorphicEditor";
 import { ModalPanel } from "./ModalPanel";
 import type { FieldDef, TypeDef } from "./registries";
 import { findTypeDef, polymorphicSummary } from "./registries";
+
+type ListColumn = {
+  header: string;
+  render: (item: Record<string, unknown>) => ReactNode;
+};
 
 type PolymorphicListEditorProps = {
   label: string;
@@ -16,6 +22,8 @@ type PolymorphicListEditorProps = {
   /** Optional fixed fields when type is not polymorphic (e.g. job dependencies). */
   fixedFields?: FieldDef[];
   addTooltip?: string;
+  modalTitle?: string;
+  columns?: ListColumn[];
 };
 
 export function PolymorphicListEditor({
@@ -25,6 +33,8 @@ export function PolymorphicListEditor({
   onChange,
   fixedFields,
   addTooltip = "Add new",
+  modalTitle,
+  columns,
 }: PolymorphicListEditorProps) {
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
@@ -49,6 +59,13 @@ export function PolymorphicListEditor({
     return findTypeDef(types, type);
   }, [draft, fixedFields, label, types]);
 
+  const tableColumns = useMemo(() => {
+    if (columns && columns.length > 0) {
+      return columns;
+    }
+    return [{ header: label, render: (item: Record<string, unknown>) => polymorphicSummary(item, types) }];
+  }, [columns, label, types]);
+
   const openEdit = (index: number) => {
     setEditingIndex(index);
     setDraft(structuredClone(items[index]));
@@ -71,33 +88,34 @@ export function PolymorphicListEditor({
     if (!draft) {
       return;
     }
-    if (editingIndex != null) {
-      const next = [...items];
-      next[editingIndex] = draft;
-      onChange(next);
-    } else {
-      onChange([...items, draft]);
+    if (fixedFields || draft.type) {
+      if (editingIndex != null) {
+        const next = [...items];
+        next[editingIndex] = draft;
+        onChange(next);
+      } else {
+        onChange([...items, draft]);
+      }
+      setDraft(null);
+      setEditingIndex(null);
     }
-    setDraft(null);
-    setEditingIndex(null);
   };
 
   const deleteAt = (index: number) => {
     onChange(items.filter((_, i) => i !== index));
   };
 
-  const copyAt = (index: number) => {
-    setEditingIndex(null);
-    setDraft(structuredClone(items[index]));
-  };
+  const addButton = <Icon name="plus" className="icon" />;
 
   return (
-    <div className="polymorphic-list-editor bean-list">
-      <table className="table">
+    <div className="draw-card-bean-list bean-list">
+      <table className="table table-hover">
         <thead>
           <tr>
             <th className="minimum actions" />
-            <th>{label}</th>
+            {tableColumns.map((col) => (
+              <th key={col.header}>{col.header}</th>
+            ))}
             <th className="minimum actions" />
           </tr>
         </thead>
@@ -107,11 +125,13 @@ export function PolymorphicListEditor({
               <td className="minimum actions">
                 <Icon name="grip" className="icon drag-indicator" />
               </td>
-              <td>{polymorphicSummary(item, types)}</td>
+              {tableColumns.map((col) => (
+                <td key={col.header}>{col.render(item)}</td>
+              ))}
               <td className="minimum actions text-nowrap">
                 <a
                   href="#"
-                  className="btn btn-light btn-xs btn-icon mr-1"
+                  className="btn btn-light btn-hover-primary btn-xs btn-icon mr-1"
                   title="Edit"
                   onClick={(e) => {
                     e.preventDefault();
@@ -120,134 +140,75 @@ export function PolymorphicListEditor({
                 >
                   <Icon name="edit" className="icon" />
                 </a>
-                <InlineDropdown
-                  className="btn btn-light btn-xs btn-icon"
-                  label={<Icon name="arrow" className="icon rotate-90" />}
+                <a
+                  href="#"
+                  className="btn btn-light btn-hover-danger btn-xs btn-icon"
+                  title="Delete"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    deleteAt(index);
+                  }}
                 >
-                  {({ close }) => (
-                    <div className="list-group list-group-flush">
-                      <a
-                        href="#"
-                        className="list-group-item list-group-item-action"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          close();
-                          copyAt(index);
-                        }}
-                      >
-                        Copy
-                      </a>
-                      <a
-                        href="#"
-                        className="list-group-item list-group-item-action"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          close();
-                          deleteAt(index);
-                        }}
-                      >
-                        Delete
-                      </a>
-                    </div>
-                  )}
-                </InlineDropdown>
+                  <Icon name="trash" className="icon" />
+                </a>
               </td>
             </tr>
           ))}
         </tbody>
+        {items.length === 0 ? (
+          <tfoot>
+            <tr>
+              <td colSpan={tableColumns.length + 2}>
+                <em className="text-muted">Unspecified</em>
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
       </table>
-      {items.length === 0 ? <div className="text-muted font-size-sm mb-2">Unspecified</div> : null}
-      {fixedFields ? (
-        <a
-          href="#"
-          className="add btn btn-light btn-hover-primary btn-block"
-          title={addTooltip}
-          onClick={(e) => {
-            e.preventDefault();
-            openAdd("");
-          }}
-        >
-          <Icon name="plus" className="icon align-middle mr-1" /> Add new
-        </a>
-      ) : (
-        <InlineDropdown
-          className="add btn btn-light btn-hover-primary btn-block text-left"
-          label={
-            <>
-              <Icon name="plus" className="icon align-middle mr-1" /> Add new
-            </>
-          }
-        >
-          {({ close }) => (
-            <div className="list-group list-group-flush type-select">
-              {types.map((typeDef) => (
-                <a
-                  key={typeDef.type}
-                  href="#"
-                  className="list-group-item list-group-item-action"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    close();
-                    openAdd(typeDef.type);
-                  }}
-                >
-                  {typeDef.group ? (
-                    <span className="text-muted font-size-sm d-block">{typeDef.group}</span>
-                  ) : null}
-                  {typeDef.label}
-                </a>
-              ))}
-            </div>
-          )}
-        </InlineDropdown>
-      )}
-      {draft && editingTypeDef ? (
+      <div className="foot">
+        {fixedFields ? (
+          <a
+            href="#"
+            className="btn btn-light btn-hover-primary btn-block"
+            title={addTooltip}
+            onClick={(e) => {
+              e.preventDefault();
+              openAdd("");
+            }}
+          >
+            {addButton}
+          </a>
+        ) : (
+          <InlineDropdown
+            className="btn btn-light btn-hover-primary btn-block d-block"
+            label={addButton}
+          >
+            {({ close }) => (
+              <TypeSelectPanel
+                types={types}
+                onSelect={(type) => {
+                  close();
+                  openAdd(type);
+                }}
+              />
+            )}
+          </InlineDropdown>
+        )}
+      </div>
+      {draft && (editingTypeDef || fixedFields) ? (
         <ModalPanel
-          title={editingIndex != null ? `Edit ${label}` : `Add ${label}`}
-          description={editingTypeDef.description}
+          title={modalTitle ?? (editingIndex != null ? `Edit ${label}` : `Add ${label}`)}
           onSave={saveDraft}
           onCancel={() => {
             setDraft(null);
             setEditingIndex(null);
           }}
         >
-          <BeanEditor>
-            {!fixedFields && editingIndex != null ? (
-              <InlineDropdown
-                className="btn btn-light mb-3"
-                label={
-                  <>
-                    Type: {findTypeDef(types, String(draft.type))?.label ?? draft.type}{" "}
-                    <Icon name="arrow" className="icon rotate-90 ml-1" />
-                  </>
-                }
-              >
-                {({ close }) => (
-                  <div className="list-group list-group-flush">
-                    {types.map((typeDef) => (
-                      <a
-                        key={typeDef.type}
-                        href="#"
-                        className="list-group-item list-group-item-action"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          close();
-                          setDraft(createDefaultBean(typeDef));
-                        }}
-                      >
-                        {typeDef.label}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </InlineDropdown>
-            ) : null}
-            <DynamicBeanFields
-              fields={editingTypeDef.fields}
-              value={draft}
-              onChange={setDraft}
-            />
-          </BeanEditor>
+          {fixedFields ? (
+            <DynamicBeanFields fields={fixedFields} value={draft} onChange={setDraft} />
+          ) : (
+            <PolymorphicEditor types={types} value={draft} onChange={setDraft} />
+          )}
         </ModalPanel>
       ) : null}
     </div>

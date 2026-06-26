@@ -6,6 +6,10 @@ Format: newest entries first. Update this file after each migrated feature batch
 
 ## [Unreleased]
 
+### Changed
+
+- **Buildspec Job editor UI (OneDev parity)** — collapsible property groups (`Params & Triggers`, `Dependencies & Services`, `More Settings`); `TypeSelectPanel` grouped/filterable menus for add-step and add-param/trigger; `PolymorphicEditor` with `custom-select` type picker; draw-card list layout (plus-only add bar, edit + delete actions, multi-column summaries)
+
 ### Added
 
 - **Buildspec editor parity (Project Files)** — `.onedev-buildspec.yml` dual-mode editor on `ProjectBlobPage`: Visual tabs (Jobs/Services/Step Templates/Properties/Imports) + YAML; Edit \| YAML \| Changes \| Save; Job BeanEditor, pipeline DAG, drag-reorder, step/property/import editors; view-mode Visual/Plain YAML toggle; CI/CD prompt when no buildspec; `POST /~api/buildspec/validate`; `?position=buildspec-*` deep links; vitest YAML ↔ visual sync. Remaining: plugin job suggestions, import resolution, Run Job, field-path validation navigation, full per-step-type BeanEditor — [docs/buildspec-editor-migration.md](docs/buildspec-editor-migration.md)

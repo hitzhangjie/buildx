@@ -413,7 +413,7 @@ export const PROJECT_DEPENDENCY_FIELDS: FieldDef[] = [
   { key: "destinationPath", label: "Destination Path", kind: "string" },
 ];
 
-export function findTypeDef(types: TypeDef[], type: string | undefined): TypeDef | undefined {
+export function findTypeDef(types: readonly TypeDef[], type: string | undefined): TypeDef | undefined {
   return types.find((t) => t.type === type);
 }
 
@@ -432,6 +432,23 @@ export function stepConditionLabel(step: Record<string, unknown>): string {
     return condition;
   }
   return "Unspecified";
+}
+
+export function groupedTypeLabel(typeDef: TypeDef): string {
+  if (typeDef.group) {
+    return `${typeDef.group} / ${typeDef.label}`;
+  }
+  return typeDef.label;
+}
+
+export function triggerDescription(item: Record<string, unknown>): string {
+  const type = typeof item.type === "string" ? item.type : "";
+  return findTypeDef(TRIGGER_TYPES, type)?.label ?? type;
+}
+
+export function triggerParamCount(item: Record<string, unknown>): number {
+  const matrix = item.paramMatrix;
+  return Array.isArray(matrix) ? matrix.length : 0;
 }
 
 export function polymorphicSummary(item: Record<string, unknown>, types: TypeDef[]): string {
