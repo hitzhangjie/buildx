@@ -77,7 +77,9 @@ export function BuildSpecViewPanel({
           }}
         />
       ) : (
-        <div className="jobs not-defined alert alert-notice alert-light-warning d-flex">No jobs defined</div>
+        <div className="content jobs not-defined alert alert-notice alert-light-warning d-flex">
+          No jobs defined
+        </div>
       );
   } else if (activeTab === "services") {
     tabContent =
@@ -96,7 +98,7 @@ export function BuildSpecViewPanel({
           renderDetail={(element) => <ServiceViewer service={element} />}
         />
       ) : (
-        <div className="services not-defined alert alert-notice alert-light-warning d-flex">
+        <div className="content services not-defined alert alert-notice alert-light-warning d-flex">
           No services defined
         </div>
       );
@@ -117,7 +119,7 @@ export function BuildSpecViewPanel({
           renderDetail={(element) => <StepTemplateViewer template={element} />}
         />
       ) : (
-        <div className="step-templates not-defined alert alert-notice alert-light-warning d-flex">
+        <div className="content step-templates not-defined alert alert-notice alert-light-warning d-flex">
           No step templates defined
         </div>
       );
@@ -128,7 +130,9 @@ export function BuildSpecViewPanel({
       imports.length > 0 ? (
         <ImportsViewPanel imports={imports} />
       ) : (
-        <div className="imports not-defined alert alert-notice alert-light-warning d-flex">No imports defined</div>
+        <div className="content imports not-defined alert alert-notice alert-light-warning d-flex">
+          No imports defined
+        </div>
       );
   }
 
@@ -158,9 +162,7 @@ export function BuildSpecViewPanel({
           </a>
         ))}
       </div>
-      <div className="body d-flex flex-column flex-grow-1">
-        <div className="content">{tabContent}</div>
-      </div>
+      <div className="body d-flex flex-column flex-grow-1">{tabContent}</div>
     </div>
   );
 }

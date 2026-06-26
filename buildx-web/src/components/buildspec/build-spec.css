@@ -86,6 +86,15 @@
   color: var(--primary);
 }
 
+.build-spec .pipeline .pipeline-row > .nav.btn-group {
+  width: 100%;
+}
+.build-spec .pipeline .pipeline-row.active .nav.btn-group > .select,
+.build-spec .pipeline .pipeline-row.active .nav.btn-group > .actions {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .pipeline {
   position: relative;
   min-width: fit-content;
@@ -114,6 +123,7 @@
   margin-top: 1rem;
 }
 
+.imports-editor .import-row {
   margin-bottom: 1rem;
 }
 .imports-editor .import-head {

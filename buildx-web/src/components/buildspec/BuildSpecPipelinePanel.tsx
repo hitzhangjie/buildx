@@ -175,7 +175,7 @@ export function BuildSpecPipelinePanel({
                   <div className={`nav btn-group flex-nowrap${isActive ? " active" : ""}`}>
                     <a
                       href="#"
-                      className="select btn btn-outline-secondary text-nowrap justify-content-start"
+                      className="select btn btn-outline-secondary text-nowrap justify-content-start d-flex align-items-center"
                       onClick={(e) => {
                         e.preventDefault();
                         onActiveIndexChange(jobIndex);
@@ -187,6 +187,7 @@ export function BuildSpecPipelinePanel({
                   </div>
                 ) : (
                   <ElementNavRow
+                    layout="pipeline"
                     label={namedElementLabel(job.name)}
                     active={isActive}
                     onSelect={() => onActiveIndexChange(jobIndex)}
@@ -212,7 +213,9 @@ export function BuildSpecPipelinePanel({
                 </a>
                 {suggestedJobs.length > 0 ? (
                   <InlineDropdown
+                    variant="btn-group"
                     className="suggestions btn btn-primary flex-grow-0 flex-shrink-0 btn-icon"
+                    align="right"
                     label={<Icon name="wand" className="icon" />}
                   >
                     {({ close }) => (

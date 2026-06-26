@@ -183,6 +183,7 @@ export function PolymorphicListEditor({
             className="btn btn-light btn-hover-primary btn-block d-block"
             wrapperClassName="d-block w-100"
             label={addButton}
+            dropup
           >
             {({ close }) => (
               <TypeSelectPanel

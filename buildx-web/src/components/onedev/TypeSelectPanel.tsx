@@ -48,32 +48,51 @@ function TypeNode({
 
 /**
  * Grouped, filterable type picker — mirrors OneDev TypeSelectPanel (NestedTree + filter input).
+ * Items are rendered in the order they appear in the `types` array, so groups are
+ * interspersed with ungrouped items exactly as in OneDev's Add Step dropdown.
  */
 export function TypeSelectPanel({ types, onSelect }: TypeSelectPanelProps) {
   const [filter, setFilter] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
 
-  const { ungrouped, groups } = useMemo(() => {
-    const ungroupedTypes: TypeDef[] = [];
-    const groupMap = new Map<string, TypeDef[]>();
+  const isFiltering = filter.trim().length > 0;
+
+  // Walk types in array order; emit ungrouped items inline and groups at their
+  // first occurrence, collecting all items of the same group in order.
+  const orderedItems = useMemo(() => {
+    const seenGroups = new Set<string>();
+    const result: Array<
+      | { kind: "type"; typeDef: TypeDef }
+      | { kind: "group"; name: string; items: TypeDef[] }
+    > = [];
     for (const typeDef of types) {
       if (!typeDef.group) {
-        ungroupedTypes.push(typeDef);
-      } else {
-        const list = groupMap.get(typeDef.group) ?? [];
-        list.push(typeDef);
-        groupMap.set(typeDef.group, list);
+        result.push({ kind: "type", typeDef });
+      } else if (!seenGroups.has(typeDef.group)) {
+        seenGroups.add(typeDef.group);
+        result.push({
+          kind: "group",
+          name: typeDef.group,
+          items: types.filter((t) => t.group === typeDef.group),
+        });
       }
     }
-    return { ungrouped: ungroupedTypes, groups: groupMap };
+    return result;
   }, [types]);
 
-  const filteredUngrouped = ungrouped.filter((t) => matchesFilter(t, filter));
-  const filteredGroups = Array.from(groups.entries())
-    .map(([name, items]) => ({ name, items: items.filter((t) => matchesFilter(t, filter)) }))
-    .filter((g) => g.items.length > 0);
-
-  const isFiltering = filter.trim().length > 0;
+  // Apply filter while preserving array order.
+  const filteredItems = useMemo(() => {
+    if (!isFiltering) return orderedItems;
+    return orderedItems
+      .map((item) => {
+        if (item.kind === "type") {
+          return matchesFilter(item.typeDef, filter) ? item : null;
+        }
+        const filtered = item.items.filter((t) => matchesFilter(t, filter));
+        return filtered.length > 0 ? { ...item, items: filtered } : null;
+      })
+      .filter(Boolean) as typeof orderedItems;
+  }, [orderedItems, filter, isFiltering]);
 
   const toggleGroup = (group: string) => {
     setExpandedGroups((prev) => {
@@ -100,30 +119,36 @@ export function TypeSelectPanel({ types, onSelect }: TypeSelectPanelProps) {
       />
       <div className="content mt-3">
         <ul className="type-select-tree">
-          {filteredUngrouped.map((typeDef) => (
-            <TypeNode key={typeDef.type} typeDef={typeDef} onSelect={onSelect} />
-          ))}
-          {filteredGroups.map(({ name, items }) => (
-            <li key={name} className="group-node">
-              <a
-                href="#"
-                className="selectable"
-                onClick={(e) => {
-                  e.preventDefault();
-                  toggleGroup(name);
-                }}
-              >
-                <span>{name}</span>
-              </a>
-              {isGroupExpanded(name) ? (
-                <ul>
-                  {items.map((typeDef) => (
-                    <TypeNode key={typeDef.type} typeDef={typeDef} onSelect={onSelect} />
-                  ))}
-                </ul>
-              ) : null}
-            </li>
-          ))}
+          {filteredItems.map((item) => {
+            if (item.kind === "type") {
+              return (
+                <TypeNode key={item.typeDef.type} typeDef={item.typeDef} onSelect={onSelect} />
+              );
+            }
+            const expanded = isGroupExpanded(item.name);
+            return (
+              <li key={item.name} className="group-node">
+                <a
+                  href="#"
+                  className="selectable"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    toggleGroup(item.name);
+                  }}
+                >
+                  <span className={`group-arrow ${expanded ? "expanded" : ""}`}>&#9654;</span>
+                  <span>{item.name}</span>
+                </a>
+                {expanded ? (
+                  <ul>
+                    {item.items.map((typeDef) => (
+                      <TypeNode key={typeDef.type} typeDef={typeDef} onSelect={onSelect} />
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </div>
     </div>

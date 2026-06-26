@@ -1,8 +1,21 @@
 /* Synced from OneDev type-select.css + tree node layout for TypeSelectPanel */
 
 .type-select {
-  padding: 24px 18px;
+  padding: 12px 18px;
   min-width: 280px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.type-select > .form-control {
+  flex-shrink: 0;
+}
+
+.type-select > .content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .type-select-tree {
@@ -42,4 +55,20 @@
 
 .type-select-tree .group-node > .selectable {
   font-weight: 500;
+  position: relative;
+}
+
+.type-select-tree .group-node > .selectable .group-arrow {
+  position: absolute;
+  left: 0.15rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.5rem;
+  width: 0.6rem;
+  text-align: center;
+  transition: transform 0.15s ease;
+}
+
+.type-select-tree .group-node > .selectable .group-arrow.expanded {
+  transform: translateY(-50%) rotate(90deg);
 }

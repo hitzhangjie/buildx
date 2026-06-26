@@ -22,13 +22,13 @@ export function JobsViewPanel({ jobs, activeIndex, onActiveIndexChange }: JobsVi
           readOnly
         />
       </div>
-      <div className="main d-flex flex-column flex-grow-1 ml-4 p-2">
-        {activeJob && activeIndex >= 0 ? (
+      {activeJob && activeIndex >= 0 ? (
+        <div className="main d-flex flex-column flex-grow-1 ml-4 p-2">
           <div className="body flex-grow-1 autofit p-3">
             <JobViewer job={activeJob} />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

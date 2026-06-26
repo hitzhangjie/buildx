@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import "./DropdownMenu.css";
 
 /**
  * Floating dropdown panel — matches OneDev's FloatingPanel / dropdown-menu.
  * Renders via portal to document.body to avoid clipping by parent overflow.
- * Anchors below the trigger element. Closes on outside click (mousedown
- * anywhere outside both the menu and the trigger).
+ * Anchors below the trigger element by default; set dropup=true to open above.
+ * Closes on outside click (mousedown anywhere outside both the menu and the trigger).
  *
  * When align="right", the panel's right edge aligns with the trigger's right edge.
  */
@@ -15,6 +15,7 @@ export function DropdownMenu({
   onClose,
   triggerRef,
   align = "left",
+  dropup = false,
   panelClassName,
   children,
 }: {
@@ -22,12 +23,14 @@ export function DropdownMenu({
   onClose: () => void;
   triggerRef: React.RefObject<HTMLElement | null>;
   align?: "left" | "right";
+  /** Open the menu above the trigger instead of below. */
+  dropup?: boolean;
   /** Extra class on the floating panel root (e.g. OneDev's `get-code`). */
   panelClassName?: string;
   children: ReactNode;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
   // Calculate position based on trigger element
   const updatePosition = useCallback(() => {
@@ -45,15 +48,42 @@ export function DropdownMenu({
       : Math.max(viewportPadding, window.innerWidth - viewportPadding);
     const clampedLeft = Math.min(Math.max(preferredLeft, viewportPadding), maxLeft);
 
-    setPosition({
-      top: rect.bottom + 4, // 4px gap below trigger
-      left: clampedLeft,
-    });
-  }, [triggerRef, align]);
+    if (dropup) {
+      // Leave at least 16px from viewport top; inner content handles scrolling.
+      const maxHeight = Math.max(100, rect.top - 24);
+      setMenuStyle({
+        bottom: window.innerHeight - rect.top + 4, // 4px gap above trigger
+        left: clampedLeft,
+        top: "auto",
+        maxHeight,
+      });
+    } else {
+      setMenuStyle({
+        top: rect.bottom + 4, // 4px gap below trigger
+        left: clampedLeft,
+        bottom: "auto",
+      });
+    }
+  }, [triggerRef, align, dropup]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    updatePosition();
+    const frame = requestAnimationFrame(updatePosition);
+    const menu = menuRef.current;
+    if (!menu) {
+      return () => cancelAnimationFrame(frame);
+    }
+    const obs = new ResizeObserver(() => updatePosition());
+    obs.observe(menu);
+    return () => {
+      cancelAnimationFrame(frame);
+      obs.disconnect();
+    };
+  }, [isOpen, updatePosition, children]);
 
   useEffect(() => {
     if (!isOpen) return;
-    updatePosition();
     window.addEventListener("scroll", updatePosition, true);
     window.addEventListener("resize", updatePosition);
     return () => {
@@ -79,10 +109,9 @@ export function DropdownMenu({
   const style: React.CSSProperties = {
     position: "fixed",
     zIndex: 1050,
-    top: position.top,
-    left: position.left,
     right: "auto",
     float: "none",
+    ...menuStyle,
   };
 
   const panelClass = ["floating", "dropdown-menu", "show", panelClassName].filter(Boolean).join(" ");
@@ -103,12 +132,22 @@ export function InlineDropdown({
   label,
   className,
   wrapperClassName,
+  align = "left",
+  dropup = false,
+  variant = "default",
+  title,
   disabled = false,
   children,
 }: {
   label: ReactNode;
   className?: string;
   wrapperClassName?: string;
+  align?: "left" | "right";
+  /** Open the menu above the trigger instead of below. */
+  dropup?: boolean;
+  /** Render trigger as a direct sibling (no wrapper) for Bootstrap btn-group. */
+  variant?: "default" | "btn-group";
+  title?: string;
   disabled?: boolean;
   children: ReactNode | ((ctx: { close: () => void }) => ReactNode);
 }) {
@@ -124,6 +163,13 @@ export function InlineDropdown({
     .join(" ");
 
   if (disabled) {
+    if (variant === "btn-group") {
+      return (
+        <span className={`${linkClass} opacity-50`} style={{ cursor: "not-allowed" }}>
+          {label}
+        </span>
+      );
+    }
     return (
       <span className={wrapperClass}>
         <span className="text-gray opacity-50" style={{ cursor: "not-allowed" }}>
@@ -133,23 +179,41 @@ export function InlineDropdown({
     );
   }
 
+  const trigger = (
+    <a
+      ref={triggerRef}
+      className={triggerClass}
+      href="#"
+      title={title}
+      onClick={(e) => {
+        e.preventDefault();
+        setOpen(!open);
+      }}
+      role="button"
+    >
+      {label}
+    </a>
+  );
+
+  const menu = (
+    <DropdownMenu isOpen={open} onClose={close} triggerRef={triggerRef} align={align} dropup={dropup}>
+      {menuContent}
+    </DropdownMenu>
+  );
+
+  if (variant === "btn-group") {
+    return (
+      <>
+        {trigger}
+        {menu}
+      </>
+    );
+  }
+
   return (
     <span className={wrapperClass}>
-      <a
-        ref={triggerRef}
-        className={triggerClass}
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
-          setOpen(!open);
-        }}
-        role="button"
-      >
-        {label}
-      </a>
-      <DropdownMenu isOpen={open} onClose={close} triggerRef={triggerRef}>
-        {menuContent}
-      </DropdownMenu>
+      {trigger}
+      {menu}
     </span>
   );
 }

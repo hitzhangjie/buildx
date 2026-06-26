@@ -43,11 +43,11 @@ export function ElementsViewPanel<T extends NamedElement>({
           ))}
         </div>
       </div>
-      <div className="main autofit d-flex flex-column flex-grow-1 ml-4 p-2">
-        {activeElement && activeIndex >= 0 ? (
+      {activeElement && activeIndex >= 0 ? (
+        <div className="main autofit d-flex flex-column flex-grow-1 ml-4 p-2">
           <div className="body flex-grow-1 autofit p-3">{renderDetail(activeElement)}</div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

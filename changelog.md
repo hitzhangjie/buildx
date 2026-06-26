@@ -9,6 +9,7 @@ Format: newest entries first. Update this file after each migrated feature batch
 ### Changed
 
 - **Buildspec Job editor UI (OneDev parity)** — collapsible property groups (`Params & Triggers`, `Dependencies & Services`, `More Settings`); `TypeSelectPanel` grouped/filterable menus for add-step and add-param/trigger; `PolymorphicEditor` with `custom-select` type picker; draw-card list layout (plus-only add bar, edit + delete actions, multi-column summaries)
+- **Buildspec Jobs tab layout** — fix nested `.content` wrapper breaking side-panel CSS; pipeline edit job rows match OneDev `jobFrag` (`flex-nowrap` + grip + arrow Copy/Delete menu); dropdown right-aligned via `InlineDropdown variant="btn-group"`; view mode shows job name only (Run Job deferred)
 
 ### Added
 

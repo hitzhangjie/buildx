@@ -34,8 +34,8 @@ export function JobsEditorPanel({
           suggestedJobs={STUB_JOB_SUGGESTIONS as Job[]}
         />
       </div>
-      <div className="main d-flex flex-column flex-grow-1 ml-4 p-2">
-        {activeJob && activeIndex >= 0 ? (
+      {activeJob && activeIndex >= 0 ? (
+        <div className="main d-flex flex-column flex-grow-1 ml-4 p-2">
           <div className="body autofit flex-grow-1 p-3">
             <JobEditorPanel
               job={activeJob}
@@ -48,8 +48,8 @@ export function JobsEditorPanel({
               }}
             />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

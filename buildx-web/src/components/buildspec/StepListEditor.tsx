@@ -145,6 +145,7 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
                 </a>
                 <InlineDropdown
                   className="btn btn-light btn-hover-primary btn-xs btn-icon"
+                  align="right"
                   label={<Icon name="arrow" className="icon rotate-90" />}
                 >
                   {({ close }) => (
@@ -215,6 +216,7 @@ export function StepListEditor({ steps, onChange }: StepListEditorProps) {
           className="btn btn-light btn-hover-primary btn-block d-block"
           wrapperClassName="d-block w-100"
           label={addStepButton}
+          dropup
         >
           {({ close }) => (
             <TypeSelectPanel

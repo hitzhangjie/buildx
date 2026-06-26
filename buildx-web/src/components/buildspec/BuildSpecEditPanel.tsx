@@ -170,9 +170,7 @@ export function BuildSpecEditPanel({
           </a>
         ))}
       </div>
-      <div className="body d-flex flex-column flex-grow-1">
-        <div className="content">{tabContent}</div>
-      </div>
+      <div className="body d-flex flex-column flex-grow-1">{tabContent}</div>
     </div>
   );
 }
