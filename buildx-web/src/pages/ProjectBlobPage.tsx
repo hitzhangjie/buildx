@@ -786,6 +786,16 @@ function FileView({
             content={blob.content ?? ""}
             position={position}
             onPositionChange={onPositionChange}
+            runJobContext={
+              user && projectId && blob.commitHash && revision
+                ? {
+                    projectId,
+                    projectPath,
+                    commitHash: blob.commitHash,
+                    refName: revision,
+                  }
+                : null
+            }
           />
         ) : (
           <SourceView
@@ -1112,6 +1122,7 @@ export function ProjectBlobPage() {
           filePath={editFilePath}
           initialContent={existingContent}
           revision={displayRevision || revision}
+          projectPath={projectPath}
           mode={mode === "edit" ? "edit" : "add"}
           position={position}
           onPositionChange={(nextPosition) => updateBlobQuery({ position: nextPosition })}

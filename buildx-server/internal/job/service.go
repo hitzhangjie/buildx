@@ -22,6 +22,7 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/artifact"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/execplan"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/interpolative"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/model"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/resource"
 )
@@ -74,6 +75,7 @@ type AgentService interface {
 // ExecutorRegistry provides access to registered job executors.
 type ExecutorRegistry interface {
 	Find(ctx context.Context, jobCtx *executor.JobContext) (executor.JobExecutor, bool)
+	Resolve(ctx context.Context, jobCtx *executor.JobContext, preferredName string) (executor.JobExecutor, error)
 	Get(name string) (executor.JobExecutor, bool)
 }
 
@@ -630,6 +632,21 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 	}
 	jobCtx.GitDir = s.projects.GitDir(build.ProjectID)
 
+	props := make(map[string]string)
+	if spec != nil {
+		for _, p := range spec.Properties {
+			if p != nil && p.Name != "" {
+				props[p.Name] = p.Value
+			}
+		}
+	}
+	interpVars := interpolative.BuildVarsFromJobContext(
+		jobCtx.ProjectPath, build.JobName, build.RefName, build.CommitHash,
+		int64(build.Number), build.Token, jobCtx.ParamMap, props,
+	)
+	preferredExecutor := interpolative.Interpolate(job.JobExecutor, interpVars)
+	jobCtx.PreferredExecutor = preferredExecutor
+
 	plan, err := execplan.CompileJob(execplan.CompileContext{
 		Spec:     spec,
 		Job:      job,
@@ -674,8 +691,8 @@ func (s *Service) runBuild(ctx context.Context, build *model.Build, job *buildsp
 		jobCtx.Cache = &executor.RunCacheHandler{Cache: s.cache}
 	}
 
-	executor_, ok := s.registry.Find(ctx, jobCtx)
-	if !ok {
+	executor_, err := s.registry.Resolve(ctx, jobCtx, preferredExecutor)
+	if err != nil {
 		s.finishBuild(ctx, build.ID, model.BuildStatusFailed, now)
 		return
 	}

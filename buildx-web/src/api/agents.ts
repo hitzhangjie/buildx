@@ -29,13 +29,14 @@ export type AgentLogEntry = {
 };
 
 export type JobExecutor = {
-  id: number;
   name: string;
   type: string;
   enabled: boolean;
   jobMatch?: string;
-  note?: string;
 };
+
+/** @deprecated use name — kept for mock rows */
+export type JobExecutorLegacy = JobExecutor & { id?: number };
 
 /** Mock agents for development without a running server. */
 const MOCK_AGENTS: Agent[] = [
@@ -99,9 +100,9 @@ const MOCK_AGENTS: Agent[] = [
 ];
 
 const MOCK_EXECUTORS: JobExecutor[] = [
-  { id: 1, name: "Docker Executor", type: "docker", enabled: true, jobMatch: "*", note: "Default Docker executor" },
-  { id: 2, name: "Native Executor", type: "native", enabled: true, jobMatch: "native-*", note: "Runs directly on agent" },
-  { id: 3, name: "Kubernetes Executor", type: "kubernetes", enabled: false, jobMatch: "k8s-*", note: "K8s cluster executor (disabled)" },
+  { name: "server-docker", type: "Server Docker", enabled: true, jobMatch: "*" },
+  { name: "server-shell", type: "Server Shell", enabled: true, jobMatch: "*" },
+  { name: "kubernetes", type: "Kubernetes", enabled: false, jobMatch: "*" },
 ];
 
 export async function queryAgents(
@@ -248,17 +249,49 @@ export async function queryJobExecutors(): Promise<JobExecutor[]> {
   return Array.isArray(data) ? data : [];
 }
 
-export async function toggleJobExecutor(
-  id: number,
-  enabled: boolean,
-): Promise<void> {
+export async function saveJobExecutors(executors: JobExecutor[]): Promise<void> {
   if (USE_MOCK) {
-    const found = MOCK_EXECUTORS.find((e) => e.id === id);
+    MOCK_EXECUTORS.splice(0, MOCK_EXECUTORS.length, ...executors);
+    return;
+  }
+  await apiFetch<void>("/~api/settings/job-executors", {
+    method: "POST",
+    body: JSON.stringify(
+      executors.map((e) => ({
+        name: e.name,
+        enabled: e.enabled,
+        jobMatch: e.jobMatch,
+      })),
+    ),
+  });
+}
+
+export async function toggleJobExecutor(name: string, enabled: boolean): Promise<void> {
+  if (USE_MOCK) {
+    const found = MOCK_EXECUTORS.find((e) => e.name === name);
     if (found) found.enabled = enabled;
     return;
   }
-  await apiFetch<void>(`/~api/settings/job-executors/${id}`, {
-    method: "POST",
-    body: JSON.stringify({ enabled }),
-  });
+  const current = await queryJobExecutors();
+  const next = current.map((e) => (e.name === name ? { ...e, enabled } : e));
+  await saveJobExecutors(next);
+}
+
+export async function suggestJobExecutors(params: {
+  projectPath?: string;
+  branch?: string;
+  jobName?: string;
+}): Promise<string[]> {
+  if (USE_MOCK) {
+    if (!params.jobName) {
+      return [];
+    }
+    return MOCK_EXECUTORS.filter((e) => e.enabled).map((e) => e.name);
+  }
+  const qs = new URLSearchParams();
+  if (params.projectPath) qs.set("projectPath", params.projectPath);
+  if (params.branch) qs.set("branch", params.branch);
+  if (params.jobName) qs.set("jobName", params.jobName);
+  const data = await apiFetch<string[] | null>(`/~api/buildspec/suggest-job-executors?${qs}`);
+  return Array.isArray(data) ? data : [];
 }

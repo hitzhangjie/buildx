@@ -1,7 +1,18 @@
+import type { ReactNode } from "react";
 import { BeanEditor } from "../onedev/BeanEditor";
+import { BeanEditorGroup } from "../onedev/BeanEditorGroup";
 import { BeanFormGroup } from "../onedev/BeanFormGroup";
 import type { BuildSpecStep, Job, JobProperty, Service, StepTemplate } from "../../buildspec/types";
-import { findTypeDef, STEP_TYPES, stepDisplayName } from "./registries";
+import { findTypeDef, STEP_TYPES, stepConditionLabel, stepDisplayName } from "./registries";
+
+/** Read-only bean panel — mirrors OneDev BeanViewer (bean-viewer editable). */
+function BeanViewerPanel({ children, grouped = true }: { children: ReactNode; grouped?: boolean }) {
+  return (
+    <div className="bean-viewer editable">
+      {grouped ? <BeanEditorGroup>{children}</BeanEditorGroup> : children}
+    </div>
+  );
+}
 
 function ReadOnlyValue({ value }: { value: unknown }) {
   if (value == null || value === "") {
@@ -23,28 +34,40 @@ function ReadOnlyValue({ value }: { value: unknown }) {
 }
 
 function StepsViewer({ steps }: { steps: BuildSpecStep[] }) {
-  if (!steps.length) {
-    return <div className="text-muted font-italic">Not specified</div>;
-  }
   return (
-    <table className="table table-sm mb-0">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Condition</th>
-        </tr>
-      </thead>
-      <tbody>
-        {steps.map((step, i) => (
-          <tr key={i}>
-            <td>{stepDisplayName(step)}</td>
-            <td>{String(step.type ?? "")}</td>
-            <td>{step.condition ? String(step.condition) : <em className="text-muted">Unspecified</em>}</td>
+    <div className="step-list bean-list">
+      <table className="table table-hover">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Condition</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {steps.map((step, i) => (
+            <tr key={i}>
+              <td>{stepDisplayName(step)}</td>
+              <td>
+                {stepConditionLabel(step) === "Unspecified" ? (
+                  <em className="text-muted">Unspecified</em>
+                ) : (
+                  stepConditionLabel(step)
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        {steps.length === 0 ? (
+          <tfoot>
+            <tr>
+              <td colSpan={2}>
+                <em className="text-muted">Unspecified</em>
+              </td>
+            </tr>
+          </tfoot>
+        ) : null}
+      </table>
+    </div>
   );
 }
 
@@ -62,55 +85,68 @@ function ListViewer({ items, labelKey = "name" }: { items: Record<string, unknow
 }
 
 export function JobViewer({ job }: { job: Job }) {
+  const showRetryFields = job.retryCondition && job.retryCondition !== "never";
+
   return (
-    <BeanEditor>
-      <BeanFormGroup property="name" label="Name">
-        <ReadOnlyValue value={job.name} />
-      </BeanFormGroup>
-      <BeanFormGroup property="jobExecutor" label="Job Executor">
-        <ReadOnlyValue value={job.jobExecutor} />
-      </BeanFormGroup>
-      <BeanFormGroup property="steps" label="Steps">
-        <StepsViewer steps={job.steps ?? []} />
-      </BeanFormGroup>
-      <BeanFormGroup property="paramSpecs" label="Parameter Specs">
-        <ListViewer items={(job.paramSpecs ?? []) as Record<string, unknown>[]} />
-      </BeanFormGroup>
-      <BeanFormGroup property="triggers" label="Triggers">
-        <ListViewer items={(job.triggers ?? []) as Record<string, unknown>[]} labelKey="type" />
-      </BeanFormGroup>
-      <BeanFormGroup property="jobDependencies" label="Job Dependencies">
-        <ListViewer items={(job.jobDependencies ?? []) as Record<string, unknown>[]} labelKey="jobName" />
-      </BeanFormGroup>
-      <BeanFormGroup property="projectDependencies" label="Project Dependencies">
-        <ListViewer items={(job.projectDependencies ?? []) as Record<string, unknown>[]} labelKey="projectPath" />
-      </BeanFormGroup>
-      <BeanFormGroup property="requiredServices" label="Required Services">
-        <ReadOnlyValue value={job.requiredServices} />
-      </BeanFormGroup>
-      <BeanFormGroup property="sequentialGroup" label="Sequential Group">
-        <ReadOnlyValue value={job.sequentialGroup} />
-      </BeanFormGroup>
-      <BeanFormGroup property="retryCondition" label="Retry Condition">
-        <ReadOnlyValue value={job.retryCondition} />
-      </BeanFormGroup>
-      {job.retryCondition && job.retryCondition !== "never" ? (
-        <>
-          <BeanFormGroup property="maxRetries" label="Max Retries">
-            <ReadOnlyValue value={job.maxRetries} />
-          </BeanFormGroup>
-          <BeanFormGroup property="retryDelay" label="Retry Delay (seconds)">
-            <ReadOnlyValue value={job.retryDelay} />
-          </BeanFormGroup>
-        </>
-      ) : null}
-      <BeanFormGroup property="timeout" label="Timeout (seconds)">
-        <ReadOnlyValue value={job.timeout} />
-      </BeanFormGroup>
-      <BeanFormGroup property="postBuildActions" label="Post Build Actions">
-        <ListViewer items={(job.postBuildActions ?? []) as Record<string, unknown>[]} labelKey="type" />
-      </BeanFormGroup>
-    </BeanEditor>
+    <BeanViewerPanel grouped={false}>
+      <BeanEditorGroup>
+        <BeanFormGroup property="name" label="Name">
+          <ReadOnlyValue value={job.name} />
+        </BeanFormGroup>
+        <BeanFormGroup property="jobExecutor" label="Job Executor">
+          <ReadOnlyValue value={job.jobExecutor} />
+        </BeanFormGroup>
+        <BeanFormGroup property="steps" label="Steps">
+          <StepsViewer steps={job.steps ?? []} />
+        </BeanFormGroup>
+      </BeanEditorGroup>
+
+      <BeanEditorGroup title="Params & Triggers" groupClassName="group-params-&-triggers">
+        <BeanFormGroup property="paramSpecs" label="Parameter Specs">
+          <ListViewer items={(job.paramSpecs ?? []) as Record<string, unknown>[]} />
+        </BeanFormGroup>
+        <BeanFormGroup property="triggers" label="Triggers">
+          <ListViewer items={(job.triggers ?? []) as Record<string, unknown>[]} labelKey="type" />
+        </BeanFormGroup>
+      </BeanEditorGroup>
+
+      <BeanEditorGroup title="Dependencies & Services" groupClassName="group-dependencies-&-services">
+        <BeanFormGroup property="jobDependencies" label="Job Dependencies">
+          <ListViewer items={(job.jobDependencies ?? []) as Record<string, unknown>[]} labelKey="jobName" />
+        </BeanFormGroup>
+        <BeanFormGroup property="projectDependencies" label="Project Dependencies">
+          <ListViewer items={(job.projectDependencies ?? []) as Record<string, unknown>[]} labelKey="projectPath" />
+        </BeanFormGroup>
+        <BeanFormGroup property="requiredServices" label="Required Services">
+          <ReadOnlyValue value={job.requiredServices} />
+        </BeanFormGroup>
+      </BeanEditorGroup>
+
+      <BeanEditorGroup title="More Settings" groupClassName="group-more-settings">
+        <BeanFormGroup property="sequentialGroup" label="Sequential Group">
+          <ReadOnlyValue value={job.sequentialGroup} />
+        </BeanFormGroup>
+        <BeanFormGroup property="retryCondition" label="Retry Condition">
+          <ReadOnlyValue value={job.retryCondition} />
+        </BeanFormGroup>
+        {showRetryFields ? (
+          <>
+            <BeanFormGroup property="maxRetries" label="Max Retries">
+              <ReadOnlyValue value={job.maxRetries} />
+            </BeanFormGroup>
+            <BeanFormGroup property="retryDelay" label="Retry Delay (seconds)">
+              <ReadOnlyValue value={job.retryDelay} />
+            </BeanFormGroup>
+          </>
+        ) : null}
+        <BeanFormGroup property="timeout" label="Timeout (seconds)">
+          <ReadOnlyValue value={job.timeout} />
+        </BeanFormGroup>
+        <BeanFormGroup property="postBuildActions" label="Post Build Actions">
+          <ListViewer items={(job.postBuildActions ?? []) as Record<string, unknown>[]} labelKey="type" />
+        </BeanFormGroup>
+      </BeanEditorGroup>
+    </BeanViewerPanel>
   );
 }
 

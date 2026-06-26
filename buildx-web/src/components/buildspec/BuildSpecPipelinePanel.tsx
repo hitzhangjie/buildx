@@ -37,6 +37,7 @@ type BuildSpecPipelinePanelProps = {
   suggestedJobs?: Job[];
   readOnly?: boolean;
   renderJobExtra?: (job: Job, index: number) => ReactNode;
+  className?: string;
 };
 
 export function BuildSpecPipelinePanel({
@@ -47,6 +48,7 @@ export function BuildSpecPipelinePanel({
   suggestedJobs = [],
   readOnly = false,
   renderJobExtra,
+  className,
 }: BuildSpecPipelinePanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pipelineId = useRef(`pipeline-${Math.random().toString(36).slice(2)}`).current;
@@ -133,7 +135,11 @@ export function BuildSpecPipelinePanel({
   const lineColor = isDarkMode() ? LINE_COLOR_DARK : LINE_COLOR_LIGHT;
 
   return (
-    <div className="pipeline d-flex flex-nowrap position-relative" ref={containerRef} id={pipelineId}>
+    <div
+      className={["pipeline d-flex flex-nowrap position-relative", className].filter(Boolean).join(" ")}
+      ref={containerRef}
+      id={pipelineId}
+    >
       {pipeline.map((column, columnIndex) => (
         <div key={columnIndex} className="pipeline-column flex-grow-1">
           {column.map((job) => {

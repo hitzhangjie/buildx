@@ -17,6 +17,7 @@ type BuildSpecBlobEditPanelProps = {
   filePath: string;
   initialContent: string;
   revision: string;
+  projectPath?: string;
   mode?: "add" | "edit";
   position: string | null;
   onPositionChange: (position: string | null) => void;
@@ -93,7 +94,8 @@ function longestCommonSubsequence(a: string[], b: string[]): string[] {
 export function BuildSpecBlobEditPanel({
   filePath,
   initialContent,
-  revision: _revision,
+  revision,
+  projectPath,
   mode = "add",
   position,
   onPositionChange,
@@ -274,6 +276,8 @@ export function BuildSpecBlobEditPanel({
             <BuildSpecEditPanel
               spec={spec}
               selection={selection}
+              projectPath={projectPath}
+              revision={revision}
               onSpecChange={(next) => {
                 setLastEditedMode("visual");
                 setSpec(next);

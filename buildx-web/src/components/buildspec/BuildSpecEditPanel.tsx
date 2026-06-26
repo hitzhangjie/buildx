@@ -16,6 +16,8 @@ import "./build-spec.css";
 type BuildSpecEditPanelProps = {
   spec: BuildSpec;
   selection: string | null;
+  projectPath?: string;
+  revision?: string;
   onSpecChange: (spec: BuildSpec) => void;
   onSelectionChange: (selection: string | null) => void;
 };
@@ -42,6 +44,8 @@ function findActiveIndex<T extends { name?: string }>(items: T[], selection: str
 export function BuildSpecEditPanel({
   spec,
   selection,
+  projectPath,
+  revision,
   onSpecChange,
   onSelectionChange,
 }: BuildSpecEditPanelProps) {
@@ -108,6 +112,8 @@ export function BuildSpecEditPanel({
         spec={spec}
         jobs={jobs}
         activeIndex={jobsActiveIndex}
+        projectPath={projectPath}
+        revision={revision}
         onActiveIndexChange={handleJobsActiveChange}
         onJobsChange={(next) => updateSpec({ jobs: next })}
       />

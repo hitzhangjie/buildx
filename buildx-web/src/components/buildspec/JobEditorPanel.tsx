@@ -1,9 +1,17 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BeanEditor } from "../onedev/BeanEditor";
 import { BeanEditorGroup } from "../onedev/BeanEditorGroup";
 import { BeanFormGroup } from "../onedev/BeanFormGroup";
+import { InterpolativeInput } from "../onedev/InterpolativeInput";
 import { Select2MultiChoice } from "../onedev/Select2MultiChoice";
+import { queryJobExecutors, suggestJobExecutors } from "../../api/agents";
 import type { BuildSpec, Job } from "../../buildspec/types";
+import {
+  collectJobVariableSuggestions,
+  jobExecutorDescription,
+  jobExecutorPlaceholder,
+  JOB_VARIABLE_TIPS,
+} from "../../buildspec/jobVariables";
 import { StepListEditor } from "./StepListEditor";
 import { PolymorphicListEditor } from "./PolymorphicListEditor";
 import {
@@ -20,14 +28,92 @@ import {
 type JobEditorPanelProps = {
   job: Job;
   buildSpec: BuildSpec;
+  projectPath?: string;
+  revision?: string;
   onChange: (job: Job) => void;
   fieldErrors?: Record<string, string>;
 };
 
 const RETRY_CONDITIONS = ["never", "always", "for-all-errors", "for-temporary-error"];
 
-export function JobEditorPanel({ job, buildSpec, onChange, fieldErrors }: JobEditorPanelProps) {
+export function JobEditorPanel({
+  job,
+  buildSpec,
+  projectPath,
+  revision,
+  onChange,
+  fieldErrors,
+}: JobEditorPanelProps) {
   const update = (patch: Partial<Job>) => onChange({ ...job, ...patch });
+
+  const [configuredExecutors, setConfiguredExecutors] = useState(false);
+  const [literalSuggestions, setLiteralSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    queryJobExecutors()
+      .then((list) => {
+        if (!cancelled) {
+          setConfiguredExecutors(list.length > 0);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConfiguredExecutors(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!job.name) {
+      setLiteralSuggestions([]);
+      return;
+    }
+    suggestJobExecutors({
+      projectPath,
+      branch: revision || "main",
+      jobName: job.name,
+    })
+      .then((names) => {
+        if (!cancelled) {
+          setLiteralSuggestions(names);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiteralSuggestions([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [job.name, projectPath, revision]);
+
+  const suggestVariables = useCallback(
+    (matchWith: string) => collectJobVariableSuggestions(buildSpec, job, matchWith),
+    [buildSpec, job],
+  );
+
+  const suggestLiterals = useCallback(
+    (matchWith: string) => {
+      const q = matchWith.toLowerCase();
+      return literalSuggestions.filter((name) => q === "" || name.toLowerCase().includes(q));
+    },
+    [literalSuggestions],
+  );
+
+  const executorDescription = useMemo(
+    () => (
+      <>
+        {jobExecutorDescription(configuredExecutors)}. {JOB_VARIABLE_TIPS}
+      </>
+    ),
+    [configuredExecutors],
+  );
 
   const serviceChoices = (buildSpec.services ?? [])
     .map((s) => s.name)
@@ -80,15 +166,16 @@ export function JobEditorPanel({ job, buildSpec, onChange, fieldErrors }: JobEdi
         <BeanFormGroup
           property="jobExecutor"
           label="Job Executor"
-          description="Optionally specify executor for this job. Leave empty to use first applicable executor"
+          description={executorDescription}
           fieldError={fieldErrors?.jobExecutor}
         >
-          <input
-            type="text"
+          <InterpolativeInput
             className="form-control"
             value={job.jobExecutor ?? ""}
-            onChange={(e) => update({ jobExecutor: e.target.value })}
-            placeholder="First applicable executor"
+            onChange={(jobExecutor) => update({ jobExecutor })}
+            placeholder={jobExecutorPlaceholder(configuredExecutors)}
+            suggestVariables={suggestVariables}
+            suggestLiterals={suggestLiterals}
           />
         </BeanFormGroup>
         <BeanFormGroup

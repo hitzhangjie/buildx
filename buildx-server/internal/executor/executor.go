@@ -124,6 +124,7 @@ type Registry struct {
 	mu        sync.RWMutex
 	executors map[string]JobExecutor
 	configs   map[string]*ExecutorConfig
+	adminMode bool // true when admin has saved a non-empty executor list (OneDev settings)
 }
 
 // NewRegistry creates an empty executor registry.
@@ -132,6 +133,20 @@ func NewRegistry() *Registry {
 		executors: make(map[string]JobExecutor),
 		configs:   make(map[string]*ExecutorConfig),
 	}
+}
+
+// SetAdminMode enables configured-executor selection (vs auto-discover when false).
+func (r *Registry) SetAdminMode(enabled bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.adminMode = enabled
+}
+
+// AdminMode reports whether admin-configured executor list is active.
+func (r *Registry) AdminMode() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.adminMode
 }
 
 // Register adds an executor with its configuration to the registry.

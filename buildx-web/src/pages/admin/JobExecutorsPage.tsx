@@ -38,7 +38,7 @@ export function JobExecutorsPage() {
 
   const handleToggle = async (executor: JobExecutor) => {
     try {
-      await toggleJobExecutor(executor.id, !executor.enabled);
+      await toggleJobExecutor(executor.name, !executor.enabled);
       setActionMsg(
         `Executor "${executor.name}" ${
           executor.enabled ? "disabled" : "enabled"
@@ -94,13 +94,12 @@ export function JobExecutorsPage() {
                       <th>Type</th>
                       <th>Status</th>
                       <th>Job Match</th>
-                      <th>Note</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {executors.map((exec) => (
-                      <tr key={exec.id}>
+                      <tr key={exec.name}>
                         <td className="font-weight-bold">{exec.name}</td>
                         <td>
                           <span className="badge badge-info">
@@ -120,9 +119,6 @@ export function JobExecutorsPage() {
                         </td>
                         <td>
                           <code>{exec.jobMatch ?? "*"}</code>
-                        </td>
-                        <td className="text-muted font-size-sm">
-                          {exec.note ?? "—"}
                         </td>
                         <td>
                           <label className="bean-switch mb-0">

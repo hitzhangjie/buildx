@@ -9,6 +9,7 @@ import {
   BuildSpecViewPanel,
   BuildSpecUnparseableViewPanel,
 } from "./BuildSpecViewPanel";
+import type { RunJobContext } from "../onedev/job/RunJobLink";
 import "./build-spec.css";
 
 type BuildSpecBlobViewPanelProps = {
@@ -16,6 +17,7 @@ type BuildSpecBlobViewPanelProps = {
   content: string;
   position: string | null;
   onPositionChange: (position: string | null) => void;
+  runJobContext?: RunJobContext | null;
 };
 
 export function BuildSpecBlobViewPanel({
@@ -23,6 +25,7 @@ export function BuildSpecBlobViewPanel({
   content,
   position,
   onPositionChange,
+  runJobContext,
 }: BuildSpecBlobViewPanelProps) {
   const [viewPlain, setViewPlain] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -92,6 +95,7 @@ export function BuildSpecBlobViewPanel({
             selection={selection}
             onSelectionChange={handleSelectionChange}
             validationErrors={validationErrors}
+            runJobContext={runJobContext}
           />
         )}
       </div>

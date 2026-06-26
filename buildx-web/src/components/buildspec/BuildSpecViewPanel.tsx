@@ -9,6 +9,7 @@ import { JobsViewPanel } from "./JobsViewPanel";
 import { ElementsViewPanel } from "./ElementsViewPanel";
 import { ServiceViewer, StepTemplateViewer, PropertiesViewer } from "./BeanViewer";
 import { ImportsViewPanel } from "./ImportsViewPanel";
+import type { RunJobContext } from "../onedev/job/RunJobLink";
 import "./build-spec.css";
 
 type BuildSpecViewPanelProps = {
@@ -16,6 +17,7 @@ type BuildSpecViewPanelProps = {
   selection: string | null;
   onSelectionChange: (selection: string | null) => void;
   validationErrors?: string[];
+  runJobContext?: RunJobContext | null;
 };
 
 const TAB_LINKS: { id: BuildSpecTab; className: string; label: string; segment: string }[] = [
@@ -42,6 +44,7 @@ export function BuildSpecViewPanel({
   selection,
   onSelectionChange,
   validationErrors = [],
+  runJobContext,
 }: BuildSpecViewPanelProps) {
   const activeTab = tabFromSelection(selection);
 
@@ -68,6 +71,7 @@ export function BuildSpecViewPanel({
         <JobsViewPanel
           jobs={jobs}
           activeIndex={jobsActiveIndex}
+          runJobContext={runJobContext}
           onActiveIndexChange={(index) => {
             if (index < 0) {
               onSelectionChange("jobs");

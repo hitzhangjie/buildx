@@ -134,6 +134,7 @@ type ciBundle struct {
 	agentWS       *runtime.AgentWebSocket
 	worker        *worker.Handler
 	artifactStore *artifact.Store
+	registry      *executor.Registry
 }
 
 func (s *Server) wireCI(projects *project.DBStore, buildsStore *build.DBStore) ciBundle {
@@ -154,20 +155,25 @@ func (s *Server) wireCI(projects *project.DBStore, buildsStore *build.DBStore) c
 	resourceSvc := resource.NewService(agentAdapter)
 
 	registry := executor.NewRegistry()
-	registry.Register(executor.NewServerShellExecutor(workBase), nil)
+	defaultMatch := "*"
+	registry.Register(executor.NewServerShellExecutor(workBase), &executor.ExecutorConfig{
+		Name: "server-shell", Enabled: true, JobMatch: defaultMatch,
+	})
 	if dockerExec := executor.NewDockerExecutor(workBase); dockerExec.Enabled() {
-		registry.Register(dockerExec, nil)
+		registry.Register(dockerExec, &executor.ExecutorConfig{
+			Name: "server-docker", Enabled: true, JobMatch: defaultMatch,
+		})
 	}
 	if k8sExec := executor.NewKubernetesExecutor(workBase); k8sExec.Enabled() {
-		registry.Register(k8sExec, nil)
+		registry.Register(k8sExec, &executor.ExecutorConfig{
+			Name: "kubernetes", Enabled: true, JobMatch: defaultMatch,
+		})
 	}
 	registry.Register(executor.NewRemoteShellExecutor(agentDialer), &executor.ExecutorConfig{
-		Name:    "remote-shell",
-		Enabled: true,
+		Name: "remote-shell", Enabled: true, JobMatch: defaultMatch,
 	})
 	registry.Register(executor.NewRemoteDockerExecutor(agentDialer), &executor.ExecutorConfig{
-		Name:    "remote-docker",
-		Enabled: true,
+		Name: "remote-docker", Enabled: true, JobMatch: defaultMatch,
 	})
 
 	issueStore := issue.NewDBStore(s.store.DB())
@@ -203,5 +209,6 @@ func (s *Server) wireCI(projects *project.DBStore, buildsStore *build.DBStore) c
 		agentWS:       agentWS,
 		worker:        worker.NewHandler(svc, cacheSvc),
 		artifactStore: artifactStore,
+		registry:      registry,
 	}
 }

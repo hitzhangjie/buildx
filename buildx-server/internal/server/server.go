@@ -15,10 +15,12 @@ import (
 	"github.com/hitzhangjie/buildx/buildx-server/internal/codecomment"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/build"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/config"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/executor"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/issue"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/job"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/invitation"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/issuesetting"
+	"github.com/hitzhangjie/buildx/buildx-server/internal/jobexecutorsetting"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/persistence/sqlite"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/project"
 	"github.com/hitzhangjie/buildx/buildx-server/internal/pullrequest"
@@ -73,6 +75,7 @@ func (s *Server) routes() chi.Router {
 	iterationsHandler := &api.IterationsHandler{Iterations: issuesStore, Projects: projects, Security: sec}
 	issueSettingStore := issuesetting.NewDBStore(s.store.DB())
 	issueSettingsHandler := &api.IssueSettingsHandler{Settings: issueSettingStore, Security: sec}
+	jobExecutorSettingStore := jobexecutorsetting.NewDBStore(s.store.DB())
 	pullRequestsStore := pullrequest.NewDBStore(s.store.DB())
 	pullRequestsService := &pullrequest.Service{Store: pullRequestsStore, Project: projects}
 	pullRequestsHandler := &api.PullRequestsHandler{
@@ -97,6 +100,16 @@ func (s *Server) routes() chi.Router {
 
 	// CI engine
 	ci := s.wireCI(projects, buildsStore)
+	if saved, err := jobExecutorSettingStore.Get(context.Background()); err == nil && len(saved) > 0 {
+		ci.registry.SetAdminMode(true)
+		for _, item := range saved {
+			_ = ci.registry.UpdateConfig(item.Name, &executor.ExecutorConfig{
+				Name: item.Name, Enabled: item.Enabled, JobMatch: item.JobMatch,
+			})
+		}
+	}
+	jobExecutorsHandler := &api.JobExecutorsHandler{Registry: ci.registry, Settings: jobExecutorSettingStore, Security: sec}
+	buildSpecSuggestHandler := &api.BuildSpecSuggestHandler{Registry: ci.registry}
 	gitHandler.CINotifier = ci.jobs
 	pullRequestsHandler.CINotifier = ci.jobs
 	jobRunHandler := &api.JobRunHandler{Jobs: ci.jobs, Builds: buildsStore, Projects: projects, Security: sec}
@@ -129,6 +142,10 @@ func (s *Server) routes() chi.Router {
 
 	r.Route("/~api", func(r chi.Router) {
 		r.Post("/buildspec/validate", buildSpecHandler.Validate)
+		r.Get("/buildspec/suggest-job-executors", buildSpecSuggestHandler.SuggestJobExecutors)
+
+		r.Get("/settings/job-executors", jobExecutorsHandler.List)
+		r.Post("/settings/job-executors", jobExecutorsHandler.Save)
 
 		r.Get("/roles", rolesHandler.List)
 

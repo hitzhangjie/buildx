@@ -228,7 +228,7 @@ export async function submitBuild(data: SubmitBuildRequest): Promise<Build> {
   if (USE_MOCK) {
     throw new Error("submitBuild not implemented in mock mode");
   }
-  return apiFetch<Build>("/~api/builds", {
+  return apiFetch<Build>("/~api/job-runs", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -243,9 +243,9 @@ export async function rerunBuild(
     if (!found) throw { status: 404, message: "Build not found" };
     return { ...found, status: "PENDING" };
   }
-  return apiFetch<Build>(`/~api/builds/${buildId}/rerun`, {
+  return apiFetch<Build>("/~api/job-runs/rebuild", {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ buildId, reason }),
   });
 }
 
