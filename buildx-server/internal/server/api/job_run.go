@@ -30,14 +30,15 @@ type JobService interface {
 
 // SubmitRequest mirrors job.SubmitRequest.
 type SubmitRequest struct {
-	ProjectID  int64               `json:"projectId"`
-	CommitHash string              `json:"commitHash"`
-	JobName    string              `json:"jobName"`
-	RefName    string              `json:"refName"`
-	Params     map[string][]string `json:"params,omitempty"`
-	Reason     string              `json:"reason,omitempty"`
-	PRID       int64               `json:"pullRequestId,omitempty"`
-	IssueID    int64               `json:"issueId,omitempty"`
+	ProjectID   int64               `json:"projectId"`
+	CommitHash  string              `json:"commitHash"`
+	JobName     string              `json:"jobName"`
+	RefName     string              `json:"refName"`
+	Params      map[string][]string `json:"params,omitempty"`
+	Reason      string              `json:"reason,omitempty"`
+	PRID        int64               `json:"pullRequestId,omitempty"`
+	IssueID     int64               `json:"issueId,omitempty"`
+	SubmitterID int64               `json:"-"` // set from authenticated user, not request body
 }
 
 // RerunRequest is the body for rebuild requests.
@@ -81,6 +82,7 @@ func (h *JobRunHandler) SubmitBuild(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "jobName is required")
 		return
 	}
+	req.SubmitterID = user.ID
 
 	build, err := h.Jobs.Submit(r.Context(), req)
 	if err != nil {

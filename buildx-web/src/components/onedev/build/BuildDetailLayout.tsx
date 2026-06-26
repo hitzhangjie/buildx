@@ -6,6 +6,7 @@ import { BuildStatusIcon, buildStatusLabel } from "../build/BuildStatusIcon";
 import { Icon } from "../Icon";
 import { ProjectLayout } from "../../../layout/ProjectLayout";
 import { formatBuildDate, formatDuration, formatRefName } from "../../../util/build";
+import "../../../pages/project/builds/build-detail.css";
 
 export type BuildDetailTab = {
   id: string;
@@ -30,8 +31,8 @@ function buildTabs(projectPath: string, buildNumber: number): BuildDetailTab[] {
   return [
     { id: "log", label: "Log", href: `${base}/log` },
     { id: "pipeline", label: "Pipeline", href: `${base}/pipeline` },
-    { id: "changes", label: "Code Changes", href: `${base}/changes` },
     { id: "fixed-issues", label: "Fixed Issues", href: `${base}/fixed-issues` },
+    { id: "changes", label: "Code Changes", href: `${base}/changes` },
     { id: "artifacts", label: "Artifacts", href: `${base}/artifacts` },
   ];
 }
@@ -45,7 +46,7 @@ export function BuildDetailLayout({
   children,
   onBuildUpdate,
 }: BuildDetailLayoutProps) {
-  const [sideVisible, setSideVisible] = useState(false);
+  const [sideVisible, setSideVisible] = useState(true);
 
   const pageTitle = build ? `Build #${build.number}` : "Build";
   const isFinished = build
@@ -123,8 +124,8 @@ export function BuildDetailLayout({
           <div className="card-toolbar">
             <button
               type="button"
-              className="more-info side-info ml-auto btn btn-icon btn-light btn-xs"
-              title="More info"
+              className="more-info side-info ml-auto btn btn-icon btn-light btn-xs d-xl-none"
+              title={sideVisible ? "Hide side info" : "More info"}
               onClick={() => setSideVisible((v) => !v)}
             >
               <Icon name="ellipsis" />
@@ -166,11 +167,22 @@ export function BuildDetailLayout({
             )}
             {children}
           </div>
-          {/* ---- more-info side panel ---- */}
+          {/* ---- more-info side panel (visible on xl+ by default, like OneDev) ---- */}
+          {build && (
+            <div
+              className={`more-info side-info ml-5 d-none d-xl-block${sideVisible ? "" : " d-xl-none"}`}
+              style={{ minWidth: 260, maxWidth: 320, width: 320 }}
+            >
+              <BuildSideInfo
+                build={build}
+                projectPath={projectPath}
+              />
+            </div>
+          )}
           {build && sideVisible && (
             <div
-              className="more-info side-info d-block ml-5"
-              style={{ minWidth: 260, maxWidth: 320, width: 320 }}
+              className="more-info side-info d-block d-xl-none ml-0 mt-4"
+              style={{ width: "100%" }}
             >
               <BuildSideInfo
                 build={build}

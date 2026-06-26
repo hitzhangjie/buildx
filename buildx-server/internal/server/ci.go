@@ -36,6 +36,7 @@ func (a jobAdapter) Submit(ctx context.Context, req api.SubmitRequest) (*model.B
 		RefName:       req.RefName,
 		Params:        req.Params,
 		Reason:        req.Reason,
+		SubmitterID:   req.SubmitterID,
 		PullRequestID: req.PRID,
 		IssueID:       req.IssueID,
 	})

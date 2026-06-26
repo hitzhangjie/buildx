@@ -469,7 +469,7 @@ func (s *Service) GetLog(ctx context.Context, buildID int64, since time.Time) ([
 		return NewFileLogReader(s.logPersistDir).GetLogs(ctx, buildID, since)
 	}
 
-	return nil, fmt.Errorf("%w: no logs for build %d", ErrNotFound, buildID)
+	return []LogEntry{}, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 import { useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "../../../buildspec/types";
-import { rerunBuild, submitBuild } from "../../../api/builds";
+import { submitBuild } from "../../../api/builds";
 import { Icon } from "../Icon";
 import { ModalPanel } from "../../buildspec/ModalPanel";
 
@@ -17,8 +17,6 @@ type RunJobLinkProps = RunJobContext & {
   job?: Job;
 };
 
-const FINISHED_STATUSES = new Set(["SUCCESSFUL", "FAILED", "CANCELLED", "TIMED_OUT"]);
-
 export function RunJobLink({ projectId, projectPath, commitHash, refName, jobName, job }: RunJobLinkProps) {
   const navigate = useNavigate();
   const [running, setRunning] = useState(false);
@@ -31,17 +29,16 @@ export function RunJobLink({ projectId, projectPath, commitHash, refName, jobNam
     setRunning(true);
     setError(null);
     try {
-      let build = await submitBuild({
+      const build = await submitBuild({
         projectId,
         commitHash,
         jobName,
         refName,
         reason: "Submitted manually",
       });
-      if (build.finishDate || FINISHED_STATUSES.has(build.status)) {
-        build = await rerunBuild(build.id, "Rebuild manually");
-      }
-      navigate(`/${projectPath}/~builds/${build.number}`);
+      navigate(`/${projectPath}/~builds/${build.number}/log`, {
+        state: { build },
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to run job";
       setError(message);

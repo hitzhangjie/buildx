@@ -27,24 +27,51 @@ export function BuildLogPage() {
   const logContainerRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  // Fetch existing log entries
+  // Fetch existing log entries; poll while the build is running.
   useEffect(() => {
     if (!build) return;
+
+    let cancelled = false;
     setLogLoading(true);
     setLogError(null);
-    void getBuildLog(build.id)
-      .then((entries) => {
-        setLogEntries(entries);
-      })
-      .catch((err: unknown) => {
-        setLogError(
-          err instanceof Error ? err.message : "Failed to load log",
-        );
-      })
-      .finally(() => {
-        setLogLoading(false);
-      });
-  }, [build?.id]);
+
+    const fetchLog = () => {
+      void getBuildLog(build.id)
+        .then((entries) => {
+          if (cancelled) return;
+          setLogEntries(entries);
+          setLogError(null);
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          setLogError(
+            err instanceof Error ? err.message : "Failed to load log",
+          );
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLogLoading(false);
+          }
+        });
+    };
+
+    fetchLog();
+
+    const isFinished = ["SUCCESSFUL", "FAILED", "CANCELLED", "TIMED_OUT"].includes(
+      build.status,
+    );
+    if (isFinished) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const interval = window.setInterval(fetchLog, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [build?.id, build?.status]);
 
   // Connect to SSE stream for live updates
   useEffect(() => {
@@ -64,7 +91,12 @@ export function BuildLogPage() {
     source.onmessage = (event) => {
       try {
         const entry = JSON.parse(event.data) as LogEntry;
-        setLogEntries((prev) => [...prev, entry]);
+        setLogEntries((prev) => {
+          if (prev.some((e) => e.id === entry.id)) {
+            return prev;
+          }
+          return [...prev, entry];
+        });
       } catch {
         // ignore malformed entries
       }
@@ -285,7 +317,7 @@ export function BuildLogPage() {
                           style={{
                             padding: "1px 8px 1px 24px",
                             backgroundColor:
-                              entry.stream === "stderr"
+                              isStderrLevel(entry.level)
                                 ? "rgba(244,67,54,0.05)"
                                 : "transparent",
                           }}
@@ -307,11 +339,15 @@ export function BuildLogPage() {
                             className="log-message"
                             style={{
                               color:
-                                entry.stream === "stderr"
+                                isStderrLevel(entry.level)
                                   ? "#f44336"
-                                  : entry.stream === "stdout"
+                                  : entry.level === "stdout"
                                     ? "var(--dark-mode-text, #d4d4d4)"
-                                    : "inherit",
+                                    : entry.level === "warn"
+                                      ? "#ff9800"
+                                      : entry.level === "info"
+                                        ? "var(--dark-mode-text, #d4d4d4)"
+                                        : "inherit",
                               whiteSpace: "pre-wrap",
                               wordBreak: "break-all",
                             }}
@@ -357,4 +393,8 @@ function formatLogTimestamp(ts: string): string {
   } catch {
     return ts;
   }
+}
+
+function isStderrLevel(level: string): boolean {
+  return level === "stderr" || level === "error";
 }

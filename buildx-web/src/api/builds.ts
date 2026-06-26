@@ -188,12 +188,12 @@ export async function deleteBuild(buildId: number): Promise<void> {
 
 export type LogEntry = {
   id: number;
+  buildId?: number;
   stepName?: string;
-  line: number;
   message: string;
-  level: "info" | "warn" | "error" | "debug";
+  /** Backend uses level for both severity and stream (stdout/stderr/info/warn/error). */
+  level: string;
   timestamp: string;
-  stream: "stdout" | "stderr";
 };
 
 export type BuildArtifact = {
@@ -276,29 +276,23 @@ export async function getBuildLog(buildId: number): Promise<LogEntry[]> {
       {
         id: 1,
         stepName: "Checkout",
-        line: 1,
         message: "Cloning repository...",
         level: "info",
         timestamp: new Date().toISOString(),
-        stream: "stdout",
       },
       {
         id: 2,
         stepName: "Build",
-        line: 2,
         message: "Compiling source code...",
-        level: "info",
+        level: "stdout",
         timestamp: new Date().toISOString(),
-        stream: "stdout",
       },
       {
         id: 3,
         stepName: "Test",
-        line: 3,
         message: "Running tests...\nAll tests passed!",
-        level: "info",
+        level: "stdout",
         timestamp: new Date().toISOString(),
-        stream: "stdout",
       },
     ];
   }
